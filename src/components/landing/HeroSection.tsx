@@ -1,12 +1,149 @@
 
+"use client";
+
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
+import { useState, useEffect, useRef } from 'react';
+
+interface Shape {
+  id: number;
+  type: 'circle' | 'rect';
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  size: number;
+  color: string;
+  rotation: number;
+  vRotation: number;
+}
 
 export default function HeroSection() {
+  const [shapes, setShapes] = useState<Shape[]>([]);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const boundsRef = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const updateBounds = () => {
+      if (container) {
+        const rect = container.getBoundingClientRect();
+        boundsRef.current = { width: rect.width, height: rect.height };
+      }
+    };
+    
+    // Run this effect only on the client
+    updateBounds();
+
+    const numShapes = 5; // Number of shapes
+    const initialShapes: Shape[] = [];
+    if (boundsRef.current.width > 0 && boundsRef.current.height > 0) {
+      for (let i = 0; i < numShapes; i++) {
+        const size = Math.random() * 20 + 20; // size between 20 and 40
+        initialShapes.push({
+          id: i,
+          type: Math.random() > 0.5 ? 'circle' : 'rect',
+          size: size,
+          x: Math.random() * (boundsRef.current.width - size),
+          y: Math.random() * (boundsRef.current.height - size),
+          vx: (Math.random() - 0.5) * 1.0, // velocity between -0.5 and 0.5
+          vy: (Math.random() - 0.5) * 1.0,
+          color: Math.random() > 0.5 ? 'hsl(var(--primary))' : 'hsl(var(--accent))',
+          rotation: Math.random() * 360,
+          vRotation: (Math.random() - 0.5) * 0.2, // Slow rotation speed
+        });
+      }
+      setShapes(initialShapes);
+    }
+
+
+    let animationFrameId: number;
+    const animate = () => {
+      if (boundsRef.current.width > 0 && boundsRef.current.height > 0) {
+        setShapes(prevShapes =>
+          prevShapes.map(shape => {
+            let newX = shape.x + shape.vx;
+            let newY = shape.y + shape.vy;
+            let newVx = shape.vx;
+            let newVy = shape.vy;
+            let newRotation = shape.rotation + shape.vRotation;
+
+            if (newX <= 0 || newX + shape.size >= boundsRef.current.width) {
+              newVx = -newVx;
+              newX = newX <= 0 ? 0 : boundsRef.current.width - shape.size;
+            }
+            if (newY <= 0 || newY + shape.size >= boundsRef.current.height) {
+              newVy = -newVy;
+              newY = newY <= 0 ? 0 : boundsRef.current.height - shape.size;
+            }
+
+            return { ...shape, x: newX, y: newY, vx: newVx, vy: newVy, rotation: newRotation };
+          })
+        );
+      }
+      animationFrameId = requestAnimationFrame(animate);
+    };
+
+    if (initialShapes.length > 0) {
+        animationFrameId = requestAnimationFrame(animate);
+    }
+    
+
+    const handleResize = () => {
+      updateBounds();
+      // Adjust shape positions if they are out of new bounds
+      if (boundsRef.current.width > 0 && boundsRef.current.height > 0) {
+        setShapes(prevShapes => prevShapes.map(shape => ({
+            ...shape,
+            x: Math.max(0, Math.min(shape.x, boundsRef.current.width - shape.size)),
+            y: Math.max(0, Math.min(shape.y, boundsRef.current.height - shape.size)),
+        })));
+      } else {
+        setShapes([]); // Clear shapes if container has no dimensions
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
+
   return (
-    <section className="bg-background py-20 md:py-32">
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
+    <section className="bg-background py-20 md:py-32 relative overflow-hidden">
+      <div ref={containerRef} className="absolute inset-0 z-0">
+        <svg width="100%" height="100%" aria-hidden="true">
+          {shapes.map(shape => (
+            shape.type === 'circle' ?
+              <circle 
+                key={shape.id} 
+                cx={shape.x + shape.size/2} 
+                cy={shape.y + shape.size/2} 
+                r={shape.size/2} 
+                fill={shape.color} 
+                opacity="0.5"
+              /> :
+              <rect 
+                key={shape.id} 
+                x={shape.x} 
+                y={shape.y} 
+                width={shape.size} 
+                height={shape.size} 
+                fill={shape.color} 
+                opacity="0.5"
+                transform={`rotate(${shape.rotation} ${shape.x + shape.size/2} ${shape.y + shape.size/2})`}
+              />
+          ))}
+        </svg>
+      </div>
+
+      <div className="relative z-10 container mx-auto px-4 sm:px-6 lg:px-8 text-center">
         <h1 className="text-4xl sm:text-5xl md:text-6xl font-headline font-bold text-foreground mb-6 leading-tight">
           Uncover Your Roots, Weave Your Story
         </h1>
@@ -25,7 +162,9 @@ export default function HeroSection() {
           <Image 
             src="https://placehold.co/1200x675.png" 
             alt="Family tree illustration" 
-            layout="fill"
+            fill // Changed from layout="fill" to fill for Next.js 13+ best practices
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" // Example sizes, adjust as needed
+            priority // For LCP
             objectFit="cover"
             className="transform group-hover:scale-105 transition-transform duration-500 ease-in-out"
             data-ai-hint="family tree"
