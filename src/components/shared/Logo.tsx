@@ -8,9 +8,9 @@ export default function Logo(props: SVGProps<SVGSVGElement>) {
 
   return (
     <svg
-      width="250"
+      width="360" // Increased width
       height="40"
-      viewBox="0 0 250 40"
+      viewBox="0 0 360 40" // Increased viewBox width
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       aria-label="KonnectedRoots Logo"
@@ -18,11 +18,11 @@ export default function Logo(props: SVGProps<SVGSVGElement>) {
     >
       <text
         x="0"
-        y="28"
+        y="28" // Adjusted y for better vertical centering with dominantBaseline
         fontFamily="Verdana, Arial, sans-serif"
         fontSize="30"
         fontWeight="bold"
-        dominantBaseline="middle"
+        dominantBaseline="middle" // Ensures y is the vertical center
         textAnchor="start"
       >
         <tspan fill={lightGreen}>K</tspan>
