@@ -16,6 +16,7 @@ type AuthContextType = {
   login: (email: string, name?: string) => Promise<void>;
   signup: (email: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
+  updateUserState: (newUser: User | null) => void; // Added for updating user details
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -28,7 +29,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const storedUser = localStorage.getItem('konnectedRootsUser');
     if (storedUser) {
-      setUser(JSON.parse(storedUser));
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch (error) {
+        console.error("Failed to parse stored user:", error);
+        localStorage.removeItem('konnectedRootsUser');
+      }
     }
     setLoading(false);
   }, []);
@@ -70,11 +76,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = async () => {
     updateUserState(null);
-    router.push('/login');
+    router.push('/login'); // Redirect to login after logout
+    return Promise.resolve();
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, signup, logout, updateUserState }}>
       {children}
     </AuthContext.Provider>
   );
