@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, UserCircle, Mail, Edit2, KeyRound, Trash2, ImageUp, Eye, EyeOff } from 'lucide-react';
 
 export default function ProfilePage() {
-  const { user, loading, logout, updateUserState } = useAuth(); // Assuming updateUserState exists in useAuth
+  const { user, loading, logout, updateUserState } = useAuth();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -28,25 +28,32 @@ export default function ProfilePage() {
   const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
 
   const handleProfilePictureChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    console.log("handleProfilePictureChange triggered");
     const file = event.target.files?.[0];
     if (file && user) {
+      console.log("File selected:", file.name);
       const reader = new FileReader();
       reader.onloadend = () => {
         const newAvatar = reader.result as string;
         const updatedUser = { ...user, avatar: newAvatar };
-        // This should be a function from useAuth to update user details including avatar
-        // For now, directly update localStorage and user state if updateUserState handles it
+        
         if (updateUserState) {
             updateUserState(updatedUser);
+             console.log("User state updated with new avatar (client-side).");
         }
-        localStorage.setItem('konnectedRootsUser', JSON.stringify(updatedUser)); //
-        toast({ title: "Profile Picture Updated", description: "Your new picture has been set." });
+        // In a real app, you would upload the file to a server here
+        // and get back a URL to store.
+        // For now, we just update localStorage for persistence in the demo.
+        localStorage.setItem('konnectedRootsUser', JSON.stringify(updatedUser)); 
+        toast({ title: "Profile Picture Updated", description: "Your new picture has been set (client-side preview)." });
       };
       reader.readAsDataURL(file);
+    } else {
+      console.log("No file selected or no user.");
     }
   };
 
-  const handleChangePasswordSubmit = (e: React.FormEvent) => {
+  const handleChangePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newPassword !== confirmNewPassword) {
       toast({ variant: "destructive", title: "Error", description: "New passwords do not match." });
@@ -56,8 +63,27 @@ export default function ProfilePage() {
       toast({ variant: "destructive", title: "Error", description: "New password must be at least 6 characters." });
       return;
     }
-    // Simulate API call
-    toast({ title: "Password Changed", description: "Your password has been successfully updated (simulated)." });
+
+    console.log("Attempting to change password (simulation)...");
+    // TODO: Backend integration needed for real password change.
+    // Example:
+    // try {
+    //   const response = await fetch('/api/user/change-password', {
+    //     method: 'POST',
+    //     headers: { 'Content-Type': 'application/json' },
+    //     body: JSON.stringify({ oldPassword, newPassword }),
+    //   });
+    //   if (!response.ok) throw new Error('Failed to change password');
+    //   const result = await response.json();
+    //   toast({ title: "Password Changed", description: "Your password has been successfully updated." });
+    //   setIsChangePasswordDialogOpen(false);
+    // } catch (error) {
+    //   toast({ variant: "destructive", title: "Error", description: error.message });
+    // }
+    
+    // Simulate API call success for now
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    toast({ title: "Password Changed (Simulated)", description: "Your password has been updated in this mock environment." });
     setIsChangePasswordDialogOpen(false);
     setOldPassword('');
     setNewPassword('');
@@ -65,10 +91,25 @@ export default function ProfilePage() {
   };
 
   const handleDeleteAccountConfirm = async () => {
+    console.log("Attempting to delete account (simulation)...");
+    // TODO: Backend integration needed for real account deletion.
+    // Example:
+    // try {
+    //   const response = await fetch('/api/user/delete-account', { method: 'POST' });
+    //   if (!response.ok) throw new Error('Failed to delete account');
+    //   toast({ variant: "destructive", title: "Account Deleted", description: "Your account has been permanently deleted." });
+    //   await logout();
+    // } catch (error) {
+    //   toast({ variant: "destructive", title: "Error", description: error.message });
+    // } finally {
+    //   setIsDeleteAccountDialogOpen(false);
+    // }
+
+    // Simulate API call success and logout
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    toast({ variant: "destructive", title: "Account Deletion Initiated (Simulated)", description: "Your account deletion process has started in this mock environment. You will be logged out." });
     setIsDeleteAccountDialogOpen(false);
-    toast({ variant: "destructive", title: "Account Deletion Initiated", description: "Your account deletion process has started (simulated)." });
-    // In a real app, call API then logout
-    await logout(); // Simulate logging out after deletion
+    await logout();
   };
 
   if (loading) {
@@ -100,7 +141,14 @@ export default function ProfilePage() {
               accept="image/*"
               className="hidden"
             />
-            <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => {
+                console.log("Change Picture button clicked");
+                fileInputRef.current?.click();
+              }}
+            >
               <ImageUp className="mr-2 h-4 w-4" /> Change Picture
             </Button>
           </div>
@@ -134,7 +182,7 @@ export default function ProfilePage() {
                 <DialogHeader>
                   <DialogTitle>Change Password</DialogTitle>
                   <DialogDescription>
-                    Enter your old password and a new password.
+                    Enter your old password and a new password. (This is a simulation)
                   </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleChangePasswordSubmit} className="space-y-4">
@@ -146,7 +194,7 @@ export default function ProfilePage() {
                     </Button>
                   </div>
                   <div className="relative">
-                    <Label htmlFor="newPassword">New Password</Label>
+                    <Label htmlFor="newPassword">New Password (min. 6 characters)</Label>
                     <Input id="newPassword" type={showNewPassword ? "text" : "password"} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={6}/>
                      <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-6 h-7 w-7" onClick={() => setShowNewPassword(!showNewPassword)}>
                       {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -171,7 +219,7 @@ export default function ProfilePage() {
             
             <AlertDialog open={isDeleteAccountDialogOpen} onOpenChange={setIsDeleteAccountDialogOpen}>
               <AlertDialogTrigger asChild>
-                <Button variant="destructive" className="w-full justify-start mt-2"> {/* Added mt-2 for spacing */}
+                <Button variant="destructive" className="w-full justify-start mt-4"> {/* Increased margin top */}
                   <Trash2 className="mr-2 h-4 w-4" /> Delete Account
                 </Button>
               </AlertDialogTrigger>
@@ -179,8 +227,8 @@ export default function ProfilePage() {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This action cannot be undone. This will permanently delete your
-                    account and all your data.
+                    This action cannot be undone. This will (simulate) permanently deleting your
+                    account and all your data. You will be logged out.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -197,3 +245,4 @@ export default function ProfilePage() {
     </div>
   );
 }
+
