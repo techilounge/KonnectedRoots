@@ -162,9 +162,9 @@ export default function HeroSection() {
           <Image 
             src="https://placehold.co/1200x675.png" 
             alt="Family tree illustration" 
-            fill // Changed from layout="fill" to fill for Next.js 13+ best practices
-            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" // Example sizes, adjust as needed
-            priority // For LCP
+            fill
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            priority
             objectFit="cover"
             className="transform group-hover:scale-105 transition-transform duration-500 ease-in-out"
             data-ai-hint="family tree"
