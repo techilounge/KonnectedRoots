@@ -3,21 +3,18 @@
 import { useState } from 'react';
 import TreeList from '@/components/dashboard/TreeList';
 import CreateTreeDialog from '@/components/dashboard/CreateTreeDialog';
-import EditTreeDialog from '@/components/dashboard/EditTreeDialog'; // New Import
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'; // New Import
+import EditTreeDialog from '@/components/dashboard/EditTreeDialog'; 
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'; 
 import { Button } from '@/components/ui/button';
 import type { FamilyTree } from '@/types';
 import { PlusCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { useToast } from '@/hooks/use-toast'; // New Import
+import { useToast } from '@/hooks/use-toast'; 
 
 export default function DashboardPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [familyTrees, setFamilyTrees] = useState<FamilyTree[]>([
-    { id: '1', name: 'Johnson Family History', memberCount: 15, lastUpdated: new Date('2023-10-15').toISOString() },
-    { id: '2', name: 'My Maternal Lineage', memberCount: 28, lastUpdated: new Date('2023-11-01').toISOString() },
-  ]);
+  const [familyTrees, setFamilyTrees] = useState<FamilyTree[]>([]); // Initialize with empty array
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   
   // State for Edit Dialog
@@ -34,7 +31,7 @@ export default function DashboardPage() {
     const newTree: FamilyTree = {
       id: String(Date.now()),
       name,
-      memberCount: 1, 
+      memberCount: 0, // Start with 0 members
       lastUpdated: new Date().toISOString(),
     };
     setFamilyTrees(prevTrees => [...prevTrees, newTree]);
