@@ -1,4 +1,5 @@
 
+
 export interface Person {
   id: string;
   name: string;
@@ -26,6 +27,11 @@ export interface FamilyTree {
   lastUpdated: string; // ISO date string
   // members?: Person[]; // Optionally store members directly or fetch separately
 }
+
+// Re-export SuggestNameInput and SuggestNameOutput from the AI flow types
+// This avoids direct import of AI flow types into UI components if not needed there
+// and centralizes shared types.
+export type { SuggestNameInput, SuggestNameOutput } from '@/ai/flows/suggest-name';
 
 export interface NameSuggestion {
   name: string;
