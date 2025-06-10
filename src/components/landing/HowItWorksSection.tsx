@@ -1,6 +1,7 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { UserPlus, TreeDeciduous, Sparkles, Search, FileText } from "lucide-react";
+import Image from 'next/image';
 
 const steps = [
   {
@@ -41,6 +42,18 @@ export default function HowItWorksSection() {
             Embarking on your genealogical adventure is straightforward and rewarding.
           </p>
         </div>
+
+        <div className="mb-12 flex justify-center">
+          <Image
+            src="https://placehold.co/800x400.png"
+            alt="Person researching family history with documents and a laptop"
+            width={800}
+            height={400}
+            className="rounded-lg shadow-xl object-cover"
+            data-ai-hint="genealogy research"
+          />
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           {steps.map((item) => (
             <Card key={item.step} className="text-center shadow-md hover:shadow-lg transition-shadow duration-300">
