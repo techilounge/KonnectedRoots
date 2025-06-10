@@ -7,7 +7,7 @@ const testimonials = [
   {
     name: "Sarah L.",
     role: "Genealogy Enthusiast",
-    avatar: "https://placehold.co/80x80.png?text=SL",
+    avatar: "https://placehold.co/80x80.png",
     aiHint: "person portrait",
     quote: "KonnectedRoots made it so easy to visualize my family's history. The AI name suggestions were surprisingly accurate and helpful!",
     rating: 5,
@@ -15,7 +15,7 @@ const testimonials = [
   {
     name: "Michael B.",
     role: "Family Historian",
-    avatar: "https://placehold.co/80x80.png?text=MB",
+    avatar: "https://placehold.co/80x80.png",
     aiHint: "person portrait",
     quote: "I've tried many platforms, but the interactive tree builder here is top-notch. Collaborating with my cousins has been a breeze.",
     rating: 5,
@@ -23,7 +23,7 @@ const testimonials = [
   {
     name: "Linda K.",
     role: "New to Ancestry",
-    avatar: "https://placehold.co/80x80.png?text=LK",
+    avatar: "https://placehold.co/80x80.png",
     aiHint: "person portrait",
     quote: "As a beginner, I found KonnectedRoots very intuitive. I've already discovered so much about my ancestors!",
     rating: 4,
@@ -75,3 +75,4 @@ export default function TestimonialsSection() {
     </section>
   );
 }
+
