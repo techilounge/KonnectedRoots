@@ -14,17 +14,17 @@ export default function Logo(props: SVGProps<SVGSVGElement>) {
     >
       <text
         x="0"
-        y="20"
+        y="28"
         fontFamily="Verdana, Arial, sans-serif"
-        fontSize="26"
+        fontSize="30"
         fontWeight="bold"
         dominantBaseline="middle"
         textAnchor="start"
       >
-        <tspan fill="hsl(var(--primary))">K</tspan>
-        <tspan fill="hsl(var(--foreground))">onnected</tspan>
-        <tspan fill="hsl(var(--primary))">R</tspan>
-        <tspan fill="hsl(var(--foreground))">oots</tspan>
+        <tspan fill="#3E7D3B">K</tspan>
+        <tspan fill="#5A8F57">onnected</tspan>
+        <tspan fill="#3E7D3B">R</tspan>
+        <tspan fill="#5A8F57">oots</tspan>
       </text>
     </svg>
   );
