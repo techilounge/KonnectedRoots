@@ -1,0 +1,179 @@
+
+"use client";
+
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import * as z from "zod";
+import { Button } from "@/components/ui/button";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import Link from "next/link";
+import { useAuth } from "@/hooks/useAuth";
+import { useState } from "react";
+import { Loader2 } from "lucide-react";
+
+interface AuthFormProps {
+  mode: "login" | "signup";
+}
+
+export default function AuthForm({ mode }: AuthFormProps) {
+  const { login, signup } = useAuth();
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const formSchema = z.object({
+    email: z.string().email({ message: "Invalid email address." }),
+    password: z.string().min(6, { message: "Password must be at least 6 characters." }),
+    ...(mode === "signup" && {
+      name: z.string().min(2, { message: "Name must be at least 2 characters." }),
+      confirmPassword: z.string(),
+    }),
+  }).refine(data => {
+    if (mode === 'signup') {
+      return data.password === data.confirmPassword;
+    }
+    return true;
+  }, {
+    message: "Passwords don't match",
+    path: ["confirmPassword"], 
+  });
+
+  type FormValues = z.infer<typeof formSchema>;
+
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      email: "",
+      password: "",
+      ...(mode === "signup" && { name: "", confirmPassword: "" }),
+    },
+  });
+
+  async function onSubmit(values: FormValues) {
+    setIsLoading(true);
+    setError(null);
+    try {
+      if (mode === "login") {
+        await login(values.email, values.password); // Password used for mock, real login uses it
+      } else if (mode === "signup" && values.name) {
+        await signup(values.email, values.name); // Password used for mock
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An unknown error occurred.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  return (
+    <Card className="w-full shadow-xl">
+      <CardHeader className="space-y-1 text-center">
+        <CardTitle className="text-3xl font-headline">
+          {mode === "login" ? "Welcome Back" : "Create Account"}
+        </CardTitle>
+        <CardDescription>
+          {mode === "login"
+            ? "Enter your credentials to access your account."
+            : "Fill in the details to start your journey with KonnectedRoots."}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            {mode === "signup" && (
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Full Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. John Doe" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email Address</FormLabel>
+                  <FormControl>
+                    <Input type="email" placeholder="your.email@example.com" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Password</FormLabel>
+                  <FormControl>
+                    <Input type="password" placeholder="••••••••" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            {mode === "signup" && (
+              <FormField
+                control={form.control}
+                name="confirmPassword"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Confirm Password</FormLabel>
+                    <FormControl>
+                      <Input type="password" placeholder="••••••••" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+            {error && <p className="text-sm font-medium text-destructive">{error}</p>}
+            <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isLoading}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {mode === "login" ? "Log In" : "Sign Up"}
+            </Button>
+          </form>
+        </Form>
+      </CardContent>
+      <CardFooter className="flex flex-col space-y-2 text-sm">
+        {mode === "login" ? (
+          <p>
+            Don&apos;t have an account?{" "}
+            <Button variant="link" asChild className="p-0 h-auto text-primary hover:text-accent">
+              <Link href="/signup">Sign up</Link>
+            </Button>
+          </p>
+        ) : (
+          <p>
+            Already have an account?{" "}
+            <Button variant="link" asChild className="p-0 h-auto text-primary hover:text-accent">
+              <Link href="/login">Log in</Link>
+            </Button>
+          </p>
+        )}
+         {mode === "login" && (
+            <Button variant="link" asChild className="p-0 h-auto text-sm text-muted-foreground hover:text-accent">
+              <Link href="/forgot-password">Forgot password?</Link>
+            </Button>
+          )}
+      </CardFooter>
+    </Card>
+  );
+}
