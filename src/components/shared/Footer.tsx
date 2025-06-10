@@ -1,6 +1,7 @@
 
 import Link from 'next/link';
 import { Facebook, Twitter, Instagram, Linkedin } from 'lucide-react';
+import Logo from './Logo'; // Import the Logo component
 
 export default function Footer() {
   return (
@@ -8,8 +9,11 @@ export default function Footer() {
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div>
-            <h3 className="text-xl font-headline font-semibold text-primary mb-4">KonnectedRoots</h3>
-            <p className="text-muted-foreground text-sm">
+            {/* Replace h3 with Logo component */}
+            <Link href="/" aria-label="KonnectedRoots Home">
+              <Logo className="h-8 w-auto text-primary" />
+            </Link>
+            <p className="text-muted-foreground text-sm mt-2"> {/* Added mt-2 for spacing */}
               Discover your heritage and build your family story.
             </p>
           </div>
