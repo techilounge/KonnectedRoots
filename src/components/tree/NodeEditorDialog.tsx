@@ -1,6 +1,6 @@
 
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { Person, GenerateBiographyInput } from '@/types';
 import { Button } from '@/components/ui/button';
 import {
@@ -33,6 +33,7 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onOp
   const [formData, setFormData] = useState<Partial<Person>>({});
   const [isGeneratingBio, setIsGeneratingBio] = useState(false);
   const { toast } = useToast();
+  const profilePictureInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (person) {
@@ -86,6 +87,21 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onOp
         toast({ variant: "destructive", title: "Error", description: "Could not generate biography." });
     } finally {
         setIsGeneratingBio(false);
+    }
+  };
+
+  const handleProfilePictureChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFormData(prev => ({ ...prev, profilePictureUrl: reader.result as string }));
+        toast({ title: "Profile Picture Previewed", description: "Save changes to apply." });
+      };
+      reader.readAsDataURL(file);
+    }
+    if (event.target) {
+        event.target.value = ''; // Reset file input
     }
   };
 
@@ -146,7 +162,7 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onOp
 
           <section className="space-y-3 p-3 border rounded-md">
             <h3 className="font-semibold text-md flex items-center"><Users className="mr-2 h-5 w-5 text-primary" />Basic Demographics</h3>
-            <div className="grid grid-cols-1 gap-3"> {/* Changed to 1 column as Pronouns removed */}
+            <div className="grid grid-cols-1 gap-3">
               <div>
                 <Label htmlFor="gender">Gender*</Label>
                 <Select value={formData.gender} onValueChange={(value) => handleSelectChange('gender', value)}>
@@ -249,10 +265,30 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onOp
                     />
                     <div className="flex-grow space-y-2">
                         <div>
-                            <Label htmlFor="profilePictureUrl">Profile Picture URL</Label>
-                            <Input id="profilePictureUrl" name="profilePictureUrl" value={formData.profilePictureUrl || ''} onChange={handleChange} placeholder="https://example.com/image.png" />
+                            <Label htmlFor="profilePictureUrlDisplay">Profile Picture URL (or upload)</Label>
+                            <Input 
+                              id="profilePictureUrlDisplay" 
+                              name="profilePictureUrl" 
+                              value={formData.profilePictureUrl || ''} 
+                              onChange={handleChange} 
+                              placeholder="https://example.com/image.png or upload"
+                              className="mb-2" 
+                            />
                         </div>
-                        <Button variant="outline" size="sm" className="text-xs" onClick={() => alert("Photo upload functionality for tree nodes to be implemented. Please use the URL field for now.")}>
+                        <input
+                            type="file"
+                            ref={profilePictureInputRef}
+                            onChange={handleProfilePictureChange}
+                            accept="image/png, image/jpeg, image/gif"
+                            className="hidden"
+                            aria-hidden="true"
+                        />
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => profilePictureInputRef.current?.click()}
+                            className="text-xs"
+                         >
                             <Upload className="mr-2 h-3 w-3" /> Upload New Photo
                         </Button>
                     </div>
@@ -301,3 +337,4 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onOp
     </Dialog>
   );
 }
+

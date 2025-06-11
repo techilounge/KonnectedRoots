@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Users, Clock, ArrowRight, MoreHorizontal, Edit, Trash2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { useRouter } from 'next/navigation';
 
 interface TreeListProps {
   trees: FamilyTree[];
@@ -15,6 +16,15 @@ interface TreeListProps {
 }
 
 export default function TreeList({ trees, onEditTree, onDeleteTree }: TreeListProps) {
+  const router = useRouter();
+
+  const handleOpenTree = (tree: FamilyTree) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`selectedTree-${tree.id}`, JSON.stringify(tree));
+    }
+    router.push(`/tree/${tree.id}`);
+  };
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {trees.map((tree) => (
@@ -41,16 +51,14 @@ export default function TreeList({ trees, onEditTree, onDeleteTree }: TreeListPr
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem asChild>
-                  <Link href={`/tree/${tree.id}`} className="flex items-center">
-                    <ArrowRight className="mr-2 h-4 w-4" /> Open Tree
-                  </Link>
+                <DropdownMenuItem onClick={() => handleOpenTree(tree)} className="flex items-center cursor-pointer">
+                  <ArrowRight className="mr-2 h-4 w-4" /> Open Tree
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onEditTree(tree)} className="flex items-center">
+                <DropdownMenuItem onClick={() => onEditTree(tree)} className="flex items-center cursor-pointer">
                   <Edit className="mr-2 h-4 w-4" /> Edit Details
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => onDeleteTree(tree.id)} className="flex items-center text-destructive focus:text-destructive focus:bg-destructive/10">
+                <DropdownMenuItem onClick={() => onDeleteTree(tree.id)} className="flex items-center text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer">
                   <Trash2 className="mr-2 h-4 w-4" /> Delete Tree
                 </DropdownMenuItem>
               </DropdownMenuContent>

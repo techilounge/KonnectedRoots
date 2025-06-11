@@ -1,18 +1,20 @@
 
 "use client";
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation'; // Added useRouter
 import FamilyTreeCanvasPlaceholder from '@/components/tree/FamilyTreeCanvasPlaceholder';
 import AddPersonToolbox from '@/components/tree/AddPersonToolbox';
 import NodeEditorDialog from '@/components/tree/NodeEditorDialog';
 import type { Person, FamilyTree } from '@/types';
 import { Button } from '@/components/ui/button';
-import { Users, Share2, ZoomIn, ZoomOut, UserPlus } from 'lucide-react';
+import { Users, Share2, ZoomIn, ZoomOut, UserPlus, ChevronLeft } from 'lucide-react';
 import NameSuggestor from '@/components/tree/NameSuggestor';
+import Link from 'next/link';
 
 export default function TreeEditorPage() {
   const params = useParams();
   const treeId = params.treeId as string;
+  const router = useRouter(); // Initialize router
 
   const [treeData, setTreeData] = useState<FamilyTree | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
@@ -23,7 +25,22 @@ export default function TreeEditorPage() {
 
 
   useEffect(() => {
-    setTreeData({ id: treeId, name: `Family Tree ${treeId}`, memberCount: people.length, lastUpdated: new Date().toISOString() });
+    let currentTreeName = `Family Tree ${treeId}`;
+    let currentMemberCount = people.length;
+
+    if (typeof window !== 'undefined') {
+        const storedTreeData = localStorage.getItem(`selectedTree-${treeId}`);
+        if (storedTreeData) {
+            try {
+                const parsedTree: FamilyTree = JSON.parse(storedTreeData);
+                currentTreeName = parsedTree.name; 
+                // We'll use people.length for memberCount as it's dynamic here
+            } catch (e) {
+                console.error("Failed to parse tree data from localStorage", e);
+            }
+        }
+    }
+    setTreeData({ id: treeId, name: currentTreeName, memberCount: currentMemberCount, lastUpdated: new Date().toISOString() });
   }, [treeId, people.length]);
 
   const handleAddPerson = (newPersonDetails: Partial<Person>) => {
@@ -81,7 +98,14 @@ export default function TreeEditorPage() {
   return (
     <div className="flex flex-col h-full bg-secondary">
       <header className="bg-card p-3 shadow-sm flex justify-between items-center border-b">
-        <h1 className="text-xl font-headline text-foreground">{treeData.name}</h1>
+        <div className="flex items-center">
+            <Button variant="ghost" size="icon" asChild className="mr-2">
+                 <Link href="/dashboard">
+                    <ChevronLeft className="h-5 w-5" />
+                 </Link>
+            </Button>
+            <h1 className="text-xl font-headline text-foreground">{treeData.name}</h1>
+        </div>
         <div className="flex items-center space-x-2">
           <Button variant="outline" size="sm" onClick={() => handleAddPerson({})}>
              <UserPlus className="mr-2 h-4 w-4" /> Add Person
