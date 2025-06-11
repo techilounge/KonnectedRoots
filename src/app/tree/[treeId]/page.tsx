@@ -29,8 +29,8 @@ export default function TreeEditorPage() {
   const handleAddPerson = (newPersonDetails: Partial<Person>) => {
     const personWithDefaults: Person = { 
       id: String(Date.now()), 
-      firstName: 'New Person', // Default name
-      gender: 'male', // Default gender
+      firstName: 'New Person', 
+      gender: 'male', 
       livingStatus: 'unknown',
       privacySetting: 'private',
       ...newPersonDetails,
@@ -60,11 +60,17 @@ export default function TreeEditorPage() {
   };
   
   const handleOpenNameSuggestor = (personDetails?: Partial<Person>) => {
-    // If no personDetails are provided (e.g. from toolbox), set default gender.
-    // If personDetails exist, use its gender or default to male.
     const genderForSuggestor = personDetails?.gender || 'male';
     setPersonForSuggestion({...personDetails, gender: genderForSuggestor });
     setIsNameSuggestorOpen(true);
+  };
+
+  const handleNodeMove = (personId: string, newX: number, newY: number) => {
+    setPeople(prevPeople =>
+      prevPeople.map(p =>
+        p.id === personId ? { ...p, x: newX, y: newY } : p
+      )
+    );
   };
 
 
@@ -77,7 +83,6 @@ export default function TreeEditorPage() {
       <header className="bg-card p-3 shadow-sm flex justify-between items-center border-b">
         <h1 className="text-xl font-headline text-foreground">{treeData.name}</h1>
         <div className="flex items-center space-x-2">
-          {/* This button in header now directly opens NodeEditorDialog for a new person */}
           <Button variant="outline" size="sm" onClick={() => handleAddPerson({})}>
              <UserPlus className="mr-2 h-4 w-4" /> Add Person
           </Button>
@@ -89,11 +94,14 @@ export default function TreeEditorPage() {
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Toolbox onAddPerson will now use handleOpenNameSuggestor if AI suggestion is desired first */}
         <AddPersonToolbox onAddPerson={(details) => handleOpenNameSuggestor(details)} />
         <main className="flex-1 relative overflow-auto p-4 bg-background">
           {people.length > 0 ? (
-            <FamilyTreeCanvasPlaceholder people={people} onNodeClick={handleEditPerson} />
+            <FamilyTreeCanvasPlaceholder 
+              people={people} 
+              onNodeClick={handleEditPerson}
+              onNodeMove={handleNodeMove} 
+            />
           ) : (
              <div className="flex flex-col items-center justify-center h-full border-2 border-dashed border-border rounded-lg">
               <p className="text-muted-foreground mb-4">This family tree is empty.</p>
@@ -105,7 +113,7 @@ export default function TreeEditorPage() {
         </main>
       </div>
 
-      {isEditorOpen && selectedPerson && ( // Ensure selectedPerson is not null before rendering
+      {isEditorOpen && selectedPerson && (
         <NodeEditorDialog
           isOpen={isEditorOpen}
           onClose={() => { setIsEditorOpen(false); setSelectedPerson(null); }}
@@ -125,20 +133,20 @@ export default function TreeEditorPage() {
         onNameSuggested={(name, reason) => {
           const updatedDetails = { 
             ...personForSuggestion, 
-            firstName: name, // Use suggested name as firstName
+            firstName: name, 
             biography: `${personForSuggestion?.biography || ''}\nAI Name Suggestion: ${name} (Reason: ${reason})`.trim()
           };
 
-          if (personForSuggestion && !personForSuggestion.id) { // Adding a new person after suggestion
-             handleAddPerson(updatedDetails); // This will open NodeEditorDialog with the suggested name
+          if (personForSuggestion && !personForSuggestion.id) { 
+             handleAddPerson(updatedDetails); 
           } 
-          else if (personForSuggestion && personForSuggestion.id) { // Editing an existing person after suggestion
+          else if (personForSuggestion && personForSuggestion.id) { 
             const personToUpdate = people.find(p => p.id === personForSuggestion!.id);
             if (personToUpdate) {
               const fullyUpdatedPerson = { ...personToUpdate, ...updatedDetails };
-              handleSavePerson(fullyUpdatedPerson); // Save the changes
-              setSelectedPerson(fullyUpdatedPerson); // Reselect
-              setIsEditorOpen(true); // Re-open editor with new details
+              handleSavePerson(fullyUpdatedPerson); 
+              setSelectedPerson(fullyUpdatedPerson); 
+              setIsEditorOpen(true); 
             }
           }
           setIsNameSuggestorOpen(false);
