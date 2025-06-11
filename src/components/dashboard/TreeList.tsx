@@ -28,41 +28,55 @@ export default function TreeList({ trees, onEditTree, onDeleteTree }: TreeListPr
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {trees.map((tree) => (
-        <Card key={tree.id} className="flex flex-col shadow-sm hover:shadow-lg transition-shadow duration-300">
-          <CardHeader>
-            <CardTitle className="font-headline text-xl text-primary">{tree.name}</CardTitle>
-            <CardDescription className="flex items-center text-sm text-muted-foreground pt-1">
-              <Users className="mr-2 h-4 w-4" /> {tree.memberCount} members
-            </CardDescription>
+        <Card 
+          key={tree.id} 
+          className="flex flex-col shadow-md hover:shadow-xl hover:border-primary/50 transition-all duration-300 cursor-pointer"
+          onClick={() => handleOpenTree(tree)}
+        >
+          <CardHeader className="pb-3">
+            <div className="flex justify-between items-start">
+              <div className="flex-grow">
+                <CardTitle className="font-headline text-xl text-primary">{tree.name}</CardTitle>
+                <CardDescription className="flex items-center text-sm text-muted-foreground pt-1">
+                  <Users className="mr-2 h-4 w-4" /> {tree.memberCount} members
+                </CardDescription>
+              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8 flex-shrink-0"
+                    onClick={(e) => e.stopPropagation()} // Prevent card click when opening menu
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                    <span className="sr-only">Tree options</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                  <DropdownMenuItem onClick={() => handleOpenTree(tree)} className="flex items-center cursor-pointer">
+                    <ArrowRight className="mr-2 h-4 w-4" /> Open Tree
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onEditTree(tree)} className="flex items-center cursor-pointer">
+                    <Edit className="mr-2 h-4 w-4" /> Edit Details
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => onDeleteTree(tree.id)} className="flex items-center text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer">
+                    <Trash2 className="mr-2 h-4 w-4" /> Delete Tree
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </CardHeader>
-          <CardContent className="flex-grow">
+          <CardContent className="flex-grow pt-0 pb-3">
              <p className="text-sm text-muted-foreground">A brief summary or recent activity could go here.</p>
           </CardContent>
-          <CardFooter className="flex flex-col items-start sm:flex-row sm:items-center sm:justify-between gap-2 pt-4 border-t">
+          <CardFooter className="flex items-center justify-between pt-3 pb-4 border-t mt-auto">
              <div className="text-xs text-muted-foreground flex items-center">
                 <Clock className="mr-1 h-3 w-3" />
                 Updated {formatDistanceToNow(new Date(tree.lastUpdated), { addSuffix: true })}
               </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8">
-                  <MoreHorizontal className="h-4 w-4" />
-                  <span className="sr-only">Tree options</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => handleOpenTree(tree)} className="flex items-center cursor-pointer">
-                  <ArrowRight className="mr-2 h-4 w-4" /> Open Tree
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onEditTree(tree)} className="flex items-center cursor-pointer">
-                  <Edit className="mr-2 h-4 w-4" /> Edit Details
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => onDeleteTree(tree.id)} className="flex items-center text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer">
-                  <Trash2 className="mr-2 h-4 w-4" /> Delete Tree
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+              {/* The MoreHorizontal button is now part of CardHeader for better alignment with CardTitle */}
           </CardFooter>
         </Card>
       ))}
