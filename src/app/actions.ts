@@ -2,7 +2,7 @@
 "use server";
 
 import { suggestName as suggestNameFlow, type SuggestNameInput, type SuggestNameOutput } from '@/ai/flows/suggest-name';
-import { generateBiography as generateBiographyFlow, type GenerateBiographyInput, type GenerateBiographyOutput, GenerateBiographyInputSchema } from '@/ai/flows/generate-biography-flow';
+import { generateBiography as generateBiographyFlow, type GenerateBiographyInput, type GenerateBiographyOutput } from '@/ai/flows/generate-biography-flow';
 import { z } from 'zod';
 
 const SuggestNameActionSchema = z.object({
@@ -27,8 +27,22 @@ export async function handleSuggestName(input: SuggestNameInput): Promise<Sugges
   }
 }
 
+// Define the Zod schema for input validation directly in the action file
+const HandleGenerateBiographyInputSchema = z.object({
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+  birthDate: z.string().optional(),
+  placeOfBirth: z.string().optional(),
+  deathDate: z.string().optional(),
+  placeOfDeath: z.string().optional(),
+  occupation: z.string().optional(),
+  education: z.string().optional(),
+  religion: z.string().optional(),
+  existingBiography: z.string().optional(),
+});
+
 export async function handleGenerateBiography(input: GenerateBiographyInput): Promise<GenerateBiographyOutput | { error: string }> {
-  const parsedInput = GenerateBiographyInputSchema.safeParse(input);
+  const parsedInput = HandleGenerateBiographyInputSchema.safeParse(input);
 
   if (!parsedInput.success) {
     console.error("Invalid input for biography generation:", parsedInput.error.format());

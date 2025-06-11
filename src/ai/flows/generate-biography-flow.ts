@@ -11,7 +11,7 @@
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
-export const GenerateBiographyInputSchema = z.object({
+const GenerateBiographyInputSchema = z.object({
   firstName: z.string().optional().describe('The first name of the person.'),
   lastName: z.string().optional().describe('The last name of the person.'),
   birthDate: z.string().optional().describe('The birth date of the person (e.g., YYYY-MM-DD or descriptive text like "about 1885").'),
@@ -25,7 +25,7 @@ export const GenerateBiographyInputSchema = z.object({
 });
 export type GenerateBiographyInput = z.infer<typeof GenerateBiographyInputSchema>;
 
-export const GenerateBiographyOutputSchema = z.object({
+const GenerateBiographyOutputSchema = z.object({
   biography: z.string().describe('The AI-generated biography for the person.'),
 });
 export type GenerateBiographyOutput = z.infer<typeof GenerateBiographyOutputSchema>;
