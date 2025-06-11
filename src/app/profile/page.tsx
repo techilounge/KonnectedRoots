@@ -35,25 +35,43 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (user) {
+      console.log("Profile Page: User loaded, setting initial avatar:", user.avatar);
       setInitialAvatarUrl(user.avatar);
       setCurrentAvatarPreview(user.avatar);
     }
   }, [user]);
 
   const handleProfilePictureChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    console.log("handleProfilePictureChange triggered");
+    console.log("Profile Page: handleProfilePictureChange triggered");
     const file = event.target.files?.[0];
     if (file) {
-      console.log("File selected:", file.name);
+      console.log("Profile Page: File selected:", file.name, "Type:", file.type, "Size:", file.size);
       const reader = new FileReader();
+      reader.onloadstart = () => console.log("Profile Page: FileReader onloadstart");
+      reader.onprogress = (e) => console.log(`Profile Page: FileReader onprogress - ${e.loaded}/${e.total}`);
       reader.onloadend = () => {
+        console.log("Profile Page: FileReader onloadend. Result type:", typeof reader.result);
         const newAvatarDataUrl = reader.result as string;
-        setCurrentAvatarPreview(newAvatarDataUrl); // Update preview immediately
-        toast({ title: "Profile Picture Previewed", description: "Click 'Apply Changes' to save." });
+        if (newAvatarDataUrl) {
+          setCurrentAvatarPreview(newAvatarDataUrl); 
+          toast({ title: "Profile Picture Previewed", description: "Click 'Apply Changes' to save." });
+          console.log("Profile Page: Avatar preview updated.");
+        } else {
+          console.error("Profile Page: FileReader result is null or empty.");
+           toast({ variant: "destructive", title: "Error", description: "Could not read image file." });
+        }
+      };
+      reader.onerror = (error) => {
+        console.error("Profile Page: FileReader error:", error);
+        toast({ variant: "destructive", title: "Error Reading File", description: "Could not process the selected image." });
       };
       reader.readAsDataURL(file);
     } else {
-      console.log("No file selected.");
+      console.log("Profile Page: No file selected or event.target.files is null.");
+    }
+     // Reset file input to allow selecting the same file again if needed
+    if (event.target) {
+        event.target.value = '';
     }
   };
 
@@ -68,9 +86,9 @@ export default function ProfilePage() {
       return;
     }
 
-    console.log("Attempting to change password (simulation)...");
+    console.log("Attempting to change password (simulation)... Old:", oldPassword, "New:", newPassword);
     // Backend integration needed for real password change.
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
     toast({ title: "Password Changed (Simulated)", description: "Your password has been updated in this mock environment." });
     setIsChangePasswordDialogOpen(false);
     setOldPassword('');
@@ -81,38 +99,32 @@ export default function ProfilePage() {
   const handleDeleteAccountConfirm = async () => {
     console.log("Attempting to delete account (simulation)...");
     // Backend integration needed for real account deletion.
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
     toast({ variant: "destructive", title: "Account Deletion Initiated (Simulated)", description: "Your account deletion process has started. You will be logged out." });
     setIsDeleteAccountDialogOpen(false);
-    await logout(); // This will redirect via useAuth
+    await logout(); 
   };
 
   const handleApplyChanges = () => {
     if (user && currentAvatarPreview && currentAvatarPreview !== initialAvatarUrl) {
       const updatedUser = { ...user, avatar: currentAvatarPreview };
       if (updateUserState) {
-        updateUserState(updatedUser);
+        updateUserState(updatedUser); // This updates localStorage in the mock auth
+        setInitialAvatarUrl(currentAvatarPreview); // Persist the change for current session's "initial"
       }
-      // In a real app, this is where you'd call an API to save the new avatar URL / file.
-      // For now, updateUserState updates localStorage.
-      console.log("User state updated with new avatar (client-side persisted).");
+      console.log("Profile Page: User state updated with new avatar (client-side persisted).");
       toast({ title: "Profile Updated", description: "Your changes have been applied." });
     } else {
-      toast({ title: "No Changes", description: "No new changes to apply." });
+      toast({ title: "No Changes Detected", description: "No new changes to apply to profile picture." });
     }
     router.push('/dashboard');
   };
 
   const handleCancelChanges = () => {
-    if (user && initialAvatarUrl) {
-      // Revert preview to initial state if it changed
-      if (currentAvatarPreview !== initialAvatarUrl) {
-        setCurrentAvatarPreview(initialAvatarUrl);
-        // If updateUserState was called on preview, revert it in localStorage as well
-        // (though current logic only previews, apply makes it permanent)
-      }
+    if (initialAvatarUrl) {
+      setCurrentAvatarPreview(initialAvatarUrl); // Revert preview to the initial state
     }
-    toast({ title: "Changes Discarded", description: "No changes were applied." });
+    toast({ title: "Changes Discarded", description: "Any pending changes were not applied." });
     router.push('/dashboard');
   };
 
@@ -122,9 +134,6 @@ export default function ProfilePage() {
   }
 
   if (!user) {
-    // This should ideally be handled by a layout or higher-order component
-    // redirecting to login if not authenticated.
-    // For now, showing a message or redirecting.
     router.push('/login');
     return <div className="container py-8 text-center">Redirecting to login...</div>;
   }
@@ -147,16 +156,18 @@ export default function ProfilePage() {
               type="file"
               ref={fileInputRef}
               onChange={handleProfilePictureChange}
-              accept="image/*"
+              accept="image/png, image/jpeg, image/gif"
               className="hidden"
+              aria-hidden="true"
             />
             <Button 
               variant="outline" 
               size="sm" 
               onClick={() => {
-                console.log("Change Picture button clicked");
+                console.log("Profile Page: Change Picture button clicked. File input ref current:", fileInputRef.current);
                 fileInputRef.current?.click();
               }}
+              aria-label="Change profile picture"
             >
               <ImageUp className="mr-2 h-4 w-4" /> Change Picture
             </Button>
@@ -179,7 +190,7 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          <div className="border-t pt-6 space-y-2">
+          <div className="border-t pt-6 space-y-4"> {/* Increased spacing */}
             <h3 className="text-lg font-headline">Account Settings</h3>
             <Dialog open={isChangePasswordDialogOpen} onOpenChange={setIsChangePasswordDialogOpen}>
               <DialogTrigger asChild>
@@ -198,21 +209,21 @@ export default function ProfilePage() {
                   <div className="relative">
                     <Label htmlFor="oldPassword">Old Password</Label>
                     <Input id="oldPassword" type={showOldPassword ? "text" : "password"} value={oldPassword} onChange={(e) => setOldPassword(e.target.value)} required />
-                    <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-6 h-7 w-7" onClick={() => setShowOldPassword(!showOldPassword)}>
+                    <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-6 h-7 w-7" onClick={() => setShowOldPassword(!showOldPassword)} aria-label={showOldPassword ? "Hide old password" : "Show old password"}>
                       {showOldPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
                   <div className="relative">
                     <Label htmlFor="newPassword">New Password (min. 6 characters)</Label>
                     <Input id="newPassword" type={showNewPassword ? "text" : "password"} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={6}/>
-                     <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-6 h-7 w-7" onClick={() => setShowNewPassword(!showNewPassword)}>
+                     <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-6 h-7 w-7" onClick={() => setShowNewPassword(!showNewPassword)} aria-label={showNewPassword ? "Hide new password" : "Show new password"}>
                       {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
                   <div className="relative">
                     <Label htmlFor="confirmNewPassword">Confirm New Password</Label>
                     <Input id="confirmNewPassword" type={showConfirmNewPassword ? "text" : "password"} value={confirmNewPassword} onChange={(e) => setConfirmNewPassword(e.target.value)} required minLength={6}/>
-                     <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-6 h-7 w-7" onClick={() => setShowConfirmNewPassword(!showConfirmNewPassword)}>
+                     <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-6 h-7 w-7" onClick={() => setShowConfirmNewPassword(!showConfirmNewPassword)} aria-label={showConfirmNewPassword ? "Hide confirm new password" : "Show confirm new password"}>
                       {showConfirmNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>

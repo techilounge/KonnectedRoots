@@ -11,7 +11,7 @@ export interface Person {
 
   // Basic Demographics
   gender: 'male' | 'female'; // Strictly 'male' or 'female'
-  pronouns?: string;
+  // pronouns?: string; // Removed
 
   // Vital Dates & Places
   birthDate?: string;
@@ -60,8 +60,11 @@ export interface FamilyTree {
 }
 
 export type { SuggestNameInput, SuggestNameOutput } from '@/ai/flows/suggest-name';
+export type { GenerateBiographyInput, GenerateBiographyOutput } from '@/ai/flows/generate-biography-flow';
+
 
 export interface NameSuggestion {
   name: string;
   reason: string;
 }
+

@@ -1,7 +1,7 @@
 
 "use client";
 import { useState, useEffect } from 'react';
-import type { Person } from '@/types';
+import type { Person, GenerateBiographyInput } from '@/types';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -16,8 +16,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Image from 'next/image';
-import { UserCircle, Wand2, Save, Upload, CalendarIcon, Users, Info, Briefcase, BookOpen, ScrollText, LinkIcon, MapPin, Eye } from 'lucide-react';
+import { UserCircle, Wand2, Save, Upload, CalendarIcon, Users, Info, Briefcase, BookOpen, ScrollText, LinkIcon, MapPin, Eye, Loader2, Sparkles } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { handleGenerateBiography } from '@/app/actions';
+import { useToast } from '@/hooks/use-toast';
 
 interface NodeEditorDialogProps {
   isOpen: boolean;
@@ -29,6 +31,8 @@ interface NodeEditorDialogProps {
 
 export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onOpenNameSuggestor }: NodeEditorDialogProps) {
   const [formData, setFormData] = useState<Partial<Person>>({});
+  const [isGeneratingBio, setIsGeneratingBio] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     if (person) {
@@ -46,16 +50,47 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onOp
     setFormData({ ...formData, [name]: value });
   };
 
-  const handleSave = () => {
-    // Basic validation: ensure firstName exists
+  const handleSaveChanges = () => {
     if (!formData.firstName || formData.firstName.trim() === "") {
-        alert("First Name is required."); // Replace with a better toast/notification
+        toast({variant: "destructive", title: "Validation Error", description: "First Name is required."});
         return;
     }
     onSave(formData as Person);
   };
 
-  if (!person && !isOpen) return null; // Ensure dialog doesn't try to render without person if not open
+  const handleGenerateBioClick = async () => {
+    setIsGeneratingBio(true);
+    const biographyInput: GenerateBiographyInput = {
+        firstName: formData.firstName || '',
+        lastName: formData.lastName || '',
+        birthDate: formData.birthDate,
+        placeOfBirth: formData.placeOfBirth,
+        deathDate: formData.deathDate,
+        placeOfDeath: formData.placeOfDeath,
+        occupation: formData.occupation,
+        education: formData.education,
+        religion: formData.religion,
+        existingBiography: formData.biography
+    };
+
+    try {
+        const result = await handleGenerateBiography(biographyInput);
+        if ('error' in result) {
+            toast({ variant: "destructive", title: "AI Error", description: result.error });
+        } else {
+            setFormData(prev => ({ ...prev, biography: result.biography }));
+            toast({ title: "Biography Generated", description: "AI has drafted a biography." });
+        }
+    } catch (error) {
+        console.error("Failed to generate biography:", error);
+        toast({ variant: "destructive", title: "Error", description: "Could not generate biography." });
+    } finally {
+        setIsGeneratingBio(false);
+    }
+  };
+
+
+  if (!person && !isOpen) return null; 
 
   const currentPersonName = formData.firstName || person?.firstName || 'New Person';
 
@@ -74,7 +109,6 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onOp
         <ScrollArea className="max-h-[70vh] pr-6">
         <div className="grid gap-6 py-4">
 
-          {/* Name Details */}
           <section className="space-y-3 p-3 border rounded-md">
             <h3 className="font-semibold text-md flex items-center"><Info className="mr-2 h-5 w-5 text-primary" />Name Details</h3>
             <div className="grid grid-cols-2 gap-3">
@@ -110,10 +144,9 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onOp
             </div>
           </section>
 
-          {/* Basic Demographics */}
           <section className="space-y-3 p-3 border rounded-md">
             <h3 className="font-semibold text-md flex items-center"><Users className="mr-2 h-5 w-5 text-primary" />Basic Demographics</h3>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3"> {/* Changed to 1 column as Pronouns removed */}
               <div>
                 <Label htmlFor="gender">Gender*</Label>
                 <Select value={formData.gender} onValueChange={(value) => handleSelectChange('gender', value)}>
@@ -124,20 +157,15 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onOp
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label htmlFor="pronouns">Pronouns</Label>
-                <Input id="pronouns" name="pronouns" value={formData.pronouns || ''} onChange={handleChange} placeholder="he/him, she/her" />
-              </div>
             </div>
           </section>
 
-          {/* Vital Dates & Places */}
           <section className="space-y-3 p-3 border rounded-md">
             <h3 className="font-semibold text-md flex items-center"><CalendarIcon className="mr-2 h-5 w-5 text-primary" />Vital Dates & Places</h3>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label htmlFor="birthDate">Birth Date</Label>
-                <Input id="birthDate" name="birthDate" type="date" value={formData.birthDate || ''} onChange={handleChange} />
+                <Input id="birthDate" name="birthDate" type="text" value={formData.birthDate || ''} onChange={handleChange} placeholder="YYYY-MM-DD or text"/>
               </div>
               <div>
                 <Label htmlFor="placeOfBirth">Place of Birth</Label>
@@ -145,7 +173,7 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onOp
               </div>
               <div>
                 <Label htmlFor="deathDate">Death Date</Label>
-                <Input id="deathDate" name="deathDate" type="date" value={formData.deathDate || ''} onChange={handleChange} />
+                <Input id="deathDate" name="deathDate" type="text" value={formData.deathDate || ''} onChange={handleChange} placeholder="YYYY-MM-DD or text"/>
               </div>
               <div>
                 <Label htmlFor="placeOfDeath">Place of Death</Label>
@@ -154,8 +182,7 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onOp
             </div>
           </section>
 
-          {/* Status & Visibility */}
-            <section className="space-y-3 p-3 border rounded-md">
+          <section className="space-y-3 p-3 border rounded-md">
                 <h3 className="font-semibold text-md flex items-center"><Eye className="mr-2 h-5 w-5 text-primary" />Status & Visibility</h3>
                 <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -183,7 +210,6 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onOp
                 </div>
             </section>
 
-          {/* Biographical Details */}
             <section className="space-y-3 p-3 border rounded-md">
                 <h3 className="font-semibold text-md flex items-center"><Briefcase className="mr-2 h-5 w-5 text-primary" />Biographical Details</h3>
                 <div className="grid grid-cols-2 gap-3">
@@ -200,13 +226,16 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onOp
                     <Label htmlFor="religion">Religion/Faith Tradition</Label>
                     <Input id="religion" name="religion" value={formData.religion || ''} onChange={handleChange} placeholder="e.g. Christian, Jewish, N/A" />
                 </div>
-                <div>
+                <div className="space-y-1">
                     <Label htmlFor="biography">Biography / Life Summary</Label>
                     <Textarea id="biography" name="biography" value={formData.biography || ''} onChange={handleChange} placeholder="Key life events, stories..." rows={4} />
+                    <Button variant="outline" size="sm" onClick={handleGenerateBioClick} disabled={isGeneratingBio} className="w-full sm:w-auto">
+                        {isGeneratingBio ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4 text-accent" />}
+                        Generate with AI
+                    </Button>
                 </div>
             </section>
 
-          {/* Media & References */}
             <section className="space-y-3 p-3 border rounded-md">
                 <h3 className="font-semibold text-md flex items-center"><Upload className="mr-2 h-5 w-5 text-primary" />Media & References</h3>
                  <div className="flex items-start space-x-4">
@@ -215,7 +244,7 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onOp
                     alt={currentPersonName}
                     width={80}
                     height={80}
-                    className="rounded-lg border flex-shrink-0"
+                    className="rounded-lg border flex-shrink-0 object-cover"
                     data-ai-hint="person avatar"
                     />
                     <div className="flex-grow space-y-2">
@@ -223,8 +252,7 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onOp
                             <Label htmlFor="profilePictureUrl">Profile Picture URL</Label>
                             <Input id="profilePictureUrl" name="profilePictureUrl" value={formData.profilePictureUrl || ''} onChange={handleChange} placeholder="https://example.com/image.png" />
                         </div>
-                        {/* Placeholder for actual upload button functionality */}
-                        <Button variant="outline" size="sm" className="text-xs" onClick={() => alert("Upload functionality to be implemented.")}>
+                        <Button variant="outline" size="sm" className="text-xs" onClick={() => alert("Photo upload functionality for tree nodes to be implemented. Please use the URL field for now.")}>
                             <Upload className="mr-2 h-3 w-3" /> Upload New Photo
                         </Button>
                     </div>
@@ -235,7 +263,6 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onOp
                 </div>
             </section>
 
-            {/* Identifiers & Notes */}
             <section className="space-y-3 p-3 border rounded-md">
                 <h3 className="font-semibold text-md flex items-center"><LinkIcon className="mr-2 h-5 w-5 text-primary" />Identifiers</h3>
                 <div>
@@ -248,16 +275,15 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onOp
                 </div>
             </section>
             
-            {/* For AI related fields if needed for direct edit, though often pre-filled from context */}
             <section className="space-y-3 p-3 border rounded-md bg-secondary/30">
                 <h3 className="font-semibold text-md flex items-center"><Wand2 className="mr-2 h-5 w-5 text-accent" />AI Helper Fields</h3>
                  <div className="grid grid-cols-2 gap-3">
                     <div>
-                        <Label htmlFor="origin">Origin (for AI)</Label>
+                        <Label htmlFor="origin">Origin (for AI Name Suggestion)</Label>
                         <Input id="origin" name="origin" value={formData.origin || ''} onChange={handleChange} placeholder="e.g., Irish, German"/>
                     </div>
                     <div>
-                        <Label htmlFor="historicalPeriod">Historical Period (for AI)</Label>
+                        <Label htmlFor="historicalPeriod">Historical Period (for AI Name Suggestion)</Label>
                         <Input id="historicalPeriod" name="historicalPeriod" value={formData.historicalPeriod || ''} onChange={handleChange} placeholder="e.g., 19th Century"/>
                     </div>
                 </div>
@@ -267,7 +293,7 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onOp
         </ScrollArea>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-          <Button type="button" onClick={handleSave} className="bg-primary hover:bg-primary/90">
+          <Button type="button" onClick={handleSaveChanges} className="bg-primary hover:bg-primary/90">
             <Save className="mr-2 h-4 w-4" /> Save Changes
           </Button>
         </DialogFooter>
