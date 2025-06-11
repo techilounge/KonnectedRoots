@@ -10,19 +10,23 @@ interface FamilyTreeCanvasPlaceholderProps {
   onNodeMove: (personId: string, x: number, y: number) => void;
 }
 
-const NODE_WIDTH = 150;
+const NODE_WIDTH = 180; // Increased width
 const NODE_HEIGHT = 70;
+const CLICK_THRESHOLD = 5; // Pixels to distinguish click from drag
 
 export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNodeMove }: FamilyTreeCanvasPlaceholderProps) {
   const [draggingState, setDraggingState] = useState<{
     personId: string;
-    offsetX: number; // Offset from top-left of node's original SVG position to mouse click point in SVG coords
+    offsetX: number; 
     offsetY: number;
+    // Store initial client mouse coordinates to detect click vs drag
+    clickStartX: number;
+    clickStartY: number;
   } | null>(null);
   
   const svgRef = useRef<SVGSVGElement>(null);
 
-  const getSVGPoint = (event: React.MouseEvent): { x: number; y: number } | null => {
+  const getSVGPoint = (event: React.MouseEvent | MouseEvent): { x: number; y: number } | null => {
     if (!svgRef.current) return null;
     const CTM = svgRef.current.getScreenCTM();
     if (!CTM) return null;
@@ -34,7 +38,7 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
   };
 
   const handleMouseDown = (event: React.MouseEvent<SVGForeignObjectElement>, person: Person) => {
-    event.preventDefault(); // Prevent text selection or other default behaviors
+    // event.preventDefault(); // Keep this if needed, but sometimes it interferes with focus
     const svgMousePos = getSVGPoint(event);
     if (!svgMousePos) return;
 
@@ -42,12 +46,14 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
       personId: person.id,
       offsetX: svgMousePos.x - (person.x ?? 0),
       offsetY: svgMousePos.y - (person.y ?? 0),
+      clickStartX: event.clientX,
+      clickStartY: event.clientY,
     });
   };
 
   const handleMouseMove = (event: React.MouseEvent<SVGSVGElement>) => {
     if (!draggingState) return;
-    event.preventDefault();
+    // No event.preventDefault() here, could cause issues with native scroll if canvas is larger than viewport
     const svgMousePos = getSVGPoint(event);
     if (!svgMousePos) return;
 
@@ -56,13 +62,32 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
     onNodeMove(draggingState.personId, newX, newY);
   };
 
-  const handleMouseUp = () => {
-    setDraggingState(null);
+  const handleMouseUp = (event: React.MouseEvent<SVGSVGElement>) => {
+    if (draggingState) {
+      const person = people.find(p => p.id === draggingState.personId);
+      const deltaX = Math.abs(event.clientX - draggingState.clickStartX);
+      const deltaY = Math.abs(event.clientY - draggingState.clickStartY);
+
+      if (person && deltaX < CLICK_THRESHOLD && deltaY < CLICK_THRESHOLD) {
+        // If mouse moved less than threshold, consider it a click
+        onNodeClick(person);
+      }
+      setDraggingState(null);
+    }
   };
   
-  const handleMouseLeave = () => {
-    // Optional: if you want dragging to stop if mouse leaves SVG
-    // setDraggingState(null); 
+  const handleMouseLeave = (event: React.MouseEvent<SVGSVGElement>) => {
+    // If mouse leaves SVG while dragging, stop the drag.
+    // This is a common pattern to avoid nodes getting stuck if mouseup happens outside.
+    if (draggingState) {
+        // Optionally, could also trigger onNodeMove one last time if needed
+        // based on last known mouse position *within* SVG bounds, but for now, just cancel.
+        // const svgMousePos = getSVGPoint(event); // Careful: event here is onMouseLeave
+        // if (svgMousePos) { 
+        //    onNodeMove(draggingState.personId, svgMousePos.x - draggingState.offsetX, svgMousePos.y - draggingState.offsetY);
+        // }
+        setDraggingState(null);
+    }
   };
 
   return (
@@ -74,7 +99,7 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
         style={{ minWidth: '800px', minHeight: '600px' }}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseLeave} // Stop dragging if mouse leaves SVG element
+        onMouseLeave={handleMouseLeave} 
       >
         {/* Render lines first */}
         {people.map(person => {
@@ -106,32 +131,20 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
             height={NODE_HEIGHT}
             className={`group ${draggingState?.personId === person.id ? 'cursor-grabbing' : 'cursor-grab'}`}
             onMouseDown={(e) => handleMouseDown(e, person)}
-            onClick={(e) => {
-              // Prevent click from triggering if it was a drag
-              if (Math.abs((person.x ?? 0) - (e.currentTarget.x?.baseVal?.value ?? 0)) < 1 && Math.abs((person.y ?? 0) - (e.currentTarget.y?.baseVal?.value ?? 0)) < 1) {
-                 // A more robust check might involve comparing original position at mousedown
-                 // For now, if no significant move, treat as click.
-                 // This basic check is to avoid triggering onNodeClick after a drag.
-                 // A better way would be to check a "wasDragged" flag set in mouseMove.
-                 if(!draggingState || draggingState.personId !== person.id) { // only click if not currently part of a drag op end
-                    onNodeClick(person);
-                 }
-              }
-            }}
+            // onClick removed, handled by onMouseUp logic
           >
             <div 
               className="w-full h-full p-2 bg-card rounded-md shadow-md border border-primary group-hover:border-accent group-hover:shadow-lg transition-all duration-200 flex items-center space-x-2 overflow-hidden select-none"
-              // style={{ userSelect: 'none' }} // Redundant, select-none class handles this
             >
               <Image
                 src={person.profilePictureUrl || `https://placehold.co/40x40.png?text=${person.firstName?.[0]}`}
                 alt={person.firstName || 'Person'}
                 width={40}
                 height={40}
-                className="rounded-full flex-shrink-0 pointer-events-none" // Prevent image from interfering with drag
+                className="rounded-full flex-shrink-0 pointer-events-none" 
                 data-ai-hint="person avatar"
               />
-              <div className="truncate pointer-events-none"> {/* Prevent text selection */}
+              <div className="truncate pointer-events-none"> 
                 <p className="text-sm font-semibold text-foreground truncate">{person.firstName || 'Unnamed'} {person.lastName || ''}</p>
                 <p className="text-xs text-muted-foreground truncate">{person.birthDate || 'Unknown birth'}</p>
               </div>
