@@ -1,6 +1,6 @@
 
 "use client";
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -10,12 +10,18 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, UserCircle, Mail, Edit2, KeyRound, Trash2, ImageUp, Eye, EyeOff } from 'lucide-react';
+import { Loader2, UserCircle, Mail, Edit2, KeyRound, Trash2, ImageUp, Eye, EyeOff, Save, XCircle } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 export default function ProfilePage() {
   const { user, loading, logout, updateUserState } = useAuth();
   const { toast } = useToast();
+  const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [initialAvatarUrl, setInitialAvatarUrl] = useState<string | undefined>(undefined);
+  const [currentAvatarPreview, setCurrentAvatarPreview] = useState<string | undefined>(undefined);
+
 
   const [isChangePasswordDialogOpen, setIsChangePasswordDialogOpen] = useState(false);
   const [isDeleteAccountDialogOpen, setIsDeleteAccountDialogOpen] = useState(false);
@@ -27,29 +33,27 @@ export default function ProfilePage() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
 
+  useEffect(() => {
+    if (user) {
+      setInitialAvatarUrl(user.avatar);
+      setCurrentAvatarPreview(user.avatar);
+    }
+  }, [user]);
+
   const handleProfilePictureChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     console.log("handleProfilePictureChange triggered");
     const file = event.target.files?.[0];
-    if (file && user) {
+    if (file) {
       console.log("File selected:", file.name);
       const reader = new FileReader();
       reader.onloadend = () => {
-        const newAvatar = reader.result as string;
-        const updatedUser = { ...user, avatar: newAvatar };
-        
-        if (updateUserState) {
-            updateUserState(updatedUser);
-             console.log("User state updated with new avatar (client-side).");
-        }
-        // In a real app, you would upload the file to a server here
-        // and get back a URL to store.
-        // For now, we just update localStorage for persistence in the demo.
-        localStorage.setItem('konnectedRootsUser', JSON.stringify(updatedUser)); 
-        toast({ title: "Profile Picture Updated", description: "Your new picture has been set (client-side preview)." });
+        const newAvatarDataUrl = reader.result as string;
+        setCurrentAvatarPreview(newAvatarDataUrl); // Update preview immediately
+        toast({ title: "Profile Picture Previewed", description: "Click 'Apply Changes' to save." });
       };
       reader.readAsDataURL(file);
     } else {
-      console.log("No file selected or no user.");
+      console.log("No file selected.");
     }
   };
 
@@ -65,23 +69,7 @@ export default function ProfilePage() {
     }
 
     console.log("Attempting to change password (simulation)...");
-    // TODO: Backend integration needed for real password change.
-    // Example:
-    // try {
-    //   const response = await fetch('/api/user/change-password', {
-    //     method: 'POST',
-    //     headers: { 'Content-Type': 'application/json' },
-    //     body: JSON.stringify({ oldPassword, newPassword }),
-    //   });
-    //   if (!response.ok) throw new Error('Failed to change password');
-    //   const result = await response.json();
-    //   toast({ title: "Password Changed", description: "Your password has been successfully updated." });
-    //   setIsChangePasswordDialogOpen(false);
-    // } catch (error) {
-    //   toast({ variant: "destructive", title: "Error", description: error.message });
-    // }
-    
-    // Simulate API call success for now
+    // Backend integration needed for real password change.
     await new Promise(resolve => setTimeout(resolve, 1000));
     toast({ title: "Password Changed (Simulated)", description: "Your password has been updated in this mock environment." });
     setIsChangePasswordDialogOpen(false);
@@ -92,32 +80,53 @@ export default function ProfilePage() {
 
   const handleDeleteAccountConfirm = async () => {
     console.log("Attempting to delete account (simulation)...");
-    // TODO: Backend integration needed for real account deletion.
-    // Example:
-    // try {
-    //   const response = await fetch('/api/user/delete-account', { method: 'POST' });
-    //   if (!response.ok) throw new Error('Failed to delete account');
-    //   toast({ variant: "destructive", title: "Account Deleted", description: "Your account has been permanently deleted." });
-    //   await logout();
-    // } catch (error) {
-    //   toast({ variant: "destructive", title: "Error", description: error.message });
-    // } finally {
-    //   setIsDeleteAccountDialogOpen(false);
-    // }
-
-    // Simulate API call success and logout
+    // Backend integration needed for real account deletion.
     await new Promise(resolve => setTimeout(resolve, 1000));
-    toast({ variant: "destructive", title: "Account Deletion Initiated (Simulated)", description: "Your account deletion process has started in this mock environment. You will be logged out." });
+    toast({ variant: "destructive", title: "Account Deletion Initiated (Simulated)", description: "Your account deletion process has started. You will be logged out." });
     setIsDeleteAccountDialogOpen(false);
-    await logout();
+    await logout(); // This will redirect via useAuth
   };
+
+  const handleApplyChanges = () => {
+    if (user && currentAvatarPreview && currentAvatarPreview !== initialAvatarUrl) {
+      const updatedUser = { ...user, avatar: currentAvatarPreview };
+      if (updateUserState) {
+        updateUserState(updatedUser);
+      }
+      // In a real app, this is where you'd call an API to save the new avatar URL / file.
+      // For now, updateUserState updates localStorage.
+      console.log("User state updated with new avatar (client-side persisted).");
+      toast({ title: "Profile Updated", description: "Your changes have been applied." });
+    } else {
+      toast({ title: "No Changes", description: "No new changes to apply." });
+    }
+    router.push('/dashboard');
+  };
+
+  const handleCancelChanges = () => {
+    if (user && initialAvatarUrl) {
+      // Revert preview to initial state if it changed
+      if (currentAvatarPreview !== initialAvatarUrl) {
+        setCurrentAvatarPreview(initialAvatarUrl);
+        // If updateUserState was called on preview, revert it in localStorage as well
+        // (though current logic only previews, apply makes it permanent)
+      }
+    }
+    toast({ title: "Changes Discarded", description: "No changes were applied." });
+    router.push('/dashboard');
+  };
+
 
   if (loading) {
     return <div className="flex items-center justify-center min-h-[calc(100vh-128px)]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
 
   if (!user) {
-    return <div className="container py-8 text-center">Please log in to view your profile.</div>;
+    // This should ideally be handled by a layout or higher-order component
+    // redirecting to login if not authenticated.
+    // For now, showing a message or redirecting.
+    router.push('/login');
+    return <div className="container py-8 text-center">Redirecting to login...</div>;
   }
 
   return (
@@ -131,7 +140,7 @@ export default function ProfilePage() {
         <CardContent className="space-y-6">
           <div className="flex flex-col items-center space-y-4">
             <Avatar className="h-24 w-24">
-              <AvatarImage src={user.avatar || `https://placehold.co/96x96.png?text=${user.name?.[0]}`} alt={user.name} data-ai-hint="user avatar" />
+              <AvatarImage src={currentAvatarPreview || `https://placehold.co/96x96.png?text=${user.name?.[0]}`} alt={user.name} data-ai-hint="user avatar" />
               <AvatarFallback className="text-3xl">{user.name?.[0]?.toUpperCase()}</AvatarFallback>
             </Avatar>
             <input
@@ -216,10 +225,15 @@ export default function ProfilePage() {
                 </form>
               </DialogContent>
             </Dialog>
-            
+          </div>
+        </CardContent>
+        <CardFooter className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2 pt-6 border-t">
+            <Button variant="outline" onClick={handleCancelChanges}>
+              <XCircle className="mr-2 h-4 w-4" /> Cancel
+            </Button>
             <AlertDialog open={isDeleteAccountDialogOpen} onOpenChange={setIsDeleteAccountDialogOpen}>
               <AlertDialogTrigger asChild>
-                <Button variant="destructive" className="w-full justify-start mt-4"> {/* Increased margin top */}
+                <Button variant="destructive">
                   <Trash2 className="mr-2 h-4 w-4" /> Delete Account
                 </Button>
               </AlertDialogTrigger>
@@ -239,10 +253,11 @@ export default function ProfilePage() {
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
-          </div>
-        </CardContent>
+            <Button onClick={handleApplyChanges} className="bg-primary hover:bg-primary/90">
+              <Save className="mr-2 h-4 w-4" /> Apply Changes
+            </Button>
+        </CardFooter>
       </Card>
     </div>
   );
 }
-
