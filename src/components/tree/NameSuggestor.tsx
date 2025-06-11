@@ -25,12 +25,12 @@ import { useToast } from '@/hooks/use-toast';
 interface NameSuggestorProps {
   isOpen: boolean;
   onClose: () => void;
-  personDetails?: Partial<Person> | null; // Pre-fill form if editing/adding specific person
+  personDetails?: Partial<Person> | null; 
   onNameSuggested: (name: string, reason: string) => void;
 }
 
 const formSchema = z.object({
-  gender: z.enum(['male', 'female', 'neutral'], { required_error: "Gender is required." }),
+  gender: z.enum(['male', 'female'], { required_error: "Gender is required." }), // Updated gender
   origin: z.string().optional(),
   historicalPeriod: z.string().optional(),
 });
@@ -45,20 +45,19 @@ export default function NameSuggestor({ isOpen, onClose, personDetails, onNameSu
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      gender: personDetails?.gender || 'neutral',
+      gender: personDetails?.gender || 'male', // Default to male or female
       origin: personDetails?.origin || '',
       historicalPeriod: personDetails?.historicalPeriod || '',
     },
   });
 
   useEffect(() => {
-    // Reset form when personDetails change (e.g. opening dialog for different person)
     form.reset({
-      gender: personDetails?.gender || 'neutral',
+      gender: personDetails?.gender || 'male',
       origin: personDetails?.origin || '',
       historicalPeriod: personDetails?.historicalPeriod || '',
     });
-    setSuggestion(null); // Clear previous suggestion
+    setSuggestion(null); 
   }, [personDetails, form, isOpen]);
 
 
@@ -120,7 +119,6 @@ export default function NameSuggestor({ isOpen, onClose, personDetails, onNameSu
                     <SelectContent>
                       <SelectItem value="male">Male</SelectItem>
                       <SelectItem value="female">Female</SelectItem>
-                      <SelectItem value="neutral">Neutral</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />

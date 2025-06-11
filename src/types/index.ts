@@ -1,20 +1,52 @@
 
-
 export interface Person {
   id: string;
-  name: string;
+  // Name Details
+  namePrefix?: string;
+  firstName: string; // Changed from 'name'
+  middleName?: string;
+  lastName?: string;
+  nameSuffix?: string;
+  nickname?: string;
+
+  // Basic Demographics
+  gender: 'male' | 'female'; // Strictly 'male' or 'female'
+  pronouns?: string;
+
+  // Vital Dates & Places
   birthDate?: string;
+  placeOfBirth?: string;
   deathDate?: string;
-  profilePictureUrl?: string;
-  gender?: 'male' | 'female' | 'neutral' | 'other';
-  origin?: string; // For AI name suggestion
-  historicalPeriod?: string; // For AI name suggestion
-  notes?: string;
-  // For tree structure, simple parent/child/spouse IDs
+  placeOfDeath?: string;
+
+  // Family Connections (IDs for linking, managed by canvas/other UI)
   parentId1?: string;
   parentId2?: string;
   spouseIds?: string[];
   childrenIds?: string[];
+
+  // Status & Visibility
+  livingStatus?: 'living' | 'deceased' | 'unknown';
+  privacySetting?: 'public' | 'private' | 'invite-only';
+
+  // Biographical Details
+  occupation?: string;
+  education?: string;
+  religion?: string;
+  biography?: string; // Was 'notes', now for life summary
+
+  // Media & References
+  profilePictureUrl?: string;
+  sourceCitationsNotes?: string; // For additional photos/docs links and source citations
+
+  // Identifiers
+  externalId?: string;
+  // konnectedRootsId is 'id'
+
+  // For AI name suggestion (can be pre-filled from context)
+  origin?: string;
+  historicalPeriod?: string;
+
   // For canvas positioning (example)
   x?: number;
   y?: number;
@@ -25,12 +57,8 @@ export interface FamilyTree {
   name: string;
   memberCount: number;
   lastUpdated: string; // ISO date string
-  // members?: Person[]; // Optionally store members directly or fetch separately
 }
 
-// Re-export SuggestNameInput and SuggestNameOutput from the AI flow types
-// This avoids direct import of AI flow types into UI components if not needed there
-// and centralizes shared types.
 export type { SuggestNameInput, SuggestNameOutput } from '@/ai/flows/suggest-name';
 
 export interface NameSuggestion {

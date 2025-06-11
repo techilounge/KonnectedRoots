@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -12,7 +13,7 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
 const SuggestNameInputSchema = z.object({
-  gender: z.enum(['male', 'female', 'neutral']).describe('The gender of the person.'),
+  gender: z.enum(['male', 'female']).describe('The gender of the person.'), // Updated gender
   origin: z.string().optional().describe('The cultural origin of the person.'),
   historicalPeriod: z.string().optional().describe('The historical period the person lived in.'),
 });

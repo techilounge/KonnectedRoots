@@ -10,12 +10,11 @@ interface FamilyTreeCanvasPlaceholderProps {
 
 const NODE_WIDTH = 150;
 const NODE_HEIGHT = 70;
-const HORIZONTAL_SPACING = 50;
-const VERTICAL_SPACING = 100;
+// const HORIZONTAL_SPACING = 50; // Not used in current layout
+// const VERTICAL_SPACING = 100; // Not used in current layout
 
 
 export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick }: FamilyTreeCanvasPlaceholderProps) {
-  // Basic rendering of nodes in a line for placeholder
   return (
     <div className="w-full h-full relative border border-dashed border-border rounded-lg bg-slate-50 overflow-auto p-10">
       <svg width="100%" height="100%" style={{ minWidth: '800px', minHeight: '600px' }}>
@@ -53,15 +52,15 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick }: Fam
           >
             <div className="w-full h-full p-2 bg-card rounded-md shadow-md border border-primary group-hover:border-accent group-hover:shadow-lg transition-all duration-200 flex items-center space-x-2 overflow-hidden">
               <Image
-                src={person.profilePictureUrl || `https://placehold.co/40x40.png?text=${person.name?.[0]}`}
-                alt={person.name || 'Person'}
+                src={person.profilePictureUrl || `https://placehold.co/40x40.png?text=${person.firstName?.[0]}`}
+                alt={person.firstName || 'Person'}
                 width={40}
                 height={40}
                 className="rounded-full flex-shrink-0"
                 data-ai-hint="person avatar"
               />
               <div className="truncate">
-                <p className="text-sm font-semibold text-foreground truncate">{person.name || 'Unnamed'}</p>
+                <p className="text-sm font-semibold text-foreground truncate">{person.firstName || 'Unnamed'} {person.lastName || ''}</p>
                 <p className="text-xs text-muted-foreground truncate">{person.birthDate || 'Unknown birth'}</p>
               </div>
             </div>

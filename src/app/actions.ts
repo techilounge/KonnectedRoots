@@ -5,7 +5,7 @@ import { suggestName as suggestNameFlow, type SuggestNameInput, type SuggestName
 import { z } from 'zod';
 
 const SuggestNameActionSchema = z.object({
-  gender: z.enum(['male', 'female', 'neutral']),
+  gender: z.enum(['male', 'female']), // Updated gender
   origin: z.string().optional(),
   historicalPeriod: z.string().optional(),
 });
