@@ -64,6 +64,7 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onOp
     const biographyInput: GenerateBiographyInput = {
         firstName: formData.firstName || '',
         lastName: formData.lastName || '',
+        maidenName: formData.maidenName,
         birthDate: formData.birthDate,
         placeOfBirth: formData.placeOfBirth,
         deathDate: formData.deathDate,
@@ -148,6 +149,10 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onOp
               <div>
                 <Label htmlFor="lastName">Last Name (Surname)</Label>
                 <Input id="lastName" name="lastName" value={formData.lastName || ''} onChange={handleChange} placeholder="Doe" />
+              </div>
+              <div>
+                <Label htmlFor="maidenName">Maiden Name</Label>
+                <Input id="maidenName" name="maidenName" value={formData.maidenName || ''} onChange={handleChange} placeholder="Smith" />
               </div>
               <div>
                 <Label htmlFor="nameSuffix">Suffix</Label>
@@ -337,4 +342,3 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onOp
     </Dialog>
   );
 }
-

@@ -14,6 +14,7 @@ import {z} from 'genkit';
 const GenerateBiographyInputSchema = z.object({
   firstName: z.string().optional().describe('The first name of the person.'),
   lastName: z.string().optional().describe('The last name of the person.'),
+  maidenName: z.string().optional().describe('The maiden name of the person, if applicable.'),
   birthDate: z.string().optional().describe('The birth date of the person (e.g., YYYY-MM-DD or descriptive text like "about 1885").'),
   placeOfBirth: z.string().optional().describe('The place of birth of the person.'),
   deathDate: z.string().optional().describe('The death date of the person (e.g., YYYY-MM-DD or descriptive text).'),
@@ -40,12 +41,14 @@ const prompt = ai.definePrompt({
   output: {schema: GenerateBiographyOutputSchema},
   prompt: `You are a helpful assistant tasked with writing a concise and engaging biography.
 Based on the following details for {{#if firstName}}{{{firstName}}}{{/if}} {{#if lastName}}{{{lastName}}}{{/if}}, craft a narrative biography.
+{{#if maidenName}}If applicable, note that their maiden name was {{{maidenName}}}.{{/if}}
 Highlight key life events, achievements, and personal characteristics if information is available.
 If dates are provided, use them to frame the timeline of their life.
 
 Details:
 {{#if firstName}}- First Name: {{{firstName}}}{{/if}}
 {{#if lastName}}- Last Name: {{{lastName}}}{{/if}}
+{{#if maidenName}}- Maiden Name: {{{maidenName}}}{{/if}}
 {{#if birthDate}}- Birth Date: {{{birthDate}}}{{/if}}
 {{#if placeOfBirth}}- Place of Birth: {{{placeOfBirth}}}{{/if}}
 {{#if deathDate}}- Death Date: {{{deathDate}}}{{/if}}

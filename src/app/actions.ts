@@ -31,6 +31,7 @@ export async function handleSuggestName(input: SuggestNameInput): Promise<Sugges
 const HandleGenerateBiographyInputSchema = z.object({
   firstName: z.string().optional(),
   lastName: z.string().optional(),
+  maidenName: z.string().optional(),
   birthDate: z.string().optional(),
   placeOfBirth: z.string().optional(),
   deathDate: z.string().optional(),

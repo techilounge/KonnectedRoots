@@ -6,12 +6,12 @@ export interface Person {
   firstName: string; // Changed from 'name'
   middleName?: string;
   lastName?: string;
+  maidenName?: string;
   nameSuffix?: string;
   nickname?: string;
 
   // Basic Demographics
   gender: 'male' | 'female'; // Strictly 'male' or 'female'
-  // pronouns?: string; // Removed
 
   // Vital Dates & Places
   birthDate?: string;
@@ -67,4 +67,3 @@ export interface NameSuggestion {
   name: string;
   reason: string;
 }
-
