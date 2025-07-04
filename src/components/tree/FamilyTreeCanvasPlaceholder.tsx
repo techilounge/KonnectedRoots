@@ -70,7 +70,7 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
       setLinkingState({ fromId: fromPerson.id, fromConnector: fromCoords, toConnector: { ...fromCoords } });
   };
 
-  const handleMouseMove = (event: React.MouseEvent<SVGSVGElement>) => {
+  const handleMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
     const svgMousePos = getSVGPoint(event);
     if (!svgMousePos) return;
 
@@ -83,7 +83,7 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
     }
   };
 
-  const handleMouseUp = (event: React.MouseEvent<SVGSVGElement>) => {
+  const handleMouseUp = (event: React.MouseEvent<HTMLDivElement>) => {
     if (draggingState) {
       const person = people.find(p => p.id === draggingState.personId);
       const deltaX = Math.abs(event.clientX - draggingState.clickStartX);
@@ -93,17 +93,16 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
       }
       setDraggingState(null);
     } else if (linkingState) {
-      const svgMousePos = getSVGPoint(event);
-      if (svgMousePos) {
-        const targetPerson = people.find(p =>
-          svgMousePos.x >= (p.x || 0) && svgMousePos.x <= (p.x || 0) + NODE_WIDTH &&
-          svgMousePos.y >= (p.y || 0) && svgMousePos.y <= (p.y || 0) + NODE_HEIGHT &&
-          p.id !== linkingState.fromId
-        );
+      const targetElement = event.target as HTMLElement;
+      // Use closest to find the person card, whether the target is the card itself or a connector on it.
+      const targetPersonContainer = targetElement.closest<HTMLElement>('[data-person-id]');
+      const targetPersonId = targetPersonContainer?.dataset.personId;
 
-        if (targetPerson) {
-          setPopoverState({ open: true, fromId: linkingState.fromId, toId: targetPerson.id, x: event.clientX, y: event.clientY });
-        }
+      if (targetPersonId && targetPersonId !== linkingState.fromId) {
+          const targetPerson = people.find(p => p.id === targetPersonId);
+          if (targetPerson) {
+              setPopoverState({ open: true, fromId: linkingState.fromId, toId: targetPerson.id, x: event.clientX, y: event.clientY });
+          }
       }
       setLinkingState(null);
     }
@@ -169,7 +168,11 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
   };
 
   return (
-    <div className="w-full h-full relative border border-dashed border-border rounded-lg bg-slate-50 overflow-auto p-10">
+    <div 
+      className="w-full h-full relative border border-dashed border-border rounded-lg bg-slate-50 overflow-auto p-10"
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+    >
       <Popover open={popoverState?.open} onOpenChange={() => setPopoverState(null)}>
         <PopoverTrigger asChild>
             <div 
@@ -191,8 +194,6 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
         width="100%" 
         height="100%" 
         style={{ minWidth: '1200px', minHeight: '800px' }}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
       >
         {renderLines()}
 
@@ -224,10 +225,10 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
                   alt={person.firstName || 'Person'}
                   width={40}
                   height={40}
-                  className="rounded-full flex-shrink-0 pointer-events-none" 
+                  className="rounded-full flex-shrink-0"
                   data-ai-hint="person avatar"
                 />
-                <div className="truncate pointer-events-none"> 
+                <div className="truncate"> 
                   <p className="text-sm font-semibold text-foreground truncate">{person.firstName || 'Unnamed'} {person.lastName || ''}</p>
                   <p className="text-xs text-muted-foreground truncate">{person.birthDate || 'Unknown birth'}</p>
                 </div>
