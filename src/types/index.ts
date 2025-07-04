@@ -1,4 +1,6 @@
 
+export type Relationship = 'parent' | 'child' | 'spouse';
+
 export interface Person {
   id: string;
   // Name Details

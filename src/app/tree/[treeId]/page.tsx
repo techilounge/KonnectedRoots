@@ -5,16 +5,18 @@ import { useParams, useRouter } from 'next/navigation'; // Added useRouter
 import FamilyTreeCanvasPlaceholder from '@/components/tree/FamilyTreeCanvasPlaceholder';
 import AddPersonToolbox from '@/components/tree/AddPersonToolbox';
 import NodeEditorDialog from '@/components/tree/NodeEditorDialog';
-import type { Person, FamilyTree } from '@/types';
+import type { Person, FamilyTree, Relationship } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Users, Share2, ZoomIn, ZoomOut, UserPlus, ChevronLeft } from 'lucide-react';
 import NameSuggestor from '@/components/tree/NameSuggestor';
 import Link from 'next/link';
+import { useToast } from '@/hooks/use-toast';
 
 export default function TreeEditorPage() {
   const params = useParams();
   const treeId = params.treeId as string;
   const router = useRouter(); // Initialize router
+  const { toast } = useToast();
 
   const [treeData, setTreeData] = useState<FamilyTree | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
@@ -50,6 +52,8 @@ export default function TreeEditorPage() {
       gender: 'male', 
       livingStatus: 'unknown',
       privacySetting: 'private',
+      spouseIds: [],
+      childrenIds: [],
       ...newPersonDetails,
       x: Math.random() * 500 + 50, 
       y: Math.random() * 300 + 50,
@@ -89,6 +93,48 @@ export default function TreeEditorPage() {
       )
     );
   };
+  
+  const handleSetRelationship = (fromId: string, toId: string, relationship: Relationship) => {
+    setPeople(prevPeople => {
+      const peopleCopy = prevPeople.map(p => ({ ...p })); // Deep copy for mutation
+      const fromPerson = peopleCopy.find(p => p.id === fromId);
+      const toPerson = peopleCopy.find(p => p.id === toId);
+
+      if (!fromPerson || !toPerson) return prevPeople;
+
+      switch (relationship) {
+        case 'parent': // `toPerson` is the parent of `fromPerson`
+          if (fromPerson.parentId1 && fromPerson.parentId2) {
+             toast({ variant: "destructive", title: "Cannot Add Parent", description: `${fromPerson.firstName} already has two parents.` });
+             return prevPeople;
+          }
+          if (fromPerson.parentId1 === toId || fromPerson.parentId2 === toId) return prevPeople; // Already a parent
+          if (!fromPerson.parentId1) fromPerson.parentId1 = toId;
+          else if (!fromPerson.parentId2) fromPerson.parentId2 = toId;
+          
+          toPerson.childrenIds = [...(toPerson.childrenIds || []), fromId];
+          break;
+        case 'child': // `toPerson` is the child of `fromPerson`
+           if (toPerson.parentId1 && toPerson.parentId2) {
+             toast({ variant: "destructive", title: "Cannot Add Parent", description: `${toPerson.firstName} already has two parents.` });
+             return prevPeople;
+           }
+          if (toPerson.parentId1 === fromId || toPerson.parentId2 === fromId) return prevPeople; // Already a parent
+          if (!toPerson.parentId1) toPerson.parentId1 = fromId;
+          else if (!toPerson.parentId2) toPerson.parentId2 = fromId;
+          
+          fromPerson.childrenIds = [...(fromPerson.childrenIds || []), toId];
+          break;
+        case 'spouse':
+          fromPerson.spouseIds = [...(fromPerson.spouseIds || []), toId];
+          toPerson.spouseIds = [...(toPerson.spouseIds || []), fromId];
+          break;
+      }
+
+      toast({ title: "Relationship Updated!", description: `Set ${toPerson.firstName} as ${fromPerson.firstName}'s ${relationship}.` });
+      return peopleCopy;
+    });
+  };
 
 
   if (!treeData) {
@@ -125,6 +171,7 @@ export default function TreeEditorPage() {
               people={people} 
               onNodeClick={handleEditPerson}
               onNodeMove={handleNodeMove} 
+              onSetRelationship={handleSetRelationship}
             />
           ) : (
              <div className="flex flex-col items-center justify-center h-full border-2 border-dashed border-border rounded-lg">
