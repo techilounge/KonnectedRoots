@@ -25,6 +25,9 @@ export default function TreeEditorPage() {
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isNameSuggestorOpen, setIsNameSuggestorOpen] = useState(false);
   const [personForSuggestion, setPersonForSuggestion] = useState<Partial<Person> | null>(null);
+  
+  // State for Delete Confirmation Dialog
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [personToDelete, setPersonToDelete] = useState<Person | null>(null);
 
 
@@ -97,6 +100,22 @@ export default function TreeEditorPage() {
     setIsEditorOpen(false);
     setSelectedPerson(null);
   };
+  
+  const handleOpenDeleteDialog = (person: Person) => {
+    setPersonToDelete(person);
+    setIsDeleteDialogOpen(true);
+    // If editor is open for this person, close it
+    if(isEditorOpen && selectedPerson?.id === person.id) {
+        setIsEditorOpen(false);
+        setSelectedPerson(null);
+    }
+  };
+
+  const handleCloseDeleteDialog = () => {
+    setPersonToDelete(null);
+    setIsDeleteDialogOpen(false);
+  };
+
 
   const handleConfirmDelete = () => {
     if (!personToDelete) return;
@@ -126,9 +145,7 @@ export default function TreeEditorPage() {
       description: `"${personToDelete.firstName}" has been removed from the tree.`,
     });
     
-    // Only set personToDelete to null to close the confirmation dialog.
-    // Other state changes (like closing the editor) are handled when the delete is initiated.
-    setPersonToDelete(null);
+    handleCloseDeleteDialog();
   };
   
   const handleOpenNameSuggestor = (personDetails?: Partial<Person>) => {
@@ -271,7 +288,7 @@ export default function TreeEditorPage() {
             <FamilyTreeCanvasPlaceholder 
               people={people} 
               onNodeClick={handleEditPerson}
-              onNodeDeleteRequest={setPersonToDelete}
+              onNodeDeleteRequest={handleOpenDeleteDialog}
               onNodeMove={handleNodeMove} 
               onSetRelationship={handleSetRelationship}
               onSetChildOfCouple={handleSetChildOfCouple}
@@ -293,11 +310,7 @@ export default function TreeEditorPage() {
           onClose={() => { setIsEditorOpen(false); setSelectedPerson(null); }}
           person={selectedPerson}
           onSave={handleSavePerson}
-          onDeleteRequest={(person) => {
-            setPersonToDelete(person);
-            setIsEditorOpen(false); // Close editor when delete is initiated
-            setSelectedPerson(null);
-          }}
+          onDeleteRequest={handleOpenDeleteDialog}
           onOpenNameSuggestor={(details) => {
             setIsEditorOpen(false); 
             handleOpenNameSuggestor(details);
@@ -332,7 +345,7 @@ export default function TreeEditorPage() {
         }}
       />
 
-      <AlertDialog open={!!personToDelete} onOpenChange={(open) => !open && setPersonToDelete(null)}>
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
@@ -341,7 +354,7 @@ export default function TreeEditorPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setPersonToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={handleCloseDeleteDialog}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmDelete}
               className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"

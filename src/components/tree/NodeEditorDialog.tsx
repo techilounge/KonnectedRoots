@@ -110,7 +110,6 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
   const handleDeleteClick = () => {
     if (person) {
       onDeleteRequest(person);
-      onClose(); // Close the editor dialog
     }
   };
 
