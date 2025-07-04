@@ -5,10 +5,13 @@ import Image from 'next/image';
 import React, { useState, useRef, useCallback } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
+import { Edit, Trash2 } from 'lucide-react';
 
 interface FamilyTreeCanvasPlaceholderProps {
   people: Person[];
   onNodeClick: (person: Person) => void;
+  onNodeDeleteRequest: (person: Person) => void;
   onNodeMove: (personId: string, x: number, y: number) => void;
   onSetRelationship: (fromId: string, toId: string, relationship: Relationship) => void;
   onSetChildOfCouple: (childId: string, parent1Id: string, parent2Id: string) => void;
@@ -32,7 +35,7 @@ type PopoverState = {
   y: number;
 };
 
-export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNodeMove, onSetRelationship, onSetChildOfCouple }: FamilyTreeCanvasPlaceholderProps) {
+export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNodeDeleteRequest, onNodeMove, onSetRelationship, onSetChildOfCouple }: FamilyTreeCanvasPlaceholderProps) {
   const [draggingState, setDraggingState] = useState<{ personId: string; offsetX: number; offsetY: number; clickStartX: number; clickStartY: number; } | null>(null);
   const [linkingState, setLinkingState] = useState<LinkingState | null>(null);
   const [popoverState, setPopoverState] = useState<PopoverState | null>(null);
@@ -50,6 +53,9 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
   }, []);
 
   const handleMouseDown = (event: React.MouseEvent<HTMLDivElement>, person: Person) => {
+    // Prevent starting a drag on right-click
+    if (event.button === 2) return;
+
     const svgMousePos = getSVGPoint(event);
     if (!svgMousePos) return;
 
@@ -71,7 +77,7 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
       setLinkingState({ fromId: fromPerson.id, fromConnector: fromCoords, toConnector: { ...fromCoords } });
   };
 
-  const handleMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
+  const handleMouseMove = (event: React.MouseEvent) => {
     const svgMousePos = getSVGPoint(event);
     if (!svgMousePos) return;
 
@@ -84,7 +90,7 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
     }
   };
 
-  const handleMouseUp = (event: React.MouseEvent<HTMLDivElement>) => {
+  const handleMouseUp = (event: React.MouseEvent) => {
     if (linkingState) {
       const targetElement = event.target as HTMLElement;
       
@@ -326,39 +332,57 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
             height={NODE_HEIGHT}
             className={`${draggingState?.personId === person.id ? 'cursor-grabbing' : 'cursor-grab'}`}
           >
-            <div 
-              className="group/node relative w-full h-full select-none"
-              onMouseDown={(e) => handleMouseDown(e, person)}
-              data-person-id={person.id}
-            >
-              <div className="w-full h-full p-2 bg-card rounded-md shadow-md border-2 border-primary group-hover/node:border-accent group-hover/node:shadow-lg transition-all duration-200 flex items-center space-x-2 overflow-hidden">
-                <Image
-                  src={person.profilePictureUrl || `https://placehold.co/40x40.png?text=${person.firstName?.[0]}`}
-                  alt={person.firstName || 'Person'}
-                  width={40}
-                  height={40}
-                  className="rounded-full flex-shrink-0"
-                  data-ai-hint="person avatar"
-                />
-                <div className="truncate"> 
-                  <p className="text-sm font-semibold text-foreground truncate">{person.firstName || 'Unnamed'} {person.lastName || ''}</p>
-                  <p className="text-xs text-muted-foreground truncate">{person.birthDate || 'Unknown birth'}</p>
-                </div>
-              </div>
+            <ContextMenu>
+              <ContextMenuTrigger>
+                <div 
+                  className="group/node relative w-full h-full select-none"
+                  onMouseDown={(e) => handleMouseDown(e, person)}
+                  data-person-id={person.id}
+                >
+                  <div className="w-full h-full p-2 bg-card rounded-md shadow-md border-2 border-primary group-hover/node:border-accent group-hover/node:shadow-lg transition-all duration-200 flex items-center space-x-2 overflow-hidden">
+                    <Image
+                      src={person.profilePictureUrl || `https://placehold.co/40x40.png?text=${person.firstName?.[0]}`}
+                      alt={person.firstName || 'Person'}
+                      width={40}
+                      height={40}
+                      className="rounded-full flex-shrink-0"
+                      data-ai-hint="person avatar"
+                    />
+                    <div className="truncate"> 
+                      <p className="text-sm font-semibold text-foreground truncate">{person.firstName || 'Unnamed'} {person.lastName || ''}</p>
+                      <p className="text-xs text-muted-foreground truncate">{person.birthDate || 'Unknown birth'}</p>
+                    </div>
+                  </div>
 
-              {/* Connector Nodes */}
-              {['top', 'bottom', 'left', 'right'].map((pos) => (
-                 <div
-                    key={pos}
-                    onMouseDown={(e) => handleConnectorMouseDown(e, person, pos as any)}
-                    className="absolute bg-primary/50 border border-primary rounded-full w-3 h-3 cursor-crosshair opacity-0 group-hover/node:opacity-100 transition-opacity"
-                    style={{
-                        top: pos === 'top' ? '-6px' : pos === 'bottom' ? 'calc(100% - 6px)' : 'calc(50% - 6px)',
-                        left: pos === 'left' ? '-6px' : pos === 'right' ? 'calc(100% - 6px)' : 'calc(50% - 6px)',
-                    }}
-                 />
-              ))}
-            </div>
+                  {/* Connector Nodes */}
+                  {['top', 'bottom', 'left', 'right'].map((pos) => (
+                    <div
+                        key={pos}
+                        onMouseDown={(e) => handleConnectorMouseDown(e, person, pos as any)}
+                        className="absolute bg-primary/50 border border-primary rounded-full w-3 h-3 cursor-crosshair opacity-0 group-hover/node:opacity-100 transition-opacity"
+                        style={{
+                            top: pos === 'top' ? '-6px' : pos === 'bottom' ? 'calc(100% - 6px)' : 'calc(50% - 6px)',
+                            left: pos === 'left' ? '-6px' : pos === 'right' ? 'calc(100% - 6px)' : 'calc(50% - 6px)',
+                        }}
+                    />
+                  ))}
+                </div>
+              </ContextMenuTrigger>
+              <ContextMenuContent>
+                  <ContextMenuItem onSelect={() => onNodeClick(person)} className="cursor-pointer">
+                    <Edit className="mr-2 h-4 w-4" />
+                    <span>Edit Person</span>
+                  </ContextMenuItem>
+                  <ContextMenuSeparator />
+                  <ContextMenuItem 
+                    onSelect={() => onNodeDeleteRequest(person)} 
+                    className="text-destructive focus:text-destructive cursor-pointer"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    <span>Delete Person</span>
+                  </ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
           </foreignObject>
         ))}
       </svg>

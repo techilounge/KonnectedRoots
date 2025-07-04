@@ -20,18 +20,17 @@ import { UserCircle, Wand2, Save, Upload, CalendarIcon, Users, Info, Briefcase, 
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { handleGenerateBiography } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 
 interface NodeEditorDialogProps {
   isOpen: boolean;
   onClose: () => void;
   person: Person | null;
   onSave: (person: Person) => void;
-  onDelete: (personId: string) => void;
+  onDeleteRequest: (person: Person) => void;
   onOpenNameSuggestor: (personDetails: Partial<Person>) => void;
 }
 
-export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDelete, onOpenNameSuggestor }: NodeEditorDialogProps) {
+export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDeleteRequest, onOpenNameSuggestor }: NodeEditorDialogProps) {
   const [formData, setFormData] = useState<Partial<Person>>({});
   const [isGeneratingBio, setIsGeneratingBio] = useState(false);
   const { toast } = useToast();
@@ -108,6 +107,12 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
     }
   };
 
+  const handleDeleteClick = () => {
+    if (person) {
+      onDeleteRequest(person);
+      onClose(); // Close the editor dialog
+    }
+  };
 
   if (!person && !isOpen) return null; 
 
@@ -335,36 +340,9 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
         </div>
         </ScrollArea>
         <DialogFooter className="sm:justify-between">
-          <div>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive">
-                  <Trash2 className="mr-2 h-4 w-4" /> Delete Person
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will permanently delete {currentPersonName} and remove all their connections. This action cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => {
-                      if (person?.id) {
-                        onDelete(person.id);
-                      }
-                    }}
-                    className="bg-destructive hover:bg-destructive/90"
-                  >
-                    Confirm Delete
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
+          <Button variant="destructive" onClick={handleDeleteClick}>
+            <Trash2 className="mr-2 h-4 w-4" /> Delete Person
+          </Button>
           <div className="flex space-x-2">
             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
             <Button type="button" onClick={handleSaveChanges} className="bg-primary hover:bg-primary/90">

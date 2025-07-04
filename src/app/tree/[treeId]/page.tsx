@@ -7,10 +7,11 @@ import AddPersonToolbox from '@/components/tree/AddPersonToolbox';
 import NodeEditorDialog from '@/components/tree/NodeEditorDialog';
 import type { Person, FamilyTree, Relationship } from '@/types';
 import { Button } from '@/components/ui/button';
-import { Users, Share2, ZoomIn, ZoomOut, UserPlus, ChevronLeft } from 'lucide-react';
+import { Users, Share2, ZoomIn, ZoomOut, UserPlus, ChevronLeft, Loader2 } from 'lucide-react';
 import NameSuggestor from '@/components/tree/NameSuggestor';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 export default function TreeEditorPage() {
   const params = useParams();
@@ -24,6 +25,7 @@ export default function TreeEditorPage() {
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isNameSuggestorOpen, setIsNameSuggestorOpen] = useState(false);
   const [personForSuggestion, setPersonForSuggestion] = useState<Partial<Person> | null>(null);
+  const [personToDelete, setPersonToDelete] = useState<Person | null>(null);
 
 
   // Effect to load people from localStorage on initial mount or treeId change
@@ -96,9 +98,10 @@ export default function TreeEditorPage() {
     setSelectedPerson(null);
   };
 
-  const handleDeletePerson = (personIdToDelete: string) => {
-    const personToDelete = people.find(p => p.id === personIdToDelete);
+  const handleConfirmDelete = () => {
     if (!personToDelete) return;
+
+    const personIdToDelete = personToDelete.id;
 
     setPeople(prevPeople =>
       prevPeople
@@ -122,8 +125,10 @@ export default function TreeEditorPage() {
       title: "Person Deleted",
       description: `"${personToDelete.firstName}" has been removed from the tree.`,
     });
+    
     setIsEditorOpen(false);
     setSelectedPerson(null);
+    setPersonToDelete(null); // Close confirmation dialog
   };
   
   const handleOpenNameSuggestor = (personDetails?: Partial<Person>) => {
@@ -266,6 +271,7 @@ export default function TreeEditorPage() {
             <FamilyTreeCanvasPlaceholder 
               people={people} 
               onNodeClick={handleEditPerson}
+              onNodeDeleteRequest={setPersonToDelete}
               onNodeMove={handleNodeMove} 
               onSetRelationship={handleSetRelationship}
               onSetChildOfCouple={handleSetChildOfCouple}
@@ -287,7 +293,11 @@ export default function TreeEditorPage() {
           onClose={() => { setIsEditorOpen(false); setSelectedPerson(null); }}
           person={selectedPerson}
           onSave={handleSavePerson}
-          onDelete={handleDeletePerson}
+          onDeleteRequest={(person) => {
+            setPersonToDelete(person);
+            setIsEditorOpen(false); // Close editor when delete is initiated
+            setSelectedPerson(null);
+          }}
           onOpenNameSuggestor={(details) => {
             setIsEditorOpen(false); 
             handleOpenNameSuggestor(details);
@@ -321,6 +331,26 @@ export default function TreeEditorPage() {
           setIsNameSuggestorOpen(false);
         }}
       />
+
+      <AlertDialog open={!!personToDelete} onOpenChange={(open) => !open && setPersonToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete {personToDelete?.firstName} {personToDelete?.lastName || ''} and all associated connections from the tree.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setPersonToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
