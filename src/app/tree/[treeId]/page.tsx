@@ -95,45 +95,55 @@ export default function TreeEditorPage() {
   };
   
   const handleSetRelationship = (fromId: string, toId: string, relationship: Relationship) => {
-    setPeople(prevPeople => {
-      const peopleCopy = prevPeople.map(p => ({ ...p })); // Deep copy for mutation
-      const fromPerson = peopleCopy.find(p => p.id === fromId);
-      const toPerson = peopleCopy.find(p => p.id === toId);
+    const fromPersonOriginal = people.find(p => p.id === fromId);
+    const toPersonOriginal = people.find(p => p.id === toId);
+    
+    if (!fromPersonOriginal || !toPersonOriginal) return;
 
-      if (!fromPerson || !toPerson) return prevPeople;
+    if (relationship === 'parent') {
+        if (fromPersonOriginal.parentId1 && fromPersonOriginal.parentId2) {
+            toast({ variant: "destructive", title: "Cannot Add Parent", description: `${fromPersonOriginal.firstName} already has two parents.` });
+            return;
+        }
+    }
+    
+    if (relationship === 'child') {
+        if (toPersonOriginal.parentId1 && toPersonOriginal.parentId2) {
+            toast({ variant: "destructive", title: "Cannot Add Parent", description: `${toPersonOriginal.firstName} already has two parents.` });
+            return;
+        }
+    }
+
+    setPeople(prevPeople => {
+      const peopleCopy = prevPeople.map(p => ({ ...p, spouseIds: [...(p.spouseIds || [])], childrenIds: [...(p.childrenIds || [])] }));
+      const fromPerson = peopleCopy.find(p => p.id === fromId)!;
+      const toPerson = peopleCopy.find(p => p.id === toId)!;
 
       switch (relationship) {
-        case 'parent': // `toPerson` is the parent of `fromPerson`
-          if (fromPerson.parentId1 && fromPerson.parentId2) {
-             toast({ variant: "destructive", title: "Cannot Add Parent", description: `${fromPerson.firstName} already has two parents.` });
-             return prevPeople;
-          }
+        case 'parent':
           if (fromPerson.parentId1 === toId || fromPerson.parentId2 === toId) return prevPeople; // Already a parent
           if (!fromPerson.parentId1) fromPerson.parentId1 = toId;
           else if (!fromPerson.parentId2) fromPerson.parentId2 = toId;
           
-          toPerson.childrenIds = [...(toPerson.childrenIds || []), fromId];
+          if (!toPerson.childrenIds!.includes(fromId)) toPerson.childrenIds!.push(fromId);
           break;
-        case 'child': // `toPerson` is the child of `fromPerson`
-           if (toPerson.parentId1 && toPerson.parentId2) {
-             toast({ variant: "destructive", title: "Cannot Add Parent", description: `${toPerson.firstName} already has two parents.` });
-             return prevPeople;
-           }
+        case 'child':
           if (toPerson.parentId1 === fromId || toPerson.parentId2 === fromId) return prevPeople; // Already a parent
           if (!toPerson.parentId1) toPerson.parentId1 = fromId;
           else if (!toPerson.parentId2) toPerson.parentId2 = fromId;
           
-          fromPerson.childrenIds = [...(fromPerson.childrenIds || []), toId];
+          if (!fromPerson.childrenIds!.includes(toId)) fromPerson.childrenIds!.push(toId);
           break;
         case 'spouse':
-          fromPerson.spouseIds = [...(fromPerson.spouseIds || []), toId];
-          toPerson.spouseIds = [...(toPerson.spouseIds || []), fromId];
+          if (!fromPerson.spouseIds!.includes(toId)) fromPerson.spouseIds!.push(toId);
+          if (!toPerson.spouseIds!.includes(fromId)) toPerson.spouseIds!.push(fromId);
           break;
       }
 
-      toast({ title: "Relationship Updated!", description: `Set ${toPerson.firstName} as ${fromPerson.firstName}'s ${relationship}.` });
       return peopleCopy;
     });
+
+    toast({ title: "Relationship Updated!", description: `Set ${toPersonOriginal.firstName} as ${fromPersonOriginal.firstName}'s ${relationship}.` });
   };
 
 
