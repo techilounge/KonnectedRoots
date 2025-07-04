@@ -126,9 +126,9 @@ export default function TreeEditorPage() {
       description: `"${personToDelete.firstName}" has been removed from the tree.`,
     });
     
-    setIsEditorOpen(false);
-    setSelectedPerson(null);
-    setPersonToDelete(null); // Close confirmation dialog
+    // Only set personToDelete to null to close the confirmation dialog.
+    // Other state changes (like closing the editor) are handled when the delete is initiated.
+    setPersonToDelete(null);
   };
   
   const handleOpenNameSuggestor = (personDetails?: Partial<Person>) => {
