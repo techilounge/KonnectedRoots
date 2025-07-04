@@ -211,8 +211,6 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
             y={person.y ?? 0} 
             width={NODE_WIDTH} 
             height={NODE_HEIGHT}
-            // onMouseUp must not propagate to the SVG to avoid conflict with node-drag mouseup
-            onMouseUp={e => e.stopPropagation()}
             className={`${draggingState?.personId === person.id ? 'cursor-grabbing' : 'cursor-grab'}`}
           >
             <div 
