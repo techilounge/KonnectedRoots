@@ -91,10 +91,8 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
       if (person && deltaX < CLICK_THRESHOLD && deltaY < CLICK_THRESHOLD) {
         onNodeClick(person);
       }
-      setDraggingState(null);
     } else if (linkingState) {
       const targetElement = event.target as HTMLElement;
-      // Use closest to find the person card, whether the target is the card itself or a connector on it.
       const targetPersonContainer = targetElement.closest<HTMLElement>('[data-person-id]');
       const targetPersonId = targetPersonContainer?.dataset.personId;
 
@@ -104,8 +102,10 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
               setPopoverState({ open: true, fromId: linkingState.fromId, toId: targetPerson.id, x: event.clientX, y: event.clientY });
           }
       }
-      setLinkingState(null);
     }
+    // Always clear dragging and linking states on mouse up
+    setDraggingState(null);
+    setLinkingState(null);
   };
   
   const handleRelationshipSelect = (relationship: Relationship) => {
@@ -116,62 +116,143 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
   };
 
   const renderLines = () => {
-    const lines = new Set<string>();
+    const elements: React.ReactNode[] = [];
+    const drawnSpouseConnections = new Set<string>();
+    const peopleMap = new Map(people.map(p => [p.id, p]));
+
+    // Group children by their two parents
+    const families = new Map<string, string[]>(); 
     people.forEach(person => {
-      // Parent lines
-      [person.parentId1, person.parentId2].forEach(parentId => {
-        if (parentId) {
-          const parent = people.find(p => p.id === parentId);
-          if (parent) {
-            const key = [parent.id, person.id].sort().join('-');
-            if (!lines.has(key)) {
-                lines.add(key);
-                lines.add(
-                    <line
-                    key={`line-${person.id}-${parent.id}`}
-                    x1={(parent.x ?? 0) + NODE_WIDTH / 2}
-                    y1={(parent.y ?? 0) + NODE_HEIGHT}
-                    x2={(person.x ?? 0) + NODE_WIDTH / 2}
-                    y2={person.y ?? 0}
-                    stroke="hsl(var(--muted-foreground))"
-                    strokeWidth="2"
-                    />
-                );
+        if (person.parentId1 && person.parentId2) {
+            const parentKey = [person.parentId1, person.parentId2].sort().join('--');
+            if (!families.has(parentKey)) {
+                families.set(parentKey, []);
             }
-          }
+            families.get(parentKey)!.push(person.id);
         }
-      });
-      // Spouse lines
-      (person.spouseIds || []).forEach(spouseId => {
-        const spouse = people.find(p => p.id === spouseId);
-        if (spouse) {
-            const key = [person.id, spouse.id].sort().join('-');
-            if (!lines.has(key)) {
-                lines.add(key);
-                lines.add(
-                     <line
-                        key={`line-spouse-${key}`}
-                        x1={(person.x ?? 0) + NODE_WIDTH}
-                        y1={(person.y ?? 0) + NODE_HEIGHT / 2}
-                        x2={(spouse.x ?? 0)}
-                        y2={(spouse.y ?? 0) + NODE_HEIGHT / 2}
-                        stroke="hsl(var(--muted-foreground))"
-                        strokeDasharray="5,5"
-                        strokeWidth="2"
-                    />
-                )
-            }
-        }
-      });
     });
-    return Array.from(lines.values()).filter(l => typeof l !== 'string');
+
+    // Draw lines for family units (two parents + children)
+    families.forEach((childrenIds, parentKey) => {
+        const [p1Id, p2Id] = parentKey.split('--');
+        const parent1 = peopleMap.get(p1Id);
+        const parent2 = peopleMap.get(p2Id);
+
+        if (!parent1 || !parent2) return;
+        
+        // Make sure parents are actually spouses before drawing the family line
+        const areSpouses = parent1.spouseIds?.includes(p2Id) && parent2.spouseIds?.includes(p1Id);
+        if(!areSpouses) return;
+
+        const p1x = parent1.x ?? 0;
+        const p1y = parent1.y ?? 0;
+        const p2x = parent2.x ?? 0;
+        const p2y = parent2.y ?? 0;
+
+        // Draw spouse line
+        const spouseKey = [p1Id, p2Id].sort().join('--');
+        drawnSpouseConnections.add(spouseKey);
+        elements.push(
+            <line
+                key={`spouse-${spouseKey}`}
+                x1={Math.min(p1x, p2x) + NODE_WIDTH}
+                y1={p1y + NODE_HEIGHT / 2}
+                x2={Math.max(p1x, p2x)}
+                y2={p2y + NODE_HEIGHT / 2}
+                stroke="hsl(var(--muted-foreground))"
+                strokeWidth="1.5"
+                strokeDasharray="4,4"
+            />
+        );
+
+        // Draw line from couple to children
+        const children = childrenIds.map(id => peopleMap.get(id)).filter((p): p is Person => !!p);
+        if (children.length === 0) return;
+
+        const coupleMidX = (p1x + NODE_WIDTH / 2 + p2x + NODE_WIDTH / 2) / 2;
+        const coupleY = p1y + NODE_HEIGHT / 2;
+        const SIBLING_BAR_Y_OFFSET = 40;
+        const childNodeY = Math.min(...children.map(c => c.y ?? 0));
+        const siblingBarY = childNodeY - SIBLING_BAR_Y_OFFSET;
+
+        // Vertical line from couple's line to sibling bar
+        elements.push(
+            <line
+                key={`family-v-drop-${parentKey}`}
+                x1={coupleMidX} y1={coupleY}
+                x2={coupleMidX} y2={siblingBarY}
+                stroke="hsl(var(--muted-foreground))" strokeWidth="2"
+            />
+        );
+
+        // Sibling bar (horizontal line)
+        const childrenXCoords = children.map(c => (c.x ?? 0) + NODE_WIDTH / 2);
+        const minChildX = Math.min(...childrenXCoords);
+        const maxChildX = Math.max(...childrenXCoords);
+        if(children.length > 1) {
+            elements.push(
+                <line
+                    key={`family-h-bar-${parentKey}`}
+                    x1={minChildX} y1={siblingBarY}
+                    x2={maxChildX} y2={siblingBarY}
+                    stroke="hsl(var(--muted-foreground))" strokeWidth="2"
+                />
+            );
+        }
+
+        // Connect each child to the sibling bar
+        children.forEach(child => {
+            elements.push(
+                <line
+                    key={`child-v-connect-${child.id}`}
+                    x1={(child.x ?? 0) + NODE_WIDTH / 2} y1={siblingBarY}
+                    x2={(child.x ?? 0) + NODE_WIDTH / 2} y2={child.y ?? 0}
+                    stroke="hsl(var(--muted-foreground))" strokeWidth="2"
+                />
+            );
+        });
+    });
+    
+    // Draw remaining spouse lines (for childless couples)
+    people.forEach(p => {
+        (p.spouseIds || []).forEach(spouseId => {
+            const key = [p.id, spouseId].sort().join('--');
+            if(!drawnSpouseConnections.has(key)) {
+                const spouse = peopleMap.get(spouseId);
+                if(spouse) {
+                    elements.push(<line key={`spouse-${key}`} x1={(p.x??0)+NODE_WIDTH} y1={(p.y??0)+NODE_HEIGHT/2} x2={(spouse.x??0)} y2={(spouse.y??0)+NODE_HEIGHT/2} stroke="hsl(var(--muted-foreground))" strokeWidth="1.5" strokeDasharray="4,4" />);
+                    drawnSpouseConnections.add(key);
+                }
+            }
+        });
+    });
+
+    // Draw single-parent lines
+    people.forEach(person => {
+        const hasBothParentsInFamilyUnit = person.parentId1 && person.parentId2 && families.has([person.parentId1, person.parentId2].sort().join('--'));
+        if(hasBothParentsInFamilyUnit) return;
+
+        [person.parentId1, person.parentId2].forEach(parentId => {
+            if(parentId) {
+                const parent = peopleMap.get(parentId);
+                if(parent) {
+                    elements.push(<line key={`single-parent-${person.id}-${parentId}`} x1={(parent.x??0) + NODE_WIDTH/2} y1={(parent.y??0) + NODE_HEIGHT} x2={(person.x??0) + NODE_WIDTH/2} y2={(person.y??0)} stroke="hsl(var(--muted-foreground))" strokeWidth="2" />);
+                }
+            }
+        });
+    });
+
+
+    return elements;
   };
+
 
   return (
     <div 
       className="w-full h-full relative border border-dashed border-border rounded-lg bg-slate-50 overflow-auto p-10"
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp} // End drag if mouse leaves canvas
     >
       <Popover open={popoverState?.open} onOpenChange={() => setPopoverState(null)}>
         <PopoverTrigger asChild>

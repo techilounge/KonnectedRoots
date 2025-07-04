@@ -26,24 +26,46 @@ export default function TreeEditorPage() {
   const [personForSuggestion, setPersonForSuggestion] = useState<Partial<Person> | null>(null);
 
 
+  // Effect to load people from localStorage on initial mount or treeId change
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedPeople = localStorage.getItem(`konnectedroots-tree-people-${treeId}`);
+      if (savedPeople) {
+        try {
+          const parsedPeople: Person[] = JSON.parse(savedPeople);
+          setPeople(parsedPeople);
+        } catch (e) {
+          console.error("Failed to parse people from localStorage", e);
+          setPeople([]);
+        }
+      } else {
+        setPeople([]); // Ensure it's empty if nothing is saved
+      }
+    }
+  }, [treeId]);
+
+  // Effect to update tree metadata and save people to localStorage whenever 'people' state changes
   useEffect(() => {
     let currentTreeName = `Family Tree ${treeId}`;
-    let currentMemberCount = people.length;
+    const currentMemberCount = people.length;
 
     if (typeof window !== 'undefined') {
-        const storedTreeData = localStorage.getItem(`selectedTree-${treeId}`);
-        if (storedTreeData) {
-            try {
-                const parsedTree: FamilyTree = JSON.parse(storedTreeData);
-                currentTreeName = parsedTree.name; 
-                // We'll use people.length for memberCount as it's dynamic here
-            } catch (e) {
-                console.error("Failed to parse tree data from localStorage", e);
-            }
+      // Save the current state of people to localStorage
+      localStorage.setItem(`konnectedroots-tree-people-${treeId}`, JSON.stringify(people));
+
+      const storedTreeData = localStorage.getItem(`selectedTree-${treeId}`);
+      if (storedTreeData) {
+        try {
+          const parsedTree: FamilyTree = JSON.parse(storedTreeData);
+          currentTreeName = parsedTree.name;
+        } catch (e) {
+          console.error("Failed to parse tree data from localStorage", e);
         }
+      }
     }
     setTreeData({ id: treeId, name: currentTreeName, memberCount: currentMemberCount, lastUpdated: new Date().toISOString() });
-  }, [treeId, people.length]);
+  }, [treeId, people]);
+
 
   const handleAddPerson = (newPersonDetails: Partial<Person>) => {
     const personWithDefaults: Person = { 
@@ -61,9 +83,6 @@ export default function TreeEditorPage() {
     setPeople(prev => [...prev, personWithDefaults]);
     setSelectedPerson(personWithDefaults); 
     setIsEditorOpen(true);
-    if (treeData) {
-      setTreeData(prevTreeData => prevTreeData ? {...prevTreeData, memberCount: prevTreeData.memberCount + 1, lastUpdated: new Date().toISOString()} : null);
-    }
   };
 
   const handleEditPerson = (person: Person) => {
@@ -75,9 +94,6 @@ export default function TreeEditorPage() {
     setPeople(prev => prev.map(p => p.id === updatedPerson.id ? updatedPerson : p));
     setIsEditorOpen(false);
     setSelectedPerson(null);
-    if (treeData) {
-       setTreeData(prevTreeData => prevTreeData ? {...prevTreeData, lastUpdated: new Date().toISOString()} : null);
-    }
   };
   
   const handleOpenNameSuggestor = (personDetails?: Partial<Person>) => {
