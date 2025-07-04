@@ -95,6 +95,36 @@ export default function TreeEditorPage() {
     setIsEditorOpen(false);
     setSelectedPerson(null);
   };
+
+  const handleDeletePerson = (personIdToDelete: string) => {
+    const personToDelete = people.find(p => p.id === personIdToDelete);
+    if (!personToDelete) return;
+
+    setPeople(prevPeople =>
+      prevPeople
+        .filter(p => p.id !== personIdToDelete) // Remove the person
+        .map(p => {
+          const newP = { ...p };
+          if (newP.parentId1 === personIdToDelete) newP.parentId1 = undefined;
+          if (newP.parentId2 === personIdToDelete) newP.parentId2 = undefined;
+          if (newP.spouseIds) {
+            newP.spouseIds = newP.spouseIds.filter(id => id !== personIdToDelete);
+          }
+          if (newP.childrenIds) {
+            newP.childrenIds = newP.childrenIds.filter(id => id !== personIdToDelete);
+          }
+          return newP;
+        })
+    );
+
+    toast({
+      variant: "destructive",
+      title: "Person Deleted",
+      description: `"${personToDelete.firstName}" has been removed from the tree.`,
+    });
+    setIsEditorOpen(false);
+    setSelectedPerson(null);
+  };
   
   const handleOpenNameSuggestor = (personDetails?: Partial<Person>) => {
     const genderForSuggestor = personDetails?.gender || 'male';
@@ -257,6 +287,7 @@ export default function TreeEditorPage() {
           onClose={() => { setIsEditorOpen(false); setSelectedPerson(null); }}
           person={selectedPerson}
           onSave={handleSavePerson}
+          onDelete={handleDeletePerson}
           onOpenNameSuggestor={(details) => {
             setIsEditorOpen(false); 
             handleOpenNameSuggestor(details);

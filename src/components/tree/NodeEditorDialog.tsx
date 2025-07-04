@@ -16,20 +16,22 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Image from 'next/image';
-import { UserCircle, Wand2, Save, Upload, CalendarIcon, Users, Info, Briefcase, BookOpen, ScrollText, LinkIcon, MapPin, Eye, Loader2, Sparkles } from 'lucide-react';
+import { UserCircle, Wand2, Save, Upload, CalendarIcon, Users, Info, Briefcase, BookOpen, ScrollText, LinkIcon, MapPin, Eye, Loader2, Sparkles, Trash2 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { handleGenerateBiography } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 
 interface NodeEditorDialogProps {
   isOpen: boolean;
   onClose: () => void;
   person: Person | null;
   onSave: (person: Person) => void;
+  onDelete: (personId: string) => void;
   onOpenNameSuggestor: (personDetails: Partial<Person>) => void;
 }
 
-export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onOpenNameSuggestor }: NodeEditorDialogProps) {
+export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDelete, onOpenNameSuggestor }: NodeEditorDialogProps) {
   const [formData, setFormData] = useState<Partial<Person>>({});
   const [isGeneratingBio, setIsGeneratingBio] = useState(false);
   const { toast } = useToast();
@@ -332,11 +334,43 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onOp
 
         </div>
         </ScrollArea>
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-          <Button type="button" onClick={handleSaveChanges} className="bg-primary hover:bg-primary/90">
-            <Save className="mr-2 h-4 w-4" /> Save Changes
-          </Button>
+        <DialogFooter className="sm:justify-between">
+          <div>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive">
+                  <Trash2 className="mr-2 h-4 w-4" /> Delete Person
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete {currentPersonName} and remove all their connections. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => {
+                      if (person?.id) {
+                        onDelete(person.id);
+                      }
+                    }}
+                    className="bg-destructive hover:bg-destructive/90"
+                  >
+                    Confirm Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+          <div className="flex space-x-2">
+            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+            <Button type="button" onClick={handleSaveChanges} className="bg-primary hover:bg-primary/90">
+              <Save className="mr-2 h-4 w-4" /> Save Changes
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
