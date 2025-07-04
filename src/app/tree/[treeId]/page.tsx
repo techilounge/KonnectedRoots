@@ -162,6 +162,46 @@ export default function TreeEditorPage() {
     toast({ title: "Relationship Updated!", description: `Set ${toPersonOriginal.firstName} as ${fromPersonOriginal.firstName}'s ${relationship}.` });
   };
 
+  const handleSetChildOfCouple = (childId: string, p1Id: string, p2Id: string) => {
+    const childPersonOriginal = people.find(p => p.id === childId);
+    if (!childPersonOriginal) return;
+
+    if (childPersonOriginal.parentId1 || childPersonOriginal.parentId2) {
+      toast({ variant: "destructive", title: "Cannot Add Parents", description: `${childPersonOriginal.firstName} already has one or more parents.` });
+      return;
+    }
+    
+    setPeople(prevPeople => {
+      const peopleCopy = prevPeople.map(p => ({ 
+        ...p, 
+        spouseIds: [...(p.spouseIds || [])], 
+        childrenIds: [...(p.childrenIds || [])] 
+      }));
+
+      const child = peopleCopy.find(p => p.id === childId)!;
+      const parent1 = peopleCopy.find(p => p.id === p1Id)!;
+      const parent2 = peopleCopy.find(p => p.id === p2Id)!;
+
+      if (!child || !parent1 || !parent2) return prevPeople; // a safety check
+
+      child.parentId1 = parent1.id;
+      child.parentId2 = parent2.id;
+
+      if (!parent1.childrenIds!.includes(childId)) {
+        parent1.childrenIds!.push(childId);
+      }
+      if (!parent2.childrenIds!.includes(childId)) {
+        parent2.childrenIds!.push(childId);
+      }
+
+      return peopleCopy;
+    });
+
+    const parent1Original = people.find(p => p.id === p1Id);
+    const parent2Original = people.find(p => p.id === p2Id);
+    toast({ title: "Relationship Updated!", description: `${childPersonOriginal.firstName} is now a child of ${parent1Original?.firstName} and ${parent2Original?.firstName}.` });
+  };
+
 
   if (!treeData) {
     return <div className="flex items-center justify-center h-full"><p>Loading tree data...</p></div>;
@@ -198,6 +238,7 @@ export default function TreeEditorPage() {
               onNodeClick={handleEditPerson}
               onNodeMove={handleNodeMove} 
               onSetRelationship={handleSetRelationship}
+              onSetChildOfCouple={handleSetChildOfCouple}
             />
           ) : (
              <div className="flex flex-col items-center justify-center h-full border-2 border-dashed border-border rounded-lg">

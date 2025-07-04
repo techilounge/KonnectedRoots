@@ -11,6 +11,7 @@ interface FamilyTreeCanvasPlaceholderProps {
   onNodeClick: (person: Person) => void;
   onNodeMove: (personId: string, x: number, y: number) => void;
   onSetRelationship: (fromId: string, toId: string, relationship: Relationship) => void;
+  onSetChildOfCouple: (childId: string, parent1Id: string, parent2Id: string) => void;
 }
 
 const NODE_WIDTH = 180;
@@ -31,7 +32,7 @@ type PopoverState = {
   y: number;
 };
 
-export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNodeMove, onSetRelationship }: FamilyTreeCanvasPlaceholderProps) {
+export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNodeMove, onSetRelationship, onSetChildOfCouple }: FamilyTreeCanvasPlaceholderProps) {
   const [draggingState, setDraggingState] = useState<{ personId: string; offsetX: number; offsetY: number; clickStartX: number; clickStartY: number; } | null>(null);
   const [linkingState, setLinkingState] = useState<LinkingState | null>(null);
   const [popoverState, setPopoverState] = useState<PopoverState | null>(null);
@@ -84,6 +85,30 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
   };
 
   const handleMouseUp = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (linkingState) {
+      const targetElement = event.target as HTMLElement;
+      
+      const draggedPersonId = linkingState.fromId;
+
+      const targetFamilyLineNode = targetElement.closest<HTMLElement>('[data-family-line-parents]');
+      const targetPersonContainer = targetElement.closest<HTMLElement>('[data-person-id]');
+      
+      if (targetFamilyLineNode) {
+        const parentIds = targetFamilyLineNode.dataset.familyLineParents?.split('--');
+        if (parentIds && parentIds.length === 2) {
+          const [p1, p2] = parentIds;
+          if (draggedPersonId !== p1 && draggedPersonId !== p2) {
+             onSetChildOfCouple(draggedPersonId, p1, p2);
+          }
+        }
+      } else if (targetPersonContainer) {
+        const targetPersonId = targetPersonContainer.dataset.personId;
+        if (targetPersonId && targetPersonId !== draggedPersonId) {
+          setPopoverState({ open: true, fromId: draggedPersonId, toId: targetPersonId, x: event.clientX, y: event.clientY });
+        }
+      }
+    }
+    
     if (draggingState) {
       const person = people.find(p => p.id === draggingState.personId);
       const deltaX = Math.abs(event.clientX - draggingState.clickStartX);
@@ -91,18 +116,8 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
       if (person && deltaX < CLICK_THRESHOLD && deltaY < CLICK_THRESHOLD) {
         onNodeClick(person);
       }
-    } else if (linkingState) {
-      const targetElement = event.target as HTMLElement;
-      const targetPersonContainer = targetElement.closest<HTMLElement>('[data-person-id]');
-      const targetPersonId = targetPersonContainer?.dataset.personId;
-
-      if (targetPersonId && targetPersonId !== linkingState.fromId) {
-          const targetPerson = people.find(p => p.id === targetPersonId);
-          if (targetPerson) {
-              setPopoverState({ open: true, fromId: linkingState.fromId, toId: targetPerson.id, x: event.clientX, y: event.clientY });
-          }
-      }
     }
+
     // Always clear dragging and linking states on mouse up
     setDraggingState(null);
     setLinkingState(null);
@@ -174,6 +189,22 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
         const SIBLING_BAR_Y_OFFSET = 40;
         const childNodeY = Math.min(...children.map(c => c.y ?? 0));
         const siblingBarY = childNodeY - SIBLING_BAR_Y_OFFSET;
+        
+        // Node on the couple's line to add children
+        elements.push(
+          <circle
+            key={`family-node-${parentKey}`}
+            data-family-line-parents={`${p1Id}--${p2Id}`}
+            cx={coupleMidX}
+            cy={coupleY}
+            r="6"
+            fill="hsl(var(--primary))"
+            className="cursor-pointer hover:fill-accent"
+            stroke="hsl(var(--card))"
+            strokeWidth="2"
+          />
+        );
+
 
         // Vertical line from couple's line to sibling bar
         elements.push(
