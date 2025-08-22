@@ -2,86 +2,114 @@
 "use client";
 import React, { useState, useEffect, useContext, createContext, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-
-type User = {
-  id: string;
-  name: string;
-  email: string;
-  avatar?: string;
-};
+import { 
+    getAuth, 
+    onAuthStateChanged, 
+    User as FirebaseUser,
+    createUserWithEmailAndPassword,
+    signInWithEmailAndPassword,
+    signOut,
+    updateProfile,
+    reauthenticateWithCredential,
+    EmailAuthProvider,
+    updatePassword,
+    deleteUser
+} from 'firebase/auth';
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { app } from '@/lib/firebase/clients';
 
 type AuthContextType = {
-  user: User | null;
+  user: FirebaseUser | null;
   loading: boolean;
-  login: (email: string, name?: string) => Promise<void>;
-  signup: (email: string, name: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
+  signup: (email: string, password: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
-  updateUserState: (newUser: User | null) => void; // Added for updating user details
+  updateUserProfile: (displayName: string, photoFile?: File | null) => Promise<void>;
+  reauthenticate: (password: string) => Promise<void>;
+  updateUserPassword: (password: string) => Promise<void>;
+  deleteUserAccount: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const auth = getAuth(app);
+const storage = getStorage(app);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('konnectedRootsUser');
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch (error) {
-        console.error("Failed to parse stored user:", error);
-        localStorage.removeItem('konnectedRootsUser');
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setUser(user);
+      setLoading(false);
+      if (!user) {
+        // You might want to control redirection more granularly
+        // For now, we let protected layouts handle redirection.
       }
-    }
-    setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
-  const updateUserState = (newUser: User | null) => {
-    setUser(newUser);
-    if (newUser) {
-      localStorage.setItem('konnectedRootsUser', JSON.stringify(newUser));
-    } else {
-      localStorage.removeItem('konnectedRootsUser');
+  const login = async (email: string, password: string) => {
+    await signInWithEmailAndPassword(auth, email, password);
+    router.push('/dashboard');
+  };
+
+  const signup = async (email: string, password: string, name: string) => {
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    if (userCredential.user) {
+      await updateProfile(userCredential.user, {
+        displayName: name,
+      });
+      // Force a reload of the user to get the new display name
+      await userCredential.user.reload();
+      setUser(auth.currentUser);
     }
-  };
-
-  const login = async (email: string, name: string = 'Demo User') => {
-    setLoading(true);
-    return new Promise<void>((resolve) => {
-      setTimeout(() => {
-        const mockUser = { id: '1', name, email, avatar: `https://placehold.co/40x40.png?text=${name.substring(0,1)}` };
-        updateUserState(mockUser);
-        setLoading(false);
-        router.push('/dashboard');
-        resolve();
-      }, 1000);
-    });
-  };
-
-  const signup = async (email: string, name: string) => {
-    setLoading(true);
-    return new Promise<void>((resolve) => {
-      setTimeout(() => {
-        const mockUser = { id: '2', name, email, avatar: `https://placehold.co/40x40.png?text=${name.substring(0,1)}` };
-        updateUserState(mockUser);
-        setLoading(false);
-        router.push('/dashboard');
-        resolve();
-      }, 1000);
-    });
+    router.push('/dashboard');
   };
 
   const logout = async () => {
-    updateUserState(null);
-    router.push('/login'); // Redirect to login after logout
-    return Promise.resolve();
+    await signOut(auth);
+    router.push('/login');
   };
 
+  const updateUserProfile = async (displayName: string, photoFile?: File | null) => {
+    if (!auth.currentUser) throw new Error("Not authenticated");
+
+    let photoURL = auth.currentUser.photoURL;
+
+    if (photoFile) {
+      const storageRef = ref(storage, `avatars/${auth.currentUser.uid}`);
+      const snapshot = await uploadBytes(storageRef, photoFile);
+      photoURL = await getDownloadURL(snapshot.ref);
+    }
+    
+    await updateProfile(auth.currentUser, { displayName, photoURL });
+    await auth.currentUser.reload(); // Reload user to get updated info
+    setUser(auth.currentUser);
+  };
+  
+  const reauthenticate = async (password: string) => {
+    if (!auth.currentUser || !auth.currentUser.email) throw new Error("User not found.");
+    const credential = EmailAuthProvider.credential(auth.currentUser.email, password);
+    await reauthenticateWithCredential(auth.currentUser, credential);
+  };
+
+  const updateUserPassword = async (password: string) => {
+     if (!auth.currentUser) throw new Error("Not authenticated");
+     await updatePassword(auth.currentUser, password);
+  };
+
+  const deleteUserAccount = async () => {
+     if (!auth.currentUser) throw new Error("Not authenticated");
+     await deleteUser(auth.currentUser);
+     // onAuthStateChanged will handle the rest
+  }
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, logout, updateUserState }}>
+    <AuthContext.Provider value={{ user, loading, login, signup, logout, updateUserProfile, reauthenticate, updateUserPassword, deleteUserAccount }}>
       {children}
     </AuthContext.Provider>
   );
@@ -94,3 +122,5 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
+
+    

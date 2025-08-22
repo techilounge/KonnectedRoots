@@ -1,6 +1,5 @@
 
 "use client";
-import Link from 'next/link';
 import type { FamilyTree } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,9 +18,7 @@ export default function TreeList({ trees, onEditTree, onDeleteTree }: TreeListPr
   const router = useRouter();
 
   const handleOpenTree = (tree: FamilyTree) => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(`selectedTree-${tree.id}`, JSON.stringify(tree));
-    }
+    // We no longer need to use localStorage to pass tree data
     router.push(`/tree/${tree.id}`);
   };
 
@@ -30,10 +27,9 @@ export default function TreeList({ trees, onEditTree, onDeleteTree }: TreeListPr
       {trees.map((tree) => (
         <Card 
           key={tree.id} 
-          className="flex flex-col shadow-md hover:shadow-xl hover:border-primary/50 transition-all duration-300 cursor-pointer"
-          onClick={() => handleOpenTree(tree)}
+          className="flex flex-col shadow-md hover:shadow-xl hover:border-primary/50 transition-all duration-300"
         >
-          <CardHeader className="pb-3">
+          <CardHeader className="pb-3 cursor-pointer" onClick={() => handleOpenTree(tree)}>
             <div className="flex justify-between items-start">
               <div className="flex-grow">
                 <CardTitle className="font-headline text-xl text-primary">{tree.name}</CardTitle>
@@ -58,7 +54,7 @@ export default function TreeList({ trees, onEditTree, onDeleteTree }: TreeListPr
                     <ArrowRight className="mr-2 h-4 w-4" /> Open Tree
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => onEditTree(tree)} className="flex items-center cursor-pointer">
-                    <Edit className="mr-2 h-4 w-4" /> Edit Details
+                    <Edit className="mr-2 h-4 w-4" /> Rename Tree
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => onDeleteTree(tree.id)} className="flex items-center text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer">
@@ -68,7 +64,7 @@ export default function TreeList({ trees, onEditTree, onDeleteTree }: TreeListPr
               </DropdownMenu>
             </div>
           </CardHeader>
-          <CardContent className="flex-grow pt-0 pb-3">
+          <CardContent className="flex-grow pt-0 pb-3 cursor-pointer" onClick={() => handleOpenTree(tree)}>
              <p className="text-sm text-muted-foreground">A brief summary or recent activity could go here.</p>
           </CardContent>
           <CardFooter className="flex items-center justify-between pt-3 pb-4 border-t mt-auto">
@@ -76,10 +72,11 @@ export default function TreeList({ trees, onEditTree, onDeleteTree }: TreeListPr
                 <Clock className="mr-1 h-3 w-3" />
                 Updated {formatDistanceToNow(new Date(tree.lastUpdated), { addSuffix: true })}
               </div>
-              {/* The MoreHorizontal button is now part of CardHeader for better alignment with CardTitle */}
           </CardFooter>
         </Card>
       ))}
     </div>
   );
 }
+
+    

@@ -62,12 +62,30 @@ export default function AuthForm({ mode }: AuthFormProps) {
     setError(null);
     try {
       if (mode === "login") {
-        await login(values.email, values.password); // Password used for mock, real login uses it
+        await login(values.email, values.password);
       } else if (mode === "signup" && values.name) {
-        await signup(values.email, values.name); // Password used for mock
+        await signup(values.email, values.password, values.name);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An unknown error occurred.");
+        if (err instanceof Error) {
+            // Map common Firebase auth errors to friendlier messages
+            switch (err.code) {
+                case 'auth/user-not-found':
+                case 'auth/wrong-password':
+                    setError('Invalid email or password. Please try again.');
+                    break;
+                case 'auth/email-already-in-use':
+                    setError('An account with this email already exists.');
+                    break;
+                case 'auth/weak-password':
+                    setError('The password is too weak. Please choose a stronger one.');
+                    break;
+                default:
+                    setError(err.message);
+            }
+        } else {
+            setError("An unknown error occurred.");
+        }
     } finally {
       setIsLoading(false);
     }
@@ -177,3 +195,5 @@ export default function AuthForm({ mode }: AuthFormProps) {
     </Card>
   );
 }
+
+    

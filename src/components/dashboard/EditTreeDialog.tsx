@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { TreeDeciduous, Loader2, Save } from 'lucide-react';
+import { Loader2, Save, Edit } from 'lucide-react';
 
 interface EditTreeDialogProps {
   isOpen: boolean;
@@ -98,3 +98,5 @@ export default function EditTreeDialog({ isOpen, onClose, onSaveTreeEdit, tree }
     </Dialog>
   );
 }
+
+    

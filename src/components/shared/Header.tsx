@@ -12,11 +12,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/hooks/useAuth';
-import { Home, Users, LogOut, UserCircle, Settings, LayoutDashboard } from 'lucide-react';
+import { Settings, LayoutDashboard, LogOut, UserCircle } from 'lucide-react';
 import Logo from './Logo'; // Import the new Logo component
 
 export default function Header() {
   const { user, logout, loading } = useAuth();
+  const userName = user?.displayName || user?.email || 'User';
+  const userInitial = (user?.displayName?.[0] || user?.email?.[0] || 'U').toUpperCase();
+
 
   return (
     <header className="bg-card shadow-sm sticky top-0 z-50">
@@ -46,15 +49,15 @@ export default function Header() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="relative h-10 w-10 rounded-full">
                     <Avatar className="h-9 w-9">
-                      <AvatarImage src={user.avatar || `https://placehold.co/40x40.png?text=${user.name?.[0]}`} alt={user.name} data-ai-hint="user avatar" />
-                      <AvatarFallback>{user.name?.[0]?.toUpperCase()}</AvatarFallback>
+                      <AvatarImage src={user.photoURL || `https://placehold.co/40x40.png?text=${userInitial}`} alt={userName} data-ai-hint="user avatar" />
+                      <AvatarFallback>{userInitial}</AvatarFallback>
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56" align="end" forceMount>
                   <DropdownMenuLabel className="font-normal">
                     <div className="flex flex-col space-y-1">
-                      <p className="text-sm font-medium leading-none font-headline">{user.name}</p>
+                      <p className="text-sm font-medium leading-none font-headline">{userName}</p>
                       <p className="text-xs leading-none text-muted-foreground">
                         {user.email}
                       </p>
@@ -68,14 +71,12 @@ export default function Header() {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                     {/* Placeholder for Profile Page */}
                     <Link href="/profile">
                       <UserCircle className="mr-2 h-4 w-4" />
                       Profile
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                     {/* Placeholder for Settings Page */}
                     <Link href="/settings">
                       <Settings className="mr-2 h-4 w-4" />
                       Settings
@@ -104,3 +105,5 @@ export default function Header() {
     </header>
   );
 }
+
+    

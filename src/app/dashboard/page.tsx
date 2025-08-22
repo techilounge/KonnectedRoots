@@ -1,6 +1,6 @@
 
 "use client";
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import TreeList from '@/components/dashboard/TreeList';
 import CreateTreeDialog from '@/components/dashboard/CreateTreeDialog';
 import EditTreeDialog from '@/components/dashboard/EditTreeDialog'; 
@@ -10,34 +10,67 @@ import type { FamilyTree } from '@/types';
 import { PlusCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast'; 
+import { db } from '@/lib/firebase/clients';
+import { collection, doc, addDoc, getDocs, updateDoc, deleteDoc, query, where, writeBatch } from 'firebase/firestore';
+
 
 export default function DashboardPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [familyTrees, setFamilyTrees] = useState<FamilyTree[]>([]); // Initialize with empty array
+  const [familyTrees, setFamilyTrees] = useState<FamilyTree[]>([]);
+  const [isLoadingTrees, setIsLoadingTrees] = useState(true);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  
-  // State for Edit Dialog
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingTree, setEditingTree] = useState<FamilyTree | null>(null);
-
-  // State for Delete Confirmation Dialog
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [deletingTreeId, setDeletingTreeId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Firestore collection reference for trees
+  const treesColRef = collection(db, 'trees');
 
-  const handleCreateTree = (name: string) => {
-    const newTree: FamilyTree = {
-      id: String(Date.now()),
-      name,
-      memberCount: 0, // Start with 0 members
-      lastUpdated: new Date().toISOString(),
-    };
-    setFamilyTrees(prevTrees => [...prevTrees, newTree]);
-    toast({ title: "Tree Created!", description: `"${name}" has been successfully created.` });
+  useEffect(() => {
+    if (user?.uid) {
+      const fetchTrees = async () => {
+        setIsLoadingTrees(true);
+        try {
+          const q = query(treesColRef, where("ownerId", "==", user.uid));
+          const querySnapshot = await getDocs(q);
+          const trees: FamilyTree[] = [];
+          querySnapshot.forEach((doc) => {
+            trees.push({ id: doc.id, ...doc.data() } as FamilyTree);
+          });
+          setFamilyTrees(trees);
+        } catch (error) {
+          console.error("Error fetching trees:", error);
+          toast({ variant: "destructive", title: "Error", description: "Could not load your family trees." });
+        } finally {
+          setIsLoadingTrees(false);
+        }
+      };
+      fetchTrees();
+    }
+  }, [user]);
+
+  const handleCreateTree = async (name: string) => {
+    if (!user?.uid) return;
+
+    try {
+      const newTreeDoc = {
+        name,
+        ownerId: user.uid,
+        memberCount: 0,
+        lastUpdated: new Date().toISOString(),
+      };
+      const docRef = await addDoc(treesColRef, newTreeDoc);
+      setFamilyTrees(prev => [...prev, { id: docRef.id, ...newTreeDoc }]);
+      toast({ title: "Tree Created!", description: `"${name}" has been successfully created.` });
+    } catch (error) {
+      console.error("Error creating tree:", error);
+      toast({ variant: "destructive", title: "Error", description: "Failed to create new tree." });
+    }
   };
-
+  
   const handleOpenEditDialog = (tree: FamilyTree) => {
     setEditingTree(tree);
     setIsEditDialogOpen(true);
@@ -48,14 +81,22 @@ export default function DashboardPage() {
     setIsEditDialogOpen(false);
   };
 
-  const handleSaveTreeEdit = (newName: string) => {
+  const handleSaveTreeEdit = async (newName: string) => {
     if (!editingTree) return;
-    setFamilyTrees(prevTrees => 
-      prevTrees.map(tree => 
-        tree.id === editingTree.id ? { ...tree, name: newName, lastUpdated: new Date().toISOString() } : tree
-      )
-    );
-    toast({ title: "Tree Updated!", description: `"${editingTree.name}" has been renamed to "${newName}".` });
+    try {
+      const treeDocRef = doc(db, 'trees', editingTree.id);
+      const updatedData = { name: newName, lastUpdated: new Date().toISOString() };
+      await updateDoc(treeDocRef, updatedData);
+      setFamilyTrees(prev => 
+        prev.map(tree => 
+          tree.id === editingTree.id ? { ...tree, ...updatedData } : tree
+        )
+      );
+      toast({ title: "Tree Updated!", description: `Tree renamed to "${newName}".` });
+    } catch (error) {
+      console.error("Error updating tree:", error);
+      toast({ variant: "destructive", title: "Error", description: "Failed to update tree name." });
+    }
     handleCloseEditDialog();
   };
   
@@ -72,25 +113,43 @@ export default function DashboardPage() {
   const handleConfirmDeleteTree = async () => {
     if (!deletingTreeId) return;
     setIsDeleting(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    
     const treeToDelete = familyTrees.find(t => t.id === deletingTreeId);
-    setFamilyTrees(prevTrees => prevTrees.filter(tree => tree.id !== deletingTreeId));
+    
+    try {
+      // Delete all people in the subcollection first
+      const peopleColRef = collection(db, `trees/${deletingTreeId}/people`);
+      const peopleSnapshot = await getDocs(peopleColRef);
+      const batch = writeBatch(db);
+      peopleSnapshot.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      await batch.commit();
+
+      // Then delete the tree document itself
+      const treeDocRef = doc(db, 'trees', deletingTreeId);
+      await deleteDoc(treeDocRef);
+      
+      setFamilyTrees(prev => prev.filter(tree => tree.id !== deletingTreeId));
+      toast({ variant: "destructive", title: "Tree Deleted!", description: `"${treeToDelete?.name}" and all its members have been deleted.` });
+    } catch (error) {
+       console.error("Error deleting tree:", error);
+       toast({ variant: "destructive", title: "Error", description: "Failed to delete the tree." });
+    }
+
     setIsDeleting(false);
-    toast({ variant: "destructive", title: "Tree Deleted!", description: `"${treeToDelete?.name}" has been deleted.` });
     handleCloseDeleteDialog();
   };
 
-
   if (!user) {
-    return null; 
+    return null;
   }
 
   return (
     <div className="space-y-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h1 className="text-3xl font-headline font-bold text-foreground">
-          Welcome, <span className="text-primary">{user.name}</span>!
+          Welcome, <span className="text-primary">{user.displayName || 'User'}</span>!
         </h1>
         <Button onClick={() => setIsCreateDialogOpen(true)} className="bg-primary hover:bg-primary/90">
           <PlusCircle className="mr-2 h-5 w-5" /> Create New Tree
@@ -99,7 +158,11 @@ export default function DashboardPage() {
       
       <div className="bg-card p-6 rounded-lg shadow-md">
         <h2 className="text-2xl font-headline text-foreground mb-4">Your Family Trees</h2>
-        {familyTrees.length > 0 ? (
+        {isLoadingTrees ? (
+           <div className="flex justify-center items-center py-10">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+           </div>
+        ) : familyTrees.length > 0 ? (
           <TreeList 
             trees={familyTrees} 
             onEditTree={handleOpenEditDialog}
@@ -136,7 +199,7 @@ export default function DashboardPage() {
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
               This action cannot be undone. This will permanently delete the
-              family tree and all its associated data.
+              family tree and all its associated data from the database.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -156,3 +219,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    
