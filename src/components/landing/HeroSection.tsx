@@ -19,10 +19,38 @@ interface Shape {
   vRotation: number;
 }
 
+const carouselImages = ['/4-Gen.png', '/3-Gen.png'];
+
 export default function HeroSection() {
   const [shapes, setShapes] = useState<Shape[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
   const boundsRef = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isHovered, setIsHovered] = useState(false);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    const startCarousel = () => {
+      intervalRef.current = setInterval(() => {
+        setCurrentIndex((prevIndex) => (prevIndex + 1) % carouselImages.length);
+      }, 5000);
+    };
+
+    const stopCarousel = () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+
+    if (!isHovered) {
+      startCarousel();
+    } else {
+      stopCarousel();
+    }
+
+    return () => stopCarousel();
+  }, [isHovered]);
+
 
   useEffect(() => {
     const container = containerRef.current;
@@ -158,16 +186,26 @@ export default function HeroSection() {
             <Link href="#features">Learn More</Link>
           </Button>
         </div>
-        <div className="relative max-w-4xl mx-auto aspect-video rounded-lg shadow-2xl overflow-hidden group">
-          <Image 
-            src="/4-Gen.png" 
-            alt="Family tree illustration" 
-            fill
-            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-            priority
-            objectFit="cover"
-            className="transform group-hover:scale-105 transition-transform duration-500 ease-in-out"
-          />
+        <div 
+          className="relative max-w-4xl mx-auto aspect-video rounded-lg shadow-2xl overflow-hidden group"
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
+          {carouselImages.map((src, index) => (
+            <Image 
+              key={src}
+              src={src} 
+              alt={`Family tree illustration ${index + 1}`} 
+              fill
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+              priority={index === 0}
+              quality={75}
+              style={{ objectFit: 'cover' }}
+              className={`transform group-hover:scale-105 transition-all duration-1000 ease-in-out ${
+                index === currentIndex ? 'opacity-100' : 'opacity-0'
+              }`}
+            />
+          ))}
           <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent"></div>
            <div className="absolute bottom-6 left-6 text-left">
             <h3 className="text-white text-2xl font-headline">Visualize Your Lineage</h3>
