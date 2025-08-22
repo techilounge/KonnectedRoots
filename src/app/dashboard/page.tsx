@@ -1,6 +1,6 @@
 
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import TreeList from '@/components/dashboard/TreeList';
 import CreateTreeDialog from '@/components/dashboard/CreateTreeDialog';
 import EditTreeDialog from '@/components/dashboard/EditTreeDialog'; 
@@ -29,28 +29,28 @@ export default function DashboardPage() {
   // Firestore collection reference for trees
   const treesColRef = collection(db, 'trees');
 
-  useEffect(() => {
-    if (user?.uid) {
-      const fetchTrees = async () => {
-        setIsLoadingTrees(true);
-        try {
-          const q = query(treesColRef, where("ownerId", "==", user.uid));
-          const querySnapshot = await getDocs(q);
-          const trees: FamilyTree[] = [];
-          querySnapshot.forEach((doc) => {
-            trees.push({ id: doc.id, ...doc.data() } as FamilyTree);
-          });
-          setFamilyTrees(trees);
-        } catch (error) {
-          console.error("Error fetching trees:", error);
-          toast({ variant: "destructive", title: "Error", description: "Could not load your family trees." });
-        } finally {
-          setIsLoadingTrees(false);
-        }
-      };
-      fetchTrees();
+  const fetchTrees = useCallback(async () => {
+    if (!user?.uid) return;
+    setIsLoadingTrees(true);
+    try {
+      const q = query(treesColRef, where("ownerId", "==", user.uid));
+      const querySnapshot = await getDocs(q);
+      const trees: FamilyTree[] = [];
+      querySnapshot.forEach((doc) => {
+        trees.push({ id: doc.id, ...doc.data() } as FamilyTree);
+      });
+      setFamilyTrees(trees);
+    } catch (error) {
+      console.error("Error fetching trees:", error);
+      toast({ variant: "destructive", title: "Error", description: "Could not load your family trees." });
+    } finally {
+      setIsLoadingTrees(false);
     }
-  }, [user]);
+  }, [user, toast]);
+
+  useEffect(() => {
+    fetchTrees();
+  }, [fetchTrees]);
 
   const handleCreateTree = async (name: string) => {
     if (!user?.uid) return;
@@ -62,9 +62,9 @@ export default function DashboardPage() {
         memberCount: 0,
         lastUpdated: new Date().toISOString(),
       };
-      const docRef = await addDoc(treesColRef, newTreeDoc);
-      setFamilyTrees(prev => [...prev, { id: docRef.id, ...newTreeDoc }]);
+      await addDoc(treesColRef, newTreeDoc);
       toast({ title: "Tree Created!", description: `"${name}" has been successfully created.` });
+      await fetchTrees(); // Refetch to get the new tree
     } catch (error) {
       console.error("Error creating tree:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to create new tree." });
@@ -87,17 +87,14 @@ export default function DashboardPage() {
       const treeDocRef = doc(db, 'trees', editingTree.id);
       const updatedData = { name: newName, lastUpdated: new Date().toISOString() };
       await updateDoc(treeDocRef, updatedData);
-      setFamilyTrees(prev => 
-        prev.map(tree => 
-          tree.id === editingTree.id ? { ...tree, ...updatedData } : tree
-        )
-      );
       toast({ title: "Tree Updated!", description: `Tree renamed to "${newName}".` });
+      await fetchTrees(); // Refetch to update list
     } catch (error) {
       console.error("Error updating tree:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to update tree name." });
+    } finally {
+      handleCloseEditDialog();
     }
-    handleCloseEditDialog();
   };
   
   const handleOpenDeleteDialog = (treeId: string) => {
@@ -130,15 +127,15 @@ export default function DashboardPage() {
       const treeDocRef = doc(db, 'trees', deletingTreeId);
       await deleteDoc(treeDocRef);
       
-      setFamilyTrees(prev => prev.filter(tree => tree.id !== deletingTreeId));
       toast({ variant: "destructive", title: "Tree Deleted!", description: `"${treeToDelete?.name}" and all its members have been deleted.` });
+      await fetchTrees(); // Refetch to update the list
     } catch (error) {
        console.error("Error deleting tree:", error);
        toast({ variant: "destructive", title: "Error", description: "Failed to delete the tree." });
+    } finally {
+      setIsDeleting(false);
+      handleCloseDeleteDialog();
     }
-
-    setIsDeleting(false);
-    handleCloseDeleteDialog();
   };
 
   if (!user) {
@@ -219,5 +216,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    

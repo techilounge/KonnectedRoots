@@ -1,4 +1,5 @@
 
+
 export type Relationship = 'parent' | 'child' | 'spouse';
 
 export interface Person {
@@ -13,7 +14,7 @@ export interface Person {
   nickname?: string;
 
   // Basic Demographics
-  gender: 'male' | 'female'; // Strictly 'male' or 'female'
+  gender: 'male' | 'female';
 
   // Vital Dates & Places
   birthDate?: string;

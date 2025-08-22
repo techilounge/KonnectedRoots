@@ -1,3 +1,4 @@
+
 "use client";
 import React, { useState, useEffect, useContext, createContext, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
@@ -74,7 +75,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = async () => {
     await signOut(auth);
-    router.push('/login');
+    router.push('/');
   };
   
   const signInWithGoogle = async () => {

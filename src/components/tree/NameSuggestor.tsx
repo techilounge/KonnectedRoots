@@ -30,7 +30,7 @@ interface NameSuggestorProps {
 }
 
 const formSchema = z.object({
-  gender: z.enum(['male', 'female'], { required_error: "Gender is required." }), // Updated gender
+  gender: z.enum(['male', 'female'], { required_error: "Gender is required." }),
   origin: z.string().optional(),
   historicalPeriod: z.string().optional(),
 });
@@ -45,7 +45,7 @@ export default function NameSuggestor({ isOpen, onClose, personDetails, onNameSu
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      gender: personDetails?.gender || 'male', // Default to male or female
+      gender: personDetails?.gender || 'male',
       origin: personDetails?.origin || '',
       historicalPeriod: personDetails?.historicalPeriod || '',
     },
