@@ -90,8 +90,8 @@ export default function DashboardPage() {
       toast({ title: "Tree Updated!", description: `Tree renamed to "${newName}".` });
       await fetchTrees(); // Refetch to update list
     } catch (error) {
-      console.error("Error updating tree:", error);
-      toast({ variant: "destructive", title: "Error", description: "Failed to update tree name." });
+       console.error("Error updating tree:", error);
+       toast({ variant: "destructive", title: "Error", description: "Failed to update tree name." });
     } finally {
       handleCloseEditDialog();
     }
