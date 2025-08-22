@@ -34,43 +34,55 @@ service cloud.firestore {
   // --- Validation helpers ---
   function isString(v) { return v is string; }
   function isNumber(v) { return v is number; }
+  function isBool(v) { return v is bool; }
+  function isMap(v) { return v is map; }
+  function isTimestamp(v) { return v is timestamp; }
 
   function validTreeCreate() {
+    let data = request.resource.data;
     return authed()
-      && request.resource.data.ownerId == request.auth.uid
-      && isString(request.resource.data.title)
-      && request.resource.data.title.size() > 0
-      && (request.resource.data.visibility in ['private', 'link', 'public'])
-      && request.resource.data.memberCount == 0
-      && request.resource.data.createdAt == request.time
-      && request.resource.data.lastUpdated == request.time;
+      && data.ownerId == request.auth.uid
+      && isString(data.title) && data.title.size() > 0 && data.title.size() < 100
+      && data.visibility in ['private', 'link', 'public']
+      && isMap(data.collaborators) && data.collaborators.size() == 0
+      && data.memberCount == 0
+      && data.createdAt == request.time
+      && data.lastUpdated == request.time;
   }
 
   function validTreeUpdate() {
-    // ownerId & createdAt immutable; lastUpdated must be set to server time
-    return resource.data.ownerId == request.resource.data.ownerId
-      && resource.data.createdAt == request.resource.data.createdAt
-      && request.resource.data.lastUpdated == request.time
-      // Only the owner can change collaborators or visibility
+    let data = request.resource.data;
+    let existingData = resource.data;
+    return existingData.ownerId == data.ownerId
+      && existingData.createdAt == data.createdAt
+      && data.lastUpdated == request.time
       && (
         (
-          request.resource.data.collaborators == resource.data.collaborators &&
-          request.resource.data.visibility == resource.data.visibility
+          data.collaborators == existingData.collaborators &&
+          data.visibility == existingData.visibility
         ) || isOwner(resource.id)
       );
   }
 
   function validPersonCreateOrUpdate() {
-    return isString(request.resource.data.firstName)
-      && request.resource.data.firstName.size() > 0
-      && isNumber(request.resource.data.x)
-      && isNumber(request.resource.data.y)
+    let data = request.resource.data;
+    let existingData = resource.data;
+    let expectedKeys = [
+      'firstName', 'middleName', 'lastName', 'nickname', 'gender', 'birthDate', 'deathDate',
+      'living', 'placeOfBirth', 'placeOfDeath', 'photoURL', 'x', 'y', 'createdAt', 'updatedAt'
+    ];
+    
+    return isString(data.firstName) && data.firstName.size() > 0 && data.firstName.size() < 100
+      && isNumber(data.x)
+      && isNumber(data.y)
+      && data.keys().hasOnly(expectedKeys)
+      && (data.gender == null || data.gender in ['male', 'female', 'other', 'unknown'])
+      && (data.living == null || isBool(data.living))
       && (
-        // createdAt is immutable; set it on create and keep on update
-        (resource == null && request.resource.data.createdAt == request.time) ||
-        (resource != null && request.resource.data.createdAt == resource.data.createdAt)
+        (resource == null && data.createdAt == request.time) ||
+        (resource != null && data.createdAt == existingData.createdAt)
       )
-      && request.resource.data.updatedAt == request.time;
+      && data.updatedAt == request.time;
   }
 
   match /databases/{database}/documents {
@@ -88,16 +100,9 @@ service cloud.firestore {
 
     // --- Trees + subcollections ---
     match /trees/{treeId} {
-      // Create: only self-owned at creation
       allow create: if validTreeCreate();
-
-      // Read: public OR collaborators OR owner
       allow read: if isPublic(treeId) || (authed() && (isOwner(treeId) || isViewer(treeId)));
-
-      // Update: managers/editors for content; owner required for collaborators/visibility (enforced in validTreeUpdate)
       allow update: if authed() && isManagerOrEditor(treeId) && validTreeUpdate();
-
-      // Delete: owner only
       allow delete: if authed() && isOwner(treeId);
 
       // People subcollection
@@ -106,18 +111,6 @@ service cloud.firestore {
         allow create, update: if authed() && isManagerOrEditor(treeId) && validPersonCreateOrUpdate();
         allow delete: if authed() && isManagerOrEditor(treeId);
       }
-
-      // Invites subcollection
-      match /invites/{inviteId} {
-        allow create: if authed() && isManagerOrEditor(treeId);
-        allow read, update, delete: if authed() && (isOwner(treeId) || collaboratorRole(treeId) == 'manager');
-      }
-    }
-
-    // Public snapshot documents for share links (optional)
-    match /publicShares/{shareId} {
-      allow read: if true;
-      allow create, update, delete: if false; // managed by backend only (Cloud Functions)
     }
   }
 }

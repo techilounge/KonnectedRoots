@@ -117,8 +117,6 @@ export default function DashboardPage() {
     const treeToDelete = familyTrees.find(t => t.id === deletingTreeId);
     
     try {
-      // Note: A Cloud Function (`onTreeDelete`) is now responsible for deleting the subcollection.
-      // This client-side batch delete is a good fallback but the function is more reliable.
       const peopleColRef = collection(db, `trees/${deletingTreeId}/people`);
       const peopleSnapshot = await getDocs(peopleColRef);
       if (!peopleSnapshot.empty) {
@@ -129,7 +127,6 @@ export default function DashboardPage() {
         await batch.commit();
       }
 
-      // Then delete the tree document itself
       const treeDocRef = doc(db, 'trees', deletingTreeId);
       await deleteDoc(treeDocRef);
       

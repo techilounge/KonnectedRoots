@@ -31,18 +31,28 @@ export default function CreateTreeDialog({ isOpen, onClose, onCreateTree }: Crea
       setError('Tree name cannot be empty.');
       return;
     }
+    if (treeName.length > 100) {
+      setError('Tree name cannot exceed 100 characters.');
+      return;
+    }
     setError('');
     setIsLoading(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    onCreateTree(treeName);
+    await onCreateTree(treeName);
     setIsLoading(false);
     setTreeName('');
     onClose();
   };
+  
+  const handleOpenChange = (open: boolean) => {
+    if (!open) {
+      setTreeName('');
+      setError('');
+      onClose();
+    }
+  }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle className="font-headline text-2xl flex items-center">
@@ -66,6 +76,7 @@ export default function CreateTreeDialog({ isOpen, onClose, onCreateTree }: Crea
                 className="col-span-3"
                 placeholder="e.g., The Miller Family Saga"
                 disabled={isLoading}
+                maxLength={100}
               />
             </div>
             {error && <p className="col-span-4 text-sm text-destructive text-center">{error}</p>}
