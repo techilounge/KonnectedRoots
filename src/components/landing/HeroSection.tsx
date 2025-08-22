@@ -160,14 +160,13 @@ export default function HeroSection() {
         </div>
         <div className="relative max-w-4xl mx-auto aspect-video rounded-lg shadow-2xl overflow-hidden group">
           <Image 
-            src="https://placehold.co/1200x675.png" 
+            src="/4-Gen.png" 
             alt="Family tree illustration" 
             fill
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
             priority
             objectFit="cover"
             className="transform group-hover:scale-105 transition-transform duration-500 ease-in-out"
-            data-ai-hint="family tree"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent"></div>
            <div className="absolute bottom-6 left-6 text-left">
