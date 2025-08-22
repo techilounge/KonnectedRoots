@@ -1,4 +1,3 @@
-
 "use client";
 import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -95,9 +94,9 @@ export default function HowItWorksSection() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           {steps.map((item) => (
-            <Card key={item.step} className="text-center shadow-md hover:shadow-lg transition-shadow duration-300">
+            <Card key={item.step} className="group text-center shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2 border-2 border-transparent hover:border-primary">
               <CardHeader>
-                <div className="mx-auto flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
+                <div className="mx-auto flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6">
                   {item.icon}
                 </div>
                 <CardTitle className="font-headline text-xl text-foreground">{item.title}</CardTitle>
