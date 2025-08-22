@@ -29,7 +29,7 @@ export default function EditTreeDialog({ isOpen, onClose, onSaveTreeEdit, tree }
 
   useEffect(() => {
     if (tree && isOpen) {
-      setTreeName(tree.name);
+      setTreeName(tree.title);
       setError(''); // Clear error when dialog opens or tree changes
     }
   }, [tree, isOpen]);
@@ -42,11 +42,11 @@ export default function EditTreeDialog({ isOpen, onClose, onSaveTreeEdit, tree }
     }
     setError('');
     setIsLoading(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // No simulation needed, parent component handles the logic
     onSaveTreeEdit(treeName);
+    
     setIsLoading(false);
-    // Do not reset treeName here, onClose will handle dialog state
     onClose(); 
   };
 
@@ -63,7 +63,7 @@ export default function EditTreeDialog({ isOpen, onClose, onSaveTreeEdit, tree }
             Edit Tree Name
           </DialogTitle>
           <DialogDescription>
-            Update the name for &quot;{tree.name}&quot;.
+            Update the name for &quot;{tree.title}&quot;.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
@@ -87,7 +87,7 @@ export default function EditTreeDialog({ isOpen, onClose, onSaveTreeEdit, tree }
             <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>
               Cancel
             </Button>
-            <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={isLoading || !treeName.trim() || treeName.trim() === tree.name}>
+            <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={isLoading || !treeName.trim() || treeName.trim() === tree.title}>
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               <Save className="mr-2 h-4 w-4" />
               Save Changes
@@ -98,5 +98,3 @@ export default function EditTreeDialog({ isOpen, onClose, onSaveTreeEdit, tree }
     </Dialog>
   );
 }
-
-    

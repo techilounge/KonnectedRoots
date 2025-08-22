@@ -13,7 +13,7 @@ import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { db } from '@/lib/firebase/clients';
-import { collection, doc, getDocs, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { collection, doc, getDocs, setDoc, deleteDoc, writeBatch, serverTimestamp, getDoc } from 'firebase/firestore';
 import { useAuth } from '@/hooks/useAuth';
 
 
@@ -42,14 +42,17 @@ export default function TreeEditorPage() {
     const fetchPeople = async () => {
       setIsLoading(true);
       try {
+        const treeDocSnap = await getDoc(doc(db, 'trees', treeId));
+        if (treeDocSnap.exists()) {
+            setTreeData(treeDocSnap.data() as FamilyTree);
+        }
+
         const querySnapshot = await getDocs(peopleColRef);
         const fetchedPeople: Person[] = [];
         querySnapshot.forEach((doc) => {
           fetchedPeople.push({ id: doc.id, ...doc.data() } as Person);
         });
         setPeople(fetchedPeople);
-        // Initial tree data can be simple, we update member count below
-        setTreeData({ id: treeId, name: `Family Tree ${treeId}`, memberCount: fetchedPeople.length, lastUpdated: new Date().toISOString() });
       } catch (error) {
         console.error("Error fetching people from Firestore:", error);
         toast({ variant: "destructive", title: "Error", description: "Could not load family tree data." });
@@ -59,41 +62,27 @@ export default function TreeEditorPage() {
     };
     
     fetchPeople();
-  }, [treeId, user]); // Refetch if user or treeId changes
-
-  useEffect(() => {
-    // Update tree data based on people count
-    if (people) {
-        setTreeData(prev => ({
-            ...prev,
-            id: treeId,
-            name: prev?.name || `Family Tree ${treeId}`,
-            memberCount: people.length,
-            lastUpdated: new Date().toISOString()
-        }));
-    }
-  }, [people, treeId]);
-
+  }, [treeId, user, toast]);
 
   const handleAddPerson = async (newPersonDetails: Partial<Person>) => {
-    const newPersonId = String(Date.now());
+    const newPersonId = String(Date.now()); // Using timestamp is simple but not collision-proof. Consider uuid.
     const personWithDefaults: Person = {
       id: newPersonId,
       firstName: 'New Person',
-      gender: 'male',
-      livingStatus: 'unknown',
-      privacySetting: 'private',
-      spouseIds: [],
-      childrenIds: [],
+      gender: 'unknown',
+      living: true,
       ...newPersonDetails,
       x: Math.random() * 500 + 50,
       y: Math.random() * 300 + 50,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     };
 
     try {
       const personDocRef = doc(peopleColRef, newPersonId);
       await setDoc(personDocRef, personWithDefaults);
-      setPeople(prev => [...prev, personWithDefaults]);
+      // Manually add to local state to avoid refetch, createdAt will be null until server roundtrip
+      setPeople(prev => [...prev, { ...personWithDefaults, createdAt: new Date(), updatedAt: new Date() }]);
       setSelectedPerson(personWithDefaults);
       setIsEditorOpen(true);
       toast({ title: "Person Added", description: "New person saved to the tree." });
@@ -111,8 +100,20 @@ export default function TreeEditorPage() {
   const handleSavePerson = async (updatedPerson: Person) => {
     try {
         const personDocRef = doc(peopleColRef, updatedPerson.id);
-        await setDoc(personDocRef, updatedPerson, { merge: true }); // Use merge to avoid overwriting fields
-        setPeople(prev => prev.map(p => p.id === updatedPerson.id ? updatedPerson : p));
+        const snap = await getDoc(personDocRef);
+        const base = snap.exists()
+          ? { createdAt: snap.data().createdAt }
+          : { createdAt: serverTimestamp() };
+
+        const dataToSave = { 
+            ...updatedPerson, 
+            ...base, 
+            updatedAt: serverTimestamp() 
+        };
+
+        await setDoc(personDocRef, dataToSave, { merge: true });
+        
+        setPeople(prev => prev.map(p => p.id === updatedPerson.id ? { ...p, ...dataToSave, updatedAt: new Date() } : p));
         toast({ title: "Person Updated", description: `${updatedPerson.firstName} has been saved.` });
     } catch (error) {
         console.error("Error updating person in Firestore:", error);
@@ -139,52 +140,15 @@ export default function TreeEditorPage() {
 
   const handleConfirmDelete = async () => {
     if (!personToDelete) return;
-
     const personIdToDelete = personToDelete.id;
-
-    const batch = writeBatch(db);
-
-    // 1. Delete the person's document
-    const personDocRef = doc(peopleColRef, personIdToDelete);
-    batch.delete(personDocRef);
-
-    // 2. Update other people's documents to remove relationships
-    const peopleToUpdate = people.filter(p => 
-        p.id !== personIdToDelete &&
-        (p.parentId1 === personIdToDelete || p.parentId2 === personIdToDelete || p.spouseIds?.includes(personIdToDelete) || p.childrenIds?.includes(personIdToDelete))
-    );
-
-    peopleToUpdate.forEach(p => {
-        const updatedP = { ...p };
-        if (updatedP.parentId1 === personIdToDelete) updatedP.parentId1 = undefined;
-        if (updatedP.parentId2 === personIdToDelete) updatedP.parentId2 = undefined;
-        if (updatedP.spouseIds) {
-            updatedP.spouseIds = updatedP.spouseIds.filter(id => id !== personIdToDelete);
-        }
-        if (updatedP.childrenIds) {
-            updatedP.childrenIds = updatedP.childrenIds.filter(id => id !== personIdToDelete);
-        }
-        const docRef = doc(peopleColRef, p.id);
-        batch.set(docRef, updatedP, { merge: true });
-    });
     
     try {
-        await batch.commit();
-        setPeople(prevPeople => prevPeople.filter(p => p.id !== personIdToDelete).map(p => {
-            const newP = { ...p };
-             if (newP.parentId1 === personIdToDelete) newP.parentId1 = undefined;
-            if (newP.parentId2 === personIdToDelete) newP.parentId2 = undefined;
-            if (newP.spouseIds) {
-                newP.spouseIds = newP.spouseIds.filter(id => id !== personIdToDelete);
-            }
-            if (newP.childrenIds) {
-                newP.childrenIds = newP.childrenIds.filter(id => id !== personIdToDelete);
-            }
-            return newP;
-        }));
+        // Just delete the person doc. The onPersonWrite cloud function will update memberCount.
+        await deleteDoc(doc(peopleColRef, personIdToDelete));
+        setPeople(prevPeople => prevPeople.filter(p => p.id !== personIdToDelete));
         toast({ variant: "destructive", title: "Person Deleted", description: `"${personToDelete.firstName}" has been removed.` });
     } catch (error) {
-        console.error("Error deleting person and updating relationships:", error);
+        console.error("Error deleting person:", error);
         toast({ variant: "destructive", title: "Error", description: "Failed to delete person." });
     }
 
@@ -193,7 +157,7 @@ export default function TreeEditorPage() {
 
   const handleOpenNameSuggestor = (personDetails?: Partial<Person>) => {
     const genderForSuggestor = personDetails?.gender || 'male';
-    setPersonForSuggestion({ ...personDetails, gender: genderForSuggestor });
+    setPersonForSuggestion({ ...personDetails, gender: genderForSuggestor as 'male' | 'female' });
     setIsNameSuggestorOpen(true);
   };
 
@@ -205,92 +169,22 @@ export default function TreeEditorPage() {
     );
     try {
         const personDocRef = doc(peopleColRef, personId);
-        await setDoc(personDocRef, { x: newX, y: newY }, { merge: true });
+        await setDoc(personDocRef, { x: newX, y: newY, updatedAt: serverTimestamp() }, { merge: true });
     } catch (error) {
         console.error("Error saving node position:", error);
-        toast({ variant: "destructive", title: "Sync Error", description: "Failed to save new position." });
+        // This can be noisy, so maybe remove toast for just node moves
+        // toast({ variant: "destructive", title: "Sync Error", description: "Failed to save new position." });
     }
   };
 
+  // Relationship logic will need significant updates to work with the new data model
+  // For now, these functions are disabled as they rely on the deprecated `parentId` fields.
   const handleSetRelationship = async (fromId: string, toId: string, relationship: Relationship) => {
-    const fromPersonOriginal = people.find(p => p.id === fromId);
-    const toPersonOriginal = people.find(p => p.id === toId);
-
-    if (!fromPersonOriginal || !toPersonOriginal) return;
-
-    if ((relationship === 'parent' || relationship === 'child') && (fromPersonOriginal.parentId1 && fromPersonOriginal.parentId2)) {
-      toast({ variant: "destructive", title: "Cannot Add Parent", description: `${fromPersonOriginal.firstName} already has two parents.` });
-      return;
-    }
-    
-    const batch = writeBatch(db);
-    const peopleCopy = people.map(p => ({ ...p, spouseIds: [...(p.spouseIds || [])], childrenIds: [...(p.childrenIds || [])] }));
-    const fromPerson = peopleCopy.find(p => p.id === fromId)!;
-    const toPerson = peopleCopy.find(p => p.id === toId)!;
-
-    switch (relationship) {
-      case 'parent':
-        if (fromPerson.parentId1 === toId || fromPerson.parentId2 === toId) return;
-        if (!fromPerson.parentId1) fromPerson.parentId1 = toId;
-        else if (!fromPerson.parentId2) fromPerson.parentId2 = toId;
-        if (!toPerson.childrenIds!.includes(fromId)) toPerson.childrenIds!.push(fromId);
-        break;
-      case 'child':
-        if (toPerson.parentId1 === fromId || toPerson.parentId2 === fromId) return;
-        if (!toPerson.parentId1) toPerson.parentId1 = fromId;
-        else if (!toPerson.parentId2) toPerson.parentId2 = fromId;
-        if (!fromPerson.childrenIds!.includes(toId)) fromPerson.childrenIds!.push(toId);
-        break;
-      case 'spouse':
-        if (!fromPerson.spouseIds!.includes(toId)) fromPerson.spouseIds!.push(toId);
-        if (!toPerson.spouseIds!.includes(fromId)) toPerson.spouseIds!.push(fromId);
-        break;
-    }
-
-    try {
-        batch.set(doc(peopleColRef, fromPerson.id), fromPerson, { merge: true });
-        batch.set(doc(peopleColRef, toPerson.id), toPerson, { merge: true });
-        await batch.commit();
-        setPeople(peopleCopy);
-        toast({ title: "Relationship Updated!", description: `Set ${toPersonOriginal.firstName} as ${fromPersonOriginal.firstName}'s ${relationship}.` });
-    } catch (error) {
-        console.error("Error setting relationship:", error);
-        toast({ variant: "destructive", title: "Error", description: "Could not save relationship." });
-    }
+     toast({ variant: "destructive", title: "Not Implemented", description: "Relationship logic needs to be updated for the new data model." });
   };
 
   const handleSetChildOfCouple = async (childId: string, p1Id: string, p2Id: string) => {
-    const childPersonOriginal = people.find(p => p.id === childId);
-    if (!childPersonOriginal) return;
-    if (childPersonOriginal.parentId1 || childPersonOriginal.parentId2) {
-      toast({ variant: "destructive", title: "Cannot Add Parents", description: `${childPersonOriginal.firstName} already has one or more parents.` });
-      return;
-    }
-    
-    const batch = writeBatch(db);
-    const peopleCopy = people.map(p => ({ ...p, spouseIds: [...(p.spouseIds || [])], childrenIds: [...(p.childrenIds || [])] }));
-    const child = peopleCopy.find(p => p.id === childId)!;
-    const parent1 = peopleCopy.find(p => p.id === p1Id)!;
-    const parent2 = peopleCopy.find(p => p.id === p2Id)!;
-
-    if (!child || !parent1 || !parent2) return;
-
-    child.parentId1 = parent1.id;
-    child.parentId2 = parent2.id;
-    if (!parent1.childrenIds!.includes(childId)) parent1.childrenIds!.push(childId);
-    if (!parent2.childrenIds!.includes(childId)) parent2.childrenIds!.push(childId);
-
-    try {
-        batch.set(doc(peopleColRef, child.id), child, { merge: true });
-        batch.set(doc(peopleColRef, parent1.id), parent1, { merge: true });
-        batch.set(doc(peopleColRef, parent2.id), parent2, { merge: true });
-        await batch.commit();
-        setPeople(peopleCopy);
-        toast({ title: "Relationship Updated!", description: `${child.firstName} is now a child of ${parent1.firstName} and ${parent2.firstName}.` });
-    } catch (error) {
-        console.error("Error setting child of couple:", error);
-        toast({ variant: "destructive", title: "Error", description: "Could not save relationship." });
-    }
+     toast({ variant: "destructive", title: "Not Implemented", description: "Relationship logic needs to be updated for the new data model." });
   };
 
   if (isLoading) {
@@ -306,7 +200,7 @@ export default function TreeEditorPage() {
               <ChevronLeft className="h-5 w-5" />
             </Link>
           </Button>
-          <h1 className="text-xl font-headline text-foreground">{treeData?.name}</h1>
+          <h1 className="text-xl font-headline text-foreground">{treeData?.title}</h1>
         </div>
         <div className="flex items-center space-x-2">
           <Button variant="outline" size="sm" onClick={() => handleAddPerson({})}>
@@ -405,5 +299,3 @@ export default function TreeEditorPage() {
     </div>
   );
 }
-
-    

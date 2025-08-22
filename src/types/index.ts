@@ -1,65 +1,71 @@
-
-
 export type Relationship = 'parent' | 'child' | 'spouse';
 
-export interface Person {
-  id: string;
-  // Name Details
-  namePrefix?: string;
-  firstName: string; // Changed from 'name'
-  middleName?: string;
-  lastName?: string;
-  maidenName?: string;
-  nameSuffix?: string;
-  nickname?: string;
-
-  // Basic Demographics
-  gender: 'male' | 'female';
-
-  // Vital Dates & Places
-  birthDate?: string;
-  placeOfBirth?: string;
-  deathDate?: string;
-  placeOfDeath?: string;
-
-  // Family Connections (IDs for linking, managed by canvas/other UI)
-  parentId1?: string;
-  parentId2?: string;
-  spouseIds?: string[];
-  childrenIds?: string[];
-
-  // Status & Visibility
-  livingStatus?: 'living' | 'deceased' | 'unknown';
-  privacySetting?: 'public' | 'private' | 'invite-only';
-
-  // Biographical Details
-  occupation?: string;
-  education?: string;
-  religion?: string;
-  biography?: string; // Was 'notes', now for life summary
-
-  // Media & References
-  profilePictureUrl?: string;
-  sourceCitationsNotes?: string; // For additional photos/docs links and source citations
-
-  // Identifiers
-  externalId?: string;
-  // konnectedRootsId is 'id'
-
-  // For AI name suggestion (can be pre-filled from context)
-  origin?: string;
-  historicalPeriod?: string;
-
-  // For canvas positioning (example)
-  x?: number;
-  y?: number;
+export interface UserProfile {
+  uid: string;
+  displayName: string;
+  email: string;
+  photoURL?: string;
+  plan: "free" | "pro" | "team";
+  entitlements: {
+    maxTrees: number;
+    maxPeoplePerTree: number;
+    aiCreditsMonthly: number;
+    exports: { pdf: boolean; png: boolean; gedcom: boolean };
+  };
+  createdAt: any; // serverTimestamp
+  updatedAt: any; // serverTimestamp
 }
 
 export interface FamilyTree {
   id: string;
-  name: string;
+  ownerId: string;
+  title: string;
+  description?: string;
+  visibility: "private" | "link" | "public";
+  collaborators: { [uid: string]: "viewer" | "editor" | "manager" };
   memberCount: number;
-  lastUpdated: string; // ISO date string
+  lastUpdated: any; // serverTimestamp
+  createdAt: any; // serverTimestamp
+}
+
+export interface Person {
+  id: string;
+  firstName: string;
+  middleName?: string;
+  lastName?: string;
+  nickname?: string;
+  gender: 'male' | 'female' | 'other' | 'unknown';
+  birthDate?: string;
+  deathDate?: string;
+  living?: boolean;
+  placeOfBirth?: string;
+  placeOfDeath?: string;
+  photoURL?: string; // Stored in Cloud Storage
+  x?: number;
+  y?: number;
+  createdAt: any; // serverTimestamp
+  updatedAt: any; // serverTimestamp
+  
+  // These fields are from the old model and can be deprecated
+  // Kept for reference during transition
+  namePrefix?: string;
+  maidenName?: string;
+  nameSuffix?: string;
+  parentId1?: string;
+  parentId2?: string;
+  spouseIds?: string[];
+  childrenIds?: string[];
+  livingStatus?: 'living' | 'deceased' | 'unknown';
+  privacySetting?: 'public' | 'private' | 'invite-only';
+  occupation?: string;
+  education?: string;
+  religion?: string;
+  biography?: string;
+  profilePictureUrl?: string;
+  sourceCitationsNotes?: string;
+  externalId?: string;
+  origin?: string;
+  historicalPeriod?: string;
 }
 
 export type { SuggestNameInput, SuggestNameOutput } from '@/ai/flows/suggest-name';

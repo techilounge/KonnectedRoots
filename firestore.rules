@@ -1,16 +1,123 @@
 rules_version = '2';
 
 service cloud.firestore {
-  match /databases/{database}/documents {
-    // A user can read and write to a tree document if they are the owner.
-    match /trees/{treeId} {
-      allow read, write: if request.auth != null && request.auth.uid == resource.data.ownerId;
+  function authed() {
+    return request.auth != null;
+  }
 
-      // A user can read and write to the 'people' subcollection within a tree
-      // if they are the owner of the parent tree document.
+  // --- Helpers (Trees) ---
+  function treeDoc(treeId) {
+    return get(/databases/$(database)/documents/trees/$(treeId));
+  }
+
+  function isOwner(treeId) {
+    return authed() && treeDoc(treeId).data.ownerId == request.auth.uid;
+  }
+
+  function collaboratorRole(treeId) {
+    return authed() && treeDoc(treeId).data.collaborators[request.auth.uid];
+  }
+
+  function isManagerOrEditor(treeId) {
+    return isOwner(treeId) ||
+      (collaboratorRole(treeId) == 'manager' || collaboratorRole(treeId) == 'editor');
+  }
+
+  function isViewer(treeId) {
+    return isManagerOrEditor(treeId) || collaboratorRole(treeId) == 'viewer';
+  }
+
+  function isPublic(treeId) {
+    return treeDoc(treeId).data.visibility == 'public' || treeDoc(treeId).data.visibility == 'link';
+  }
+
+  // --- Validation helpers ---
+  function isString(v) { return v is string; }
+  function isNumber(v) { return v is number; }
+
+  function validTreeCreate() {
+    return authed()
+      && request.resource.data.ownerId == request.auth.uid
+      && isString(request.resource.data.title)
+      && request.resource.data.title.size() > 0
+      && (request.resource.data.visibility in ['private', 'link', 'public'])
+      && request.resource.data.memberCount == 0
+      && request.resource.data.createdAt == request.time
+      && request.resource.data.lastUpdated == request.time;
+  }
+
+  function validTreeUpdate() {
+    // ownerId & createdAt immutable; lastUpdated must be set to server time
+    return resource.data.ownerId == request.resource.data.ownerId
+      && resource.data.createdAt == request.resource.data.createdAt
+      && request.resource.data.lastUpdated == request.time
+      // Only the owner can change collaborators or visibility
+      && (
+        (
+          request.resource.data.collaborators == resource.data.collaborators &&
+          request.resource.data.visibility == resource.data.visibility
+        ) || isOwner(resource.id)
+      );
+  }
+
+  function validPersonCreateOrUpdate() {
+    return isString(request.resource.data.firstName)
+      && request.resource.data.firstName.size() > 0
+      && isNumber(request.resource.data.x)
+      && isNumber(request.resource.data.y)
+      && (
+        // createdAt is immutable; set it on create and keep on update
+        (resource == null && request.resource.data.createdAt == request.time) ||
+        (resource != null && request.resource.data.createdAt == resource.data.createdAt)
+      )
+      && request.resource.data.updatedAt == request.time;
+  }
+
+  match /databases/{database}/documents {
+
+    // --- Users: self-only ---
+    match /users/{uid} {
+      allow create: if authed() && request.auth.uid == uid
+        && request.resource.data.createdAt == request.time;
+      allow read: if authed() && request.auth.uid == uid;
+      allow update: if authed() && request.auth.uid == uid
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.plan in ['free','pro','team'];
+      allow delete: if authed() && request.auth.uid == uid;
+    }
+
+    // --- Trees + subcollections ---
+    match /trees/{treeId} {
+      // Create: only self-owned at creation
+      allow create: if validTreeCreate();
+
+      // Read: public OR collaborators OR owner
+      allow read: if isPublic(treeId) || (authed() && (isOwner(treeId) || isViewer(treeId)));
+
+      // Update: managers/editors for content; owner required for collaborators/visibility (enforced in validTreeUpdate)
+      allow update: if authed() && isManagerOrEditor(treeId) && validTreeUpdate();
+
+      // Delete: owner only
+      allow delete: if authed() && isOwner(treeId);
+
+      // People subcollection
       match /people/{personId} {
-        allow read, write: if request.auth != null && get(/databases/$(database)/documents/trees/$(treeId)).data.ownerId == request.auth.uid;
+        allow read: if isPublic(treeId) || (authed() && (isOwner(treeId) || isViewer(treeId)));
+        allow create, update: if authed() && isManagerOrEditor(treeId) && validPersonCreateOrUpdate();
+        allow delete: if authed() && isManagerOrEditor(treeId);
       }
+
+      // Invites subcollection
+      match /invites/{inviteId} {
+        allow create: if authed() && isManagerOrEditor(treeId);
+        allow read, update, delete: if authed() && (isOwner(treeId) || collaboratorRole(treeId) == 'manager');
+      }
+    }
+
+    // Public snapshot documents for share links (optional)
+    match /publicShares/{shareId} {
+      allow read: if true;
+      allow create, update, delete: if false; // managed by backend only (Cloud Functions)
     }
   }
 }

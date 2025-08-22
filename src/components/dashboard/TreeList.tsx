@@ -18,9 +18,23 @@ export default function TreeList({ trees, onEditTree, onDeleteTree }: TreeListPr
   const router = useRouter();
 
   const handleOpenTree = (tree: FamilyTree) => {
-    // We no longer need to use localStorage to pass tree data
     router.push(`/tree/${tree.id}`);
   };
+  
+  const getFormattedDate = (timestamp: any) => {
+    if (!timestamp || !timestamp.toDate) {
+      // Handle cases where timestamp is not a Firestore Timestamp
+      // It might be a string from older data or null
+      try {
+        const date = new Date(timestamp);
+        if(isNaN(date.getTime())) return "a while ago";
+        return formatDistanceToNow(date, { addSuffix: true });
+      } catch (e) {
+        return "a while ago";
+      }
+    }
+    return formatDistanceToNow(timestamp.toDate(), { addSuffix: true });
+  }
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -32,7 +46,7 @@ export default function TreeList({ trees, onEditTree, onDeleteTree }: TreeListPr
           <CardHeader className="pb-3 cursor-pointer" onClick={() => handleOpenTree(tree)}>
             <div className="flex justify-between items-start">
               <div className="flex-grow">
-                <CardTitle className="font-headline text-xl text-primary">{tree.name}</CardTitle>
+                <CardTitle className="font-headline text-xl text-primary">{tree.title}</CardTitle>
                 <CardDescription className="flex items-center text-sm text-muted-foreground pt-1">
                   <Users className="mr-2 h-4 w-4" /> {tree.memberCount} members
                 </CardDescription>
@@ -65,12 +79,12 @@ export default function TreeList({ trees, onEditTree, onDeleteTree }: TreeListPr
             </div>
           </CardHeader>
           <CardContent className="flex-grow pt-0 pb-3 cursor-pointer" onClick={() => handleOpenTree(tree)}>
-             <p className="text-sm text-muted-foreground">A brief summary or recent activity could go here.</p>
+             <p className="text-sm text-muted-foreground">{tree.description || "No description provided."}</p>
           </CardContent>
           <CardFooter className="flex items-center justify-between pt-3 pb-4 border-t mt-auto">
              <div className="text-xs text-muted-foreground flex items-center">
                 <Clock className="mr-1 h-3 w-3" />
-                Updated {formatDistanceToNow(new Date(tree.lastUpdated), { addSuffix: true })}
+                Updated {getFormattedDate(tree.lastUpdated)}
               </div>
           </CardFooter>
         </Card>
@@ -78,5 +92,3 @@ export default function TreeList({ trees, onEditTree, onDeleteTree }: TreeListPr
     </div>
   );
 }
-
-    

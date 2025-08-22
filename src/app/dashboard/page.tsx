@@ -11,7 +11,7 @@ import { PlusCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast'; 
 import { db } from '@/lib/firebase/clients';
-import { collection, doc, addDoc, getDocs, updateDoc, deleteDoc, query, where, writeBatch } from 'firebase/firestore';
+import { collection, doc, addDoc, getDocs, updateDoc, deleteDoc, query, where, writeBatch, serverTimestamp } from 'firebase/firestore';
 
 
 export default function DashboardPage() {
@@ -57,10 +57,13 @@ export default function DashboardPage() {
 
     try {
       const newTreeDoc = {
-        name,
         ownerId: user.uid,
+        title: name,
+        visibility: "private",
+        collaborators: {},
         memberCount: 0,
-        lastUpdated: new Date().toISOString(),
+        createdAt: serverTimestamp(),
+        lastUpdated: serverTimestamp(),
       };
       await addDoc(treesColRef, newTreeDoc);
       toast({ title: "Tree Created!", description: `"${name}" has been successfully created.` });
@@ -85,7 +88,7 @@ export default function DashboardPage() {
     if (!editingTree) return;
     try {
       const treeDocRef = doc(db, 'trees', editingTree.id);
-      const updatedData = { name: newName, lastUpdated: new Date().toISOString() };
+      const updatedData = { title: newName, lastUpdated: serverTimestamp() };
       await updateDoc(treeDocRef, updatedData);
       toast({ title: "Tree Updated!", description: `Tree renamed to "${newName}".` });
       await fetchTrees(); // Refetch to update list
@@ -114,20 +117,23 @@ export default function DashboardPage() {
     const treeToDelete = familyTrees.find(t => t.id === deletingTreeId);
     
     try {
-      // Delete all people in the subcollection first
+      // Note: A Cloud Function (`onTreeDelete`) is now responsible for deleting the subcollection.
+      // This client-side batch delete is a good fallback but the function is more reliable.
       const peopleColRef = collection(db, `trees/${deletingTreeId}/people`);
       const peopleSnapshot = await getDocs(peopleColRef);
-      const batch = writeBatch(db);
-      peopleSnapshot.forEach(doc => {
-        batch.delete(doc.ref);
-      });
-      await batch.commit();
+      if (!peopleSnapshot.empty) {
+        const batch = writeBatch(db);
+        peopleSnapshot.forEach(doc => {
+          batch.delete(doc.ref);
+        });
+        await batch.commit();
+      }
 
       // Then delete the tree document itself
       const treeDocRef = doc(db, 'trees', deletingTreeId);
       await deleteDoc(treeDocRef);
       
-      toast({ variant: "destructive", title: "Tree Deleted!", description: `"${treeToDelete?.name}" and all its members have been deleted.` });
+      toast({ variant: "destructive", title: "Tree Deleted!", description: `"${treeToDelete?.title}" and all its members have been deleted.` });
       await fetchTrees(); // Refetch to update the list
     } catch (error) {
        console.error("Error deleting tree:", error);

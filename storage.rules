@@ -1,0 +1,24 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function authed() { return request.auth != null; }
+
+    // User avatars: /users/{uid}/profile/avatar.jpg
+    match /users/{uid}/profile/{file} {
+      allow read: if true; // make avatars public; switch to authed() if you want private
+      allow write: if authed() && request.auth.uid == uid
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // Tree media: /trees/{treeId}/media/{filename}
+    // Keep reads to authed users by default; for public trees, prefer signed URLs you generate via Function if needed.
+    match /trees/{treeId}/media/{file} {
+      allow read: if authed();
+      allow write: if authed()
+        && request.resource.size < 20 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*|application/pdf');
+    }
+  }
+}
