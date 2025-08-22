@@ -1,4 +1,3 @@
-
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -19,13 +18,14 @@ import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
+import GoogleIcon from "@/components/icons/GoogleIcon";
 
 interface AuthFormProps {
   mode: "login" | "signup";
 }
 
 export default function AuthForm({ mode }: AuthFormProps) {
-  const { login, signup } = useAuth();
+  const { login, signup, signInWithGoogle } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,7 +66,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
       } else if (mode === "signup" && values.name) {
         await signup(values.email, values.password, values.name);
       }
-    } catch (err) {
+    } catch (err: any) {
         if (err instanceof Error) {
             // Map common Firebase auth errors to friendlier messages
             switch (err.code) {
@@ -91,6 +91,20 @@ export default function AuthForm({ mode }: AuthFormProps) {
     }
   }
 
+   const handleGoogleSignIn = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await signInWithGoogle();
+    } catch (err: any) {
+      if (err.code !== 'auth/popup-closed-by-user') {
+        setError(err.message || "An unknown error occurred with Google Sign-In.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <Card className="w-full shadow-xl">
       <CardHeader className="space-y-1 text-center">
@@ -103,7 +117,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
             : "Fill in the details to start your journey with KonnectedRoots."}
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pb-2">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             {mode === "signup" && (
@@ -169,8 +183,26 @@ export default function AuthForm({ mode }: AuthFormProps) {
             </Button>
           </form>
         </Form>
+        <div className="relative my-6">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t" />
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-card px-2 text-muted-foreground">
+              Or continue with
+            </span>
+          </div>
+        </div>
+        <Button variant="outline" className="w-full" onClick={handleGoogleSignIn} disabled={isLoading}>
+            {isLoading ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+                <GoogleIcon className="mr-2 h-5 w-5" />
+            )}
+            Google
+        </Button>
       </CardContent>
-      <CardFooter className="flex flex-col space-y-2 text-sm">
+      <CardFooter className="flex flex-col space-y-2 text-sm pt-6">
         {mode === "login" ? (
           <p>
             Don&apos;t have an account?{" "}
@@ -195,5 +227,3 @@ export default function AuthForm({ mode }: AuthFormProps) {
     </Card>
   );
 }
-
-    

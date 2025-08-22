@@ -1,4 +1,3 @@
-
 "use client";
 import React, { useState, useEffect, useContext, createContext, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
@@ -13,7 +12,9 @@ import {
     reauthenticateWithCredential,
     EmailAuthProvider,
     updatePassword,
-    deleteUser
+    deleteUser,
+    GoogleAuthProvider,
+    signInWithPopup
 } from 'firebase/auth';
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { app } from '@/lib/firebase/clients';
@@ -24,6 +25,7 @@ type AuthContextType = {
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
   updateUserProfile: (displayName: string, photoFile?: File | null) => Promise<void>;
   reauthenticate: (password: string) => Promise<void>;
   updateUserPassword: (password: string) => Promise<void>;
@@ -74,6 +76,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await signOut(auth);
     router.push('/login');
   };
+  
+  const signInWithGoogle = async () => {
+    const provider = new GoogleAuthProvider();
+    await signInWithPopup(auth, provider);
+    router.push('/dashboard');
+  };
 
   const updateUserProfile = async (displayName: string, photoFile?: File | null) => {
     if (!auth.currentUser) throw new Error("Not authenticated");
@@ -109,7 +117,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, logout, updateUserProfile, reauthenticate, updateUserPassword, deleteUserAccount }}>
+    <AuthContext.Provider value={{ user, loading, login, signup, logout, signInWithGoogle, updateUserProfile, reauthenticate, updateUserPassword, deleteUserAccount }}>
       {children}
     </AuthContext.Provider>
   );
@@ -122,5 +130,3 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
-
-    
