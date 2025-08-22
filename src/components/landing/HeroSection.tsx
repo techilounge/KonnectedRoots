@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from 'next/link';
@@ -33,7 +32,7 @@ export default function HeroSection() {
     const startCarousel = () => {
       intervalRef.current = setInterval(() => {
         setCurrentIndex((prevIndex) => (prevIndex + 1) % carouselImages.length);
-      }, 5000);
+      }, 10000);
     };
 
     const stopCarousel = () => {
