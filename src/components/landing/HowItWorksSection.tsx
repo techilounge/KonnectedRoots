@@ -1,4 +1,6 @@
 
+"use client";
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { UserPlus, TreeDeciduous, Sparkles, Search, FileText } from "lucide-react";
 import Image from 'next/image';
@@ -30,7 +32,35 @@ const steps = [
   },
 ];
 
+const carouselImages = ['/family1.png', '/family2.png'];
+
 export default function HowItWorksSection() {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isHovered, setIsHovered] = useState(false);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    const startCarousel = () => {
+      intervalRef.current = setInterval(() => {
+        setCurrentIndex((prevIndex) => (prevIndex + 1) % carouselImages.length);
+      }, 10000);
+    };
+
+    const stopCarousel = () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+
+    if (!isHovered) {
+      startCarousel();
+    } else {
+      stopCarousel();
+    }
+
+    return () => stopCarousel();
+  }, [isHovered]);
+
   return (
     <section id="how-it-works" className="py-16 md:py-24 bg-background">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
@@ -43,15 +73,24 @@ export default function HowItWorksSection() {
           </p>
         </div>
 
-        <div className="mb-12 flex justify-center">
-          <Image
-            src="https://placehold.co/800x400.png"
-            alt="Person researching family history with documents and a laptop"
-            width={800}
-            height={400}
-            className="rounded-lg shadow-xl object-cover"
-            data-ai-hint="genealogy research"
-          />
+        <div 
+          className="mb-12 relative max-w-4xl mx-auto aspect-video rounded-lg shadow-xl overflow-hidden group"
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
+           {carouselImages.map((src, index) => (
+            <Image
+              key={src}
+              src={src}
+              alt="Person researching family history with documents and a laptop"
+              fill
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 75vw, 800px"
+              className={`rounded-lg object-cover transform group-hover:scale-105 transition-all duration-1000 ease-in-out ${
+                index === currentIndex ? 'opacity-100' : 'opacity-0'
+              }`}
+              data-ai-hint="genealogy research"
+            />
+           ))}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
