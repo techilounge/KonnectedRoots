@@ -1,3 +1,4 @@
+
 "use client";
 import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -84,6 +85,7 @@ export default function HowItWorksSection() {
               alt="Person researching family history with documents and a laptop"
               fill
               sizes="(max-width: 768px) 100vw, (max-width: 1200px) 75vw, 800px"
+              priority={index === 0}
               className={`rounded-lg object-cover transform group-hover:scale-105 transition-all duration-1000 ease-in-out ${
                 index === currentIndex ? 'opacity-100' : 'opacity-0'
               }`}
