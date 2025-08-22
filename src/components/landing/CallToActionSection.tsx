@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 import { useState, useEffect, useRef } from 'react';
 
-const carouselImages = ['/grandparents.png', '/grandparents2.png', '/mixed-fam.png'];
+const carouselImages = ['/Grandparents.png', '/Grandparents2.png', '/mixed-fam.png'];
 
 export default function CallToActionSection() {
   const [currentIndex, setCurrentIndex] = useState(0);
