@@ -1,5 +1,5 @@
 // src/lib/firebase/client.ts
-import { initializeApp, getApps, getApp, FirebaseOptions } from 'firebase/app';
+import { initializeApp, getApps, getApp, type FirebaseOptions } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getStorage } from "firebase/storage";
