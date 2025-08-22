@@ -31,7 +31,7 @@ const steps = [
   },
 ];
 
-const carouselImages = ['/family1.png', '/family2.png'];
+const carouselImages = ['/family1.png?v=1', '/family2.png?v=1'];
 
 export default function HowItWorksSection() {
   const [currentIndex, setCurrentIndex] = useState(0);
