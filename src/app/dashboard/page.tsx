@@ -1,6 +1,6 @@
 
 "use client";
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import TreeList from '@/components/dashboard/TreeList';
 import CreateTreeDialog from '@/components/dashboard/CreateTreeDialog';
 import EditTreeDialog from '@/components/dashboard/EditTreeDialog'; 
@@ -29,31 +29,32 @@ export default function DashboardPage() {
   // Firestore collection reference for trees
   const treesColRef = collection(db, 'trees');
 
-  const fetchTrees = useCallback(async () => {
-    // Guard against running before user and profile are fully loaded
-    if (!user?.uid || !userProfile) return;
-
-    setIsLoadingTrees(true);
-    try {
-      const q = query(treesColRef, where("ownerId", "==", user.uid));
-      const querySnapshot = await getDocs(q);
-      const trees: FamilyTree[] = [];
-      querySnapshot.forEach((doc) => {
-        trees.push({ id: doc.id, ...doc.data() } as FamilyTree);
-      });
-      setFamilyTrees(trees);
-    } catch (error) {
-      console.error("Error fetching trees:", error);
-      toast({ variant: "destructive", title: "Error", description: "Could not load your family trees." });
-    } finally {
-      setIsLoadingTrees(false);
-    }
-  }, [user, userProfile, toast]); // Depend on both user and userProfile
-
   useEffect(() => {
+    const fetchTrees = async () => {
+      if (!user?.uid) return;
+
+      setIsLoadingTrees(true);
+      try {
+        const q = query(treesColRef, where("ownerId", "==", user.uid));
+        const querySnapshot = await getDocs(q);
+        const trees: FamilyTree[] = [];
+        querySnapshot.forEach((doc) => {
+          trees.push({ id: doc.id, ...doc.data() } as FamilyTree);
+        });
+        setFamilyTrees(trees);
+      } catch (error) {
+        console.error("Error fetching trees:", error);
+        toast({ variant: "destructive", title: "Error", description: "Could not load your family trees." });
+      } finally {
+        setIsLoadingTrees(false);
+      }
+    };
+    
     // This effect now correctly waits for both user and userProfile
-    fetchTrees();
-  }, [fetchTrees]);
+    if (user && userProfile) {
+        fetchTrees();
+    }
+  }, [user, userProfile, toast]);
 
   const handleCreateTree = async (name: string) => {
     if (!user?.uid) return;
@@ -70,7 +71,16 @@ export default function DashboardPage() {
       };
       await addDoc(treesColRef, newTreeDoc);
       toast({ title: "Tree Created!", description: `"${name}" has been successfully created.` });
-      await fetchTrees(); // Refetch to get the new tree
+      
+      // Manually refetch after creation
+      const q = query(treesColRef, where("ownerId", "==", user.uid));
+      const querySnapshot = await getDocs(q);
+      const trees: FamilyTree[] = [];
+      querySnapshot.forEach((doc) => {
+        trees.push({ id: doc.id, ...doc.data() } as FamilyTree);
+      });
+      setFamilyTrees(trees);
+
     } catch (error) {
       console.error("Error creating tree:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to create new tree." });
@@ -94,7 +104,7 @@ export default function DashboardPage() {
       const updatedData = { title: newName, lastUpdated: serverTimestamp() };
       await updateDoc(treeDocRef, updatedData);
       toast({ title: "Tree Updated!", description: `Tree renamed to "${newName}".` });
-      await fetchTrees(); // Refetch to update list
+      setFamilyTrees(prev => prev.map(t => t.id === editingTree.id ? { ...t, ...updatedData, title: newName } : t));
     } catch (error) {
        console.error("Error updating tree:", error);
        toast({ variant: "destructive", title: "Error", description: "Failed to update tree name." });
@@ -120,13 +130,11 @@ export default function DashboardPage() {
     const treeToDelete = familyTrees.find(t => t.id === deletingTreeId);
     
     try {
-      // The onTreeDelete Cloud Function will handle deleting the subcollections (people, invites).
-      // We only need to delete the main tree document from the client.
       const treeDocRef = doc(db, 'trees', deletingTreeId);
       await deleteDoc(treeDocRef);
       
       toast({ variant: "destructive", title: "Tree Deleted!", description: `"${treeToDelete?.title}" and all its members have been deleted.` });
-      await fetchTrees(); // Refetch to update the list
+      setFamilyTrees(prev => prev.filter(t => t.id !== deletingTreeId));
     } catch (error) {
        console.error("Error deleting tree:", error);
        toast({ variant: "destructive", title: "Error", description: "Failed to delete the tree." });
