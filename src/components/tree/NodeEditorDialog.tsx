@@ -53,6 +53,12 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
+  
+  const handleFirstNameFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    if (e.target.value === 'New Person') {
+      setFormData({ ...formData, firstName: '' });
+    }
+  };
 
   const handleSelectChange = (name: keyof Person, value: string) => {
     setFormData({ ...formData, [name]: value });
@@ -170,7 +176,7 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
               <div>
                 <Label htmlFor="firstName">First Name*</Label>
                  <div className="flex items-center gap-2">
-                    <Input id="firstName" name="firstName" value={formData.firstName || ''} onChange={handleChange} placeholder="John" className="flex-grow" />
+                    <Input id="firstName" name="firstName" value={formData.firstName || ''} onChange={handleChange} onFocus={handleFirstNameFocus} placeholder="John" className="flex-grow" />
                     <Button variant="outline" size="icon" title="Suggest Name (AI)" onClick={() => onOpenNameSuggestor(formData)}>
                         <Wand2 className="h-4 w-4 text-accent" />
                     </Button>
@@ -380,4 +386,3 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
     </Dialog>
   );
 }
-
