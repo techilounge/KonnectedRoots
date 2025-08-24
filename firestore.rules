@@ -42,8 +42,8 @@ service cloud.firestore {
       && isString(request.resource.data.title)
       && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 100
       && (request.resource.data.visibility in ['private', 'link', 'public'])
-      && isMap(request.resource.data.collaborators) && request.resource.data.collaborators.size() == 0
       && request.resource.data.memberCount == 0
+      && isMap(request.resource.data.collaborators) && request.resource.data.collaborators.size() == 0
       && request.resource.data.createdAt == request.time
       && request.resource.data.lastUpdated == request.time;
   }
@@ -63,20 +63,17 @@ service cloud.firestore {
   }
 
   function validPersonCreateOrUpdate() {
-    let requiredFields = ['firstName', 'x', 'y', 'createdAt', 'updatedAt'];
-    let optionalFields = ['middleName', 'lastName', 'nickname', 'gender', 'birthDate', 'deathDate', 'living', 'placeOfBirth', 'placeOfDeath', 'photoURL', 'namePrefix', 'maidenName', 'nameSuffix', 'parentId1', 'parentId2', 'spouseIds', 'childrenIds', 'livingStatus', 'privacySetting', 'occupation', 'education', 'religion', 'biography', 'profilePictureUrl', 'sourceCitationsNotes', 'externalId', 'origin', 'historicalPeriod'];
-    let allFields = requiredFields.concat(optionalFields);
-
-    return request.resource.data.keys().hasAll(requiredFields)
-      && request.resource.data.keys().hasOnly(allFields)
-      && isString(request.resource.data.firstName) && request.resource.data.firstName.size() > 0
-      && isNumber(request.resource.data.x)
-      && isNumber(request.resource.data.y)
+    let incoming = request.resource.data;
+    return isString(incoming.firstName) && incoming.firstName.size() > 0
+      && isNumber(incoming.x)
+      && isNumber(incoming.y)
+      && (incoming.gender in ['male', 'female', 'other', 'unknown'])
       && (
-        (resource == null && request.resource.data.createdAt == request.time) ||
-        (resource != null && request.resource.data.createdAt == resource.data.createdAt)
+        // createdAt is immutable; set it on create and keep on update
+        (resource == null && incoming.createdAt == request.time) ||
+        (resource != null && incoming.createdAt == resource.data.createdAt)
       )
-      && request.resource.data.updatedAt == request.time;
+      && incoming.updatedAt == request.time;
   }
 
   match /databases/{database}/documents {
@@ -94,11 +91,11 @@ service cloud.firestore {
 
     // --- Trees + subcollections ---
     match /trees/{treeId} {
+      // Allow querying the collection only when filtering by ownerId
+      allow list: if authed() && request.query.filters.ownerId == request.auth.uid;
+
       // Create: only self-owned at creation
       allow create: if validTreeCreate();
-      
-      // List: Allow querying one's own trees for the dashboard
-      allow list: if authed() && request.query.resource.data.ownerId == request.auth.uid;
 
       // Read: public OR collaborators OR owner
       allow read: if isPublic(treeId) || (authed() && (isOwner(treeId) || isViewer(treeId)));
