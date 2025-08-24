@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import FamilyTreeCanvasPlaceholder from '@/components/tree/FamilyTreeCanvasPlaceholder';
 import AddPersonToolbox from '@/components/tree/AddPersonToolbox';
 import NodeEditorDialog from '@/components/tree/NodeEditorDialog';
+import ShareDialog from '@/components/tree/ShareDialog'; // Import the new dialog
 import type { Person, FamilyTree, RelationshipType } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Users, Share2, ZoomIn, ZoomOut, UserPlus, ChevronLeft } from 'lucide-react';
@@ -28,6 +29,8 @@ export default function TreeEditorPage() {
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isNameSuggestorOpen, setIsNameSuggestorOpen] = useState(false);
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false); // State for share dialog
+  const [zoomLevel, setZoomLevel] = useState(1); // State for zoom
   const [personForSuggestion, setPersonForSuggestion] = useState<Partial<Person> | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [personToDelete, setPersonToDelete] = useState<Person | null>(null);
@@ -44,7 +47,7 @@ export default function TreeEditorPage() {
       try {
         const treeDocSnap = await getDoc(doc(db, 'trees', treeId));
         if (treeDocSnap.exists()) {
-            setTreeData(treeDocSnap.data() as FamilyTree);
+            setTreeData({ id: treeDocSnap.id, ...treeDocSnap.data() } as FamilyTree);
         }
 
         const querySnapshot = await getDocs(peopleColRef);
@@ -238,7 +241,14 @@ export default function TreeEditorPage() {
         toast({ variant: "destructive", title: "Error", description: `Could not create relationship: ${errorMessage}` });
     }
   };
-
+  
+  const handleZoom = (direction: 'in' | 'out') => {
+    if (direction === 'in') {
+      setZoomLevel(prev => Math.min(prev * 1.2, 2)); // Zoom in by 20%, max 200%
+    } else {
+      setZoomLevel(prev => Math.max(prev / 1.2, 0.5)); // Zoom out by 20%, min 50%
+    }
+  };
 
   if (isLoading) {
     return <div className="flex items-center justify-center h-full"><p>Loading tree data...</p></div>;
@@ -259,10 +269,10 @@ export default function TreeEditorPage() {
           <Button variant="outline" size="sm" onClick={() => handleAddPerson({})}>
             <UserPlus className="mr-2 h-4 w-4" /> Add Person
           </Button>
-          <Button variant="outline" size="sm"><ZoomIn className="h-4 w-4" /></Button>
-          <Button variant="outline" size="sm"><ZoomOut className="h-4 w-4" /></Button>
-          <Button variant="outline" size="sm"><Share2 className="mr-2 h-4 w-4" /> Share</Button>
-          <Button variant="outline" size="sm"><Users className="mr-2 h-4 w-4" /> {treeData?.memberCount} Members</Button>
+          <Button variant="outline" size="sm" onClick={() => handleZoom('in')}><ZoomIn className="h-4 w-4" /></Button>
+          <Button variant="outline" size="sm" onClick={() => handleZoom('out')}><ZoomOut className="h-4 w-4" /></Button>
+          <Button variant="outline" size="sm" onClick={() => setIsShareDialogOpen(true)}><Share2 className="mr-2 h-4 w-4" /> Share</Button>
+          <Button variant="outline" size="sm" onClick={() => setIsShareDialogOpen(true)}><Users className="mr-2 h-4 w-4" /> {people.length} Members</Button>
         </div>
       </header>
 
@@ -276,6 +286,7 @@ export default function TreeEditorPage() {
               onNodeDeleteRequest={handleOpenDeleteDialog}
               onNodeMove={handleNodeMove}
               onCreateRelationship={handleCreateRelationship}
+              zoomLevel={zoomLevel}
             />
           ) : (
             <div className="flex flex-col items-center justify-center h-full border-2 border-dashed border-border rounded-lg">
@@ -299,6 +310,14 @@ export default function TreeEditorPage() {
             setIsEditorOpen(false);
             handleOpenNameSuggestor(details);
           }}
+        />
+      )}
+
+      {isShareDialogOpen && treeData && (
+        <ShareDialog
+            isOpen={isShareDialogOpen}
+            onClose={() => setIsShareDialogOpen(false)}
+            tree={treeData}
         />
       )}
 
