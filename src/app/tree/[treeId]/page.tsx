@@ -71,9 +71,9 @@ export default function TreeEditorPage() {
       firstName: 'New Person',
       gender: 'unknown',
       living: true,
+      x: Math.random() * 500 + 50, // Default X required by rules
+      y: Math.random() * 300 + 50, // Default Y required by rules
       ...newPersonDetails,
-      x: Math.random() * 500 + 50,
-      y: Math.random() * 300 + 50,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
@@ -101,15 +101,20 @@ export default function TreeEditorPage() {
     try {
         const personDocRef = doc(peopleColRef, updatedPerson.id);
         const snap = await getDoc(personDocRef);
-        const base = snap.exists()
-          ? { createdAt: snap.data().createdAt }
-          : { createdAt: serverTimestamp() };
-
-        const dataToSave = { 
-            ...updatedPerson, 
-            ...base, 
+        
+        const dataToSave: Partial<Person> & { updatedAt: any, createdAt?: any } = { 
+            ...updatedPerson,
+            firstName: updatedPerson.firstName || 'Unnamed', // Ensure firstName is not empty
+            x: updatedPerson.x ?? Math.random() * 500 + 50, // Ensure x is set
+            y: updatedPerson.y ?? Math.random() * 300 + 50, // Ensure y is set
             updatedAt: serverTimestamp() 
         };
+
+        if (snap.exists()) {
+            dataToSave.createdAt = snap.data().createdAt;
+        } else {
+            dataToSave.createdAt = serverTimestamp();
+        }
 
         await setDoc(personDocRef, dataToSave, { merge: true });
         
@@ -156,8 +161,8 @@ export default function TreeEditorPage() {
   };
 
   const handleOpenNameSuggestor = (personDetails?: Partial<Person>) => {
-    const genderForSuggestor = personDetails?.gender || 'male';
-    setPersonForSuggestion({ ...personDetails, gender: genderForSuggestor as 'male' | 'female' });
+    const genderForSuggestor = personDetails?.gender === 'female' ? 'female' : 'male';
+    setPersonForSuggestion({ ...personDetails, gender: genderForSuggestor });
     setIsNameSuggestorOpen(true);
   };
 
