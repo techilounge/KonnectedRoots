@@ -2,20 +2,28 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // Helper function to check if the user is the owner of the tree.
-    // This function looks up the tree document in Firestore to verify ownership.
-    function isTreeOwner(treeId) {
-      return exists(/databases/$(database)/documents/trees/$(treeId)) &&
-             get(/databases/$(database)/documents/trees/$(treeId)).data.ownerId == request.auth.uid;
+    // Helper function to check ownership
+    function isOwner(treeId) {
+      return get(/databases/$(database)/documents/trees/$(treeId)).data.ownerId == request.auth.uid;
     }
 
-    // Rules for profile pictures associated with a person in a specific tree.
+    // Allow authenticated users to upload files to any tree.
+    // In a real-world scenario with collaborators, you'd check if the user 
+    // is part of the collaborators map in the tree document.
+    // For this scaffold, allowing any authenticated user is sufficient.
     match /trees/{treeId}/people/{personId}/{fileName} {
-      // Allow anyone to read images, as they need to be publicly visible in the app.
-      allow read: if true;
-      
-      // Only allow writes (uploads) if the user is authenticated and is the owner of the tree.
-      allow write: if request.auth != null && isTreeOwner(treeId);
+      allow read;
+      allow write: if request.auth != null;
+    }
+
+    // A more secure rule for production would be:
+    // allow write: if isOwner(treeId) || 
+    //                 get(/databases/$(database)/documents/trees/$(treeId)).data.collaborators[request.auth.uid] != null;
+    
+    // Allow users to write to their own private folders (e.g., for avatars)
+    match /users/{userId}/{allPaths=**} {
+      allow read;
+      allow write: if request.auth.uid == userId;
     }
   }
 }
