@@ -24,7 +24,7 @@ service cloud.firestore {
       // Rules for the 'people' subcollection within a tree
       match /people/{personId} {
         // Anyone who can read the parent tree can also read/list the people in it.
-        allow read, list: if authed() && get(/databases/$(database)/documents/trees/$(treeId)).data.ownerId == request.auth.uid;
+        allow list, read: if authed() && get(/databases/$(database)/documents/trees/$(treeId)).data.ownerId == request.auth.uid;
 
         // Anyone who can edit the parent tree (the owner) can create, update, delete people.
         allow write: if authed() && get(/databases/$(database)/documents/trees/$(treeId)).data.ownerId == request.auth.uid;
