@@ -1,71 +1,34 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Helper functions
+    // Helper function to check for authentication
     function authed() {
       return request.auth != null;
     }
-    
-    function isOwner(userId) {
-      return authed() && request.auth.uid == userId;
-    }
-    
-    function getTreeData(treeId) {
-      return get(/databases/$(database)/documents/trees/$(treeId)).data;
-    }
-    
-    // Match statements for collections
-    match /users/{userId} {
-      allow read, update: if isOwner(userId);
-      allow create: if authed();
-    }
-    
-    match /trees/{treeId} {
-      // CORRECTED RULE:
-      // Allow a user to read or list trees if their UID matches the tree's ownerId.
-      // For 'list' operations (queries), Firestore enforces that the client query
-      // MUST include a 'where("ownerId", "==", request.auth.uid)' clause.
-      allow read, list: if authed() && resource.data.ownerId == request.auth.uid;
-      
-      // Allow a user to create a tree if they are authenticated and the data is valid.
-      allow create: if authed() && isValidNewTree();
-      
-      // Allow the owner to update the tree if the data is valid.
-      allow update: if isOwner(getTreeData(treeId).ownerId) && isValidTreeUpdate();
-      
-      // Only the owner can delete their tree.
-      allow delete: if isOwner(getTreeData(treeId).ownerId);
-      
-      // Rules for the 'people' subcollection
-      match /people/{personId} {
-        // Anyone who can read the parent tree can read the people in it.
-        allow read: if authed() && getTreeData(treeId).ownerId == request.auth.uid;
 
-        // The owner of the parent tree can write to the people subcollection.
-        allow write: if authed() && getTreeData(treeId).ownerId == request.auth.uid;
+    // Rules for the 'users' collection
+    match /users/{userId} {
+      // Users can only read and write their own profile
+      allow read, write: if authed() && request.auth.uid == userId;
+    }
+
+    // Rules for the 'trees' collection and its subcollections
+    match /trees/{treeId} {
+      // Allow create if the user is authenticated and the ownerId matches their uid.
+      allow create: if authed() && request.resource.data.ownerId == request.auth.uid;
+
+      // Allow read, update, delete if the user is the owner of the tree.
+      // The 'list' permission is implicitly handled by the 'read' rule when a correct client-side query is made.
+      allow read, update, delete: if authed() && resource.data.ownerId == request.auth.uid;
+
+      // Rules for the 'people' subcollection within a tree
+      match /people/{personId} {
+        // Anyone who can read the parent tree can also read/list the people in it.
+        allow read, list: if authed() && get(/databases/$(database)/documents/trees/$(treeId)).data.ownerId == request.auth.uid;
+
+        // Anyone who can edit the parent tree (the owner) can create, update, delete people.
+        allow write: if authed() && get(/databases/$(database)/documents/trees/$(treeId)).data.ownerId == request.auth.uid;
       }
-    }
-    
-    // Validation functions for tree data
-    function isValidNewTree() {
-      let data = request.resource.data;
-      return data.ownerId == request.auth.uid
-          && data.title is string
-          && data.title.size() > 0 && data.title.size() <= 100
-          && data.memberCount == 0
-          && data.visibility == 'private'
-          && data.collaborators == {}
-          && data.createdAt == request.time
-          && data.lastUpdated == request.time;
-    }
-    
-    function isValidTreeUpdate() {
-      let data = request.resource.data;
-      return data.title is string
-          && data.title.size() > 0 && data.title.size() <= 100
-          && data.lastUpdated == request.time;
     }
   }
 }
