@@ -8,6 +8,9 @@ import { AuthProvider } from '@/hooks/useAuth'; // Using mocked AuthProvider
 export const metadata: Metadata = {
   title: 'KonnectedRoots - Trace Your Ancestry',
   description: 'Build, explore, and share your family tree with KonnectedRoots. Discover your heritage with our intuitive tools and AI-powered suggestions.',
+  icons: {
+    icon: '/KonnectedRoots_Favicon.svg',
+  },
 };
 
 export default function RootLayout({
