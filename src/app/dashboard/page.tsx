@@ -31,7 +31,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const fetchTrees = async () => {
-      if (!user?.uid) return;
+      if (!user?.uid || !userProfile) return;
 
       setIsLoadingTrees(true);
       try {
