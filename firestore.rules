@@ -1,147 +1,71 @@
 rules_version = '2';
 
 service cloud.firestore {
-  function authed() {
-    return request.auth != null;
-  }
-
-  // --- Helpers (Trees) ---
-  function treeDoc(treeId) {
-    return get(/databases/$(database)/documents/trees/$(treeId));
-  }
-
-  function isOwner(treeId) {
-    return authed() && treeDoc(treeId).data.ownerId == request.auth.uid;
-  }
-
-  function collaboratorRole(treeId) {
-    return authed() && treeDoc(treeId).data.collaborators[request.auth.uid];
-  }
-
-  function isManagerOrEditor(treeId) {
-    return isOwner(treeId) ||
-      (collaboratorRole(treeId) == 'manager' || collaboratorRole(treeId) == 'editor');
-  }
-
-  function isViewer(treeId) {
-    return isManagerOrEditor(treeId) || collaboratorRole(treeId) == 'viewer';
-  }
-
-  function isPublic(treeId) {
-    return treeDoc(treeId).data.visibility == 'public' || treeDoc(treeId).data.visibility == 'link';
-  }
-
-  // --- Validation helpers ---
-  function isString(v) { return v is string; }
-  function isNumber(v) { return v is number; }
-  function isMap(v) { return v is map; }
-  function isTimestamp(v) { return v is timestamp; }
-  function isBool(v) { return v is bool; }
-
-  function validTreeCreate() {
-    let data = request.resource.data;
-    return authed()
-      && data.ownerId == request.auth.uid
-      && isString(data.title) && data.title.size() > 0 && data.title.size() <= 100
-      && (data.visibility in ['private', 'link', 'public'])
-      && isMap(data.collaborators) && data.collaborators.size() == 0
-      && data.memberCount == 0
-      && data.createdAt == request.time
-      && data.lastUpdated == request.time;
-  }
-
-  function validTreeUpdate() {
-    let data = request.resource.data;
-    let existingData = resource.data;
-    return existingData.ownerId == data.ownerId
-      && existingData.createdAt == data.createdAt
-      && data.lastUpdated == request.time
-      && (
-        (
-          data.collaborators == existingData.collaborators &&
-          data.visibility == existingData.visibility
-        ) || isOwner(resource.id)
-      );
-  }
-
-  function validPerson() {
-      let data = request.resource.data;
-      return isString(data.firstName) && data.firstName.size() > 0
-          && isNumber(data.x)
-          && isNumber(data.y)
-          && (data.gender is string && data.gender in ['male', 'female', 'other', 'unknown'])
-          && (!('lastName' in data) || isString(data.lastName))
-          && (!('middleName' in data) || isString(data.middleName))
-          && (!('nickname' in data) || isString(data.nickname))
-          && (!('birthDate' in data) || isString(data.birthDate))
-          && (!('deathDate' in data) || isString(data.deathDate))
-          && (!('living' in data) || isBool(data.living))
-          && (!('placeOfBirth' in data) || isString(data.placeOfBirth))
-          && (!('placeOfDeath' in data) || isString(data.placeOfDeath))
-          && (!('photoURL' in data) || isString(data.photoURL));
-  }
-
-  function validPersonCreate() {
-    return validPerson()
-      && request.resource.data.createdAt == request.time
-      && request.resource.data.updatedAt == request.time;
-  }
-
-  function validPersonUpdate() {
-     return validPerson()
-      && request.resource.data.createdAt == resource.data.createdAt
-      && request.resource.data.updatedAt == request.time;
-  }
-
   match /databases/{database}/documents {
-
-    // --- Users: self-only ---
-    match /users/{uid} {
-      allow create: if authed() && request.auth.uid == uid
-        && request.resource.data.createdAt == request.time;
-      allow read: if authed() && request.auth.uid == uid;
-      allow update: if authed() && request.auth.uid == uid
-        && request.resource.data.updatedAt == request.time
-        && request.resource.data.plan in ['free','pro','team'];
-      allow delete: if authed() && request.auth.uid == uid;
+    
+    // Helper functions
+    function authed() {
+      return request.auth != null;
     }
-
-    // --- Trees + subcollections ---
+    
+    function isOwner(userId) {
+      return authed() && request.auth.uid == userId;
+    }
+    
+    function getTreeData(treeId) {
+      return get(/databases/$(database)/documents/trees/$(treeId)).data;
+    }
+    
+    // Match statements for collections
+    match /users/{userId} {
+      allow read, update: if isOwner(userId);
+      allow create: if authed();
+    }
+    
     match /trees/{treeId} {
-      // Create: only self-owned at creation
-      allow create: if validTreeCreate();
-
-      // Read: public OR collaborators OR owner
-      allow read: if isPublic(treeId) || (authed() && (isOwner(treeId) || isViewer(treeId)));
-
-      // List: Allow querying for own trees
-      allow list: if authed() and request.query.where.ownerId == request.auth.uid;
-
-      // Update: managers/editors for content; owner required for collaborators/visibility (enforced in validTreeUpdate)
-      allow update: if authed() && isManagerOrEditor(treeId) && validTreeUpdate();
-
-      // Delete: owner only
-      allow delete: if authed() && isOwner(treeId);
-
-      // People subcollection
+      // CORRECTED RULE:
+      // Allow a user to read or list trees if their UID matches the tree's ownerId.
+      // For 'list' operations (queries), Firestore enforces that the client query
+      // MUST include a 'where("ownerId", "==", request.auth.uid)' clause.
+      allow read, list: if authed() && resource.data.ownerId == request.auth.uid;
+      
+      // Allow a user to create a tree if they are authenticated and the data is valid.
+      allow create: if authed() && isValidNewTree();
+      
+      // Allow the owner to update the tree if the data is valid.
+      allow update: if isOwner(getTreeData(treeId).ownerId) && isValidTreeUpdate();
+      
+      // Only the owner can delete their tree.
+      allow delete: if isOwner(getTreeData(treeId).ownerId);
+      
+      // Rules for the 'people' subcollection
       match /people/{personId} {
-        allow read: if isPublic(treeId) || (authed() && (isOwner(treeId) || isViewer(treeId)));
-        allow create: if authed() && isManagerOrEditor(treeId) && validPersonCreate();
-        allow update: if authed() && isManagerOrEditor(treeId) && validPersonUpdate();
-        allow delete: if authed() && isManagerOrEditor(treeId);
-      }
+        // Anyone who can read the parent tree can read the people in it.
+        allow read: if authed() && getTreeData(treeId).ownerId == request.auth.uid;
 
-      // Invites subcollection
-      match /invites/{inviteId} {
-        allow create: if authed() && isManagerOrEditor(treeId);
-        allow read, update, delete: if authed() && (isOwner(treeId) || collaboratorRole(treeId) == 'manager');
+        // The owner of the parent tree can write to the people subcollection.
+        allow write: if authed() && getTreeData(treeId).ownerId == request.auth.uid;
       }
     }
-
-    // Public snapshot documents for share links (optional)
-    match /publicShares/{shareId} {
-      allow read: if true;
-      allow create, update, delete: if false; // managed by backend only (Cloud Functions)
+    
+    // Validation functions for tree data
+    function isValidNewTree() {
+      let data = request.resource.data;
+      return data.ownerId == request.auth.uid
+          && data.title is string
+          && data.title.size() > 0 && data.title.size() <= 100
+          && data.memberCount == 0
+          && data.visibility == 'private'
+          && data.collaborators == {}
+          && data.createdAt == request.time
+          && data.lastUpdated == request.time;
+    }
+    
+    function isValidTreeUpdate() {
+      let data = request.resource.data;
+      return data.title is string
+          && data.title.size() > 0 && data.title.size() <= 100
+          && data.lastUpdated == request.time;
     }
   }
 }
