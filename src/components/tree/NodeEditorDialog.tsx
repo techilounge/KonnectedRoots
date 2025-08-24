@@ -18,8 +18,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import Image from 'next/image';
 import { UserCircle, Wand2, Save, Upload, CalendarIcon, Users, Info, Briefcase, BookOpen, ScrollText, LinkIcon, MapPin, Eye, Loader2, Sparkles, Trash2 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { handleGenerateBiography } from '@/app/actions';
+import { handleGenerateBiography, handleUploadProfilePicture } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
+import { useParams } from 'next/navigation';
+
 
 interface NodeEditorDialogProps {
   isOpen: boolean;
@@ -33,8 +35,12 @@ interface NodeEditorDialogProps {
 export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDeleteRequest, onOpenNameSuggestor }: NodeEditorDialogProps) {
   const [formData, setFormData] = useState<Partial<Person>>({});
   const [isGeneratingBio, setIsGeneratingBio] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const { toast } = useToast();
   const profilePictureInputRef = useRef<HTMLInputElement>(null);
+  const params = useParams();
+  const treeId = params.treeId as string;
+
 
   useEffect(() => {
     if (person) {
@@ -92,18 +98,40 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
     }
   };
 
-  const handleProfilePictureChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleProfilePictureChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData(prev => ({ ...prev, profilePictureUrl: reader.result as string }));
-        toast({ title: "Profile Picture Previewed", description: "Save changes to apply." });
-      };
-      reader.readAsDataURL(file);
+    if (!file || !person) return;
+    
+    // Check file size (e.g., 5MB limit)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ variant: "destructive", title: "File too large", description: "Please select an image smaller than 5MB." });
+      return;
     }
-    if (event.target) {
+
+    setIsUploading(true);
+
+    const actionFormData = new FormData();
+    actionFormData.append('profilePicture', file);
+    actionFormData.append('treeId', treeId);
+    actionFormData.append('personId', person.id);
+
+    try {
+      const result = await handleUploadProfilePicture(actionFormData);
+      if ('error' in result) {
+        throw new Error(result.error);
+      }
+      
+      setFormData(prev => ({ ...prev, profilePictureUrl: result.downloadURL }));
+      toast({ title: "Picture Uploaded", description: "Your new profile picture is ready. Save changes to confirm." });
+
+    } catch (error) {
+      console.error("Upload failed:", error);
+      toast({ variant: "destructive", title: "Upload Failed", description: error instanceof Error ? error.message : "Could not upload image." });
+    } finally {
+      setIsUploading(false);
+      if (event.target) {
         event.target.value = ''; // Reset file input
+      }
     }
   };
 
@@ -266,42 +294,41 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
             <section className="space-y-3 p-3 border rounded-md">
                 <h3 className="font-semibold text-md flex items-center"><Upload className="mr-2 h-5 w-5 text-primary" />Media & References</h3>
                  <div className="flex items-start space-x-4">
-                    <Image
-                    src={formData.profilePictureUrl || `https://placehold.co/80x80.png?text=${currentPersonName?.[0] || 'P'}`}
-                    alt={currentPersonName}
-                    width={80}
-                    height={80}
-                    className="rounded-lg border flex-shrink-0 object-cover"
-                    data-ai-hint="person avatar"
-                    />
+                    <div className="relative">
+                        <Image
+                        src={formData.profilePictureUrl || `https://placehold.co/80x80.png?text=${currentPersonName?.[0] || 'P'}`}
+                        alt={currentPersonName}
+                        width={80}
+                        height={80}
+                        className="rounded-lg border flex-shrink-0 object-cover"
+                        data-ai-hint="person avatar"
+                        />
+                        {isUploading && (
+                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-lg">
+                                <Loader2 className="h-6 w-6 text-white animate-spin" />
+                            </div>
+                        )}
+                    </div>
                     <div className="flex-grow space-y-2">
-                        <div>
-                            <Label htmlFor="profilePictureUrlDisplay">Profile Picture URL (or upload)</Label>
-                            <Input 
-                              id="profilePictureUrlDisplay" 
-                              name="profilePictureUrl" 
-                              value={formData.profilePictureUrl || ''} 
-                              onChange={handleChange} 
-                              placeholder="https://example.com/image.png or upload"
-                              className="mb-2" 
-                            />
-                        </div>
-                        <input
+                         <input
                             type="file"
                             ref={profilePictureInputRef}
                             onChange={handleProfilePictureChange}
                             accept="image/png, image/jpeg, image/gif"
                             className="hidden"
                             aria-hidden="true"
+                            disabled={isUploading}
                         />
                         <Button 
                             variant="outline" 
                             size="sm" 
                             onClick={() => profilePictureInputRef.current?.click()}
                             className="text-xs"
+                            disabled={isUploading}
                          >
                             <Upload className="mr-2 h-3 w-3" /> Upload New Photo
                         </Button>
+                        <p className="text-xs text-muted-foreground">Max file size: 5MB.</p>
                     </div>
                 </div>
                 <div>
@@ -353,3 +380,4 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
     </Dialog>
   );
 }
+

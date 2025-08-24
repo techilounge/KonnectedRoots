@@ -4,6 +4,11 @@
 import { suggestName as suggestNameFlow, type SuggestNameInput, type SuggestNameOutput } from '@/ai/flows/suggest-name';
 import { generateBiography as generateBiographyFlow, type GenerateBiographyInput, type GenerateBiographyOutput } from '@/ai/flows/generate-biography-flow';
 import { z } from 'zod';
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { app } from '@/lib/firebase/clients';
+import { getAuth } from 'firebase/auth';
+
+const storage = getStorage(app);
 
 const SuggestNameActionSchema = z.object({
   gender: z.enum(['male', 'female']), 
@@ -60,6 +65,34 @@ export async function handleGenerateBiography(input: GenerateBiographyInput): Pr
   }
 }
 
+export async function handleUploadProfilePicture(formData: FormData): Promise<{ downloadURL: string } | { error: string }> {
+  const file = formData.get('profilePicture') as File;
+  const treeId = formData.get('treeId') as string;
+  const personId = formData.get('personId') as string;
+
+  if (!file || !treeId || !personId) {
+    return { error: "Missing required data for file upload." };
+  }
+  
+  // Note: In a real app, you'd get the current user's ID from a session, not assume auth().currentUser
+  // This is a simplified example. You should add proper authentication checks here.
+
+  try {
+    // Sanitize filename
+    const safeFilename = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
+    const storageRef = ref(storage, `trees/${treeId}/people/${personId}/${safeFilename}`);
+    
+    const snapshot = await uploadBytes(storageRef, file);
+    const downloadURL = await getDownloadURL(snapshot.ref);
+    
+    return { downloadURL };
+  } catch (error) {
+    console.error("Error uploading profile picture:", error);
+    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+    return { error: `File upload failed: ${errorMessage}` };
+  }
+}
+
 
 // Example of another action (not used in this scaffold but for structure)
 export async function saveFamilyTree(treeData: any) {
@@ -69,3 +102,4 @@ export async function saveFamilyTree(treeData: any) {
   await new Promise(resolve => setTimeout(resolve, 1000));
   return { success: true, message: "Family tree saved (simulated)." };
 }
+
