@@ -11,11 +11,11 @@ import { PlusCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast'; 
 import { db } from '@/lib/firebase/clients';
-import { collection, doc, addDoc, getDocs, updateDoc, deleteDoc, query, where, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, addDoc, getDocs, updateDoc, deleteDoc, query, where, serverTimestamp } from 'firebase/firestore';
 
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth(); // Also get userProfile
   const { toast } = useToast();
   const [familyTrees, setFamilyTrees] = useState<FamilyTree[]>([]);
   const [isLoadingTrees, setIsLoadingTrees] = useState(true);
@@ -30,7 +30,9 @@ export default function DashboardPage() {
   const treesColRef = collection(db, 'trees');
 
   const fetchTrees = useCallback(async () => {
-    if (!user?.uid) return;
+    // Guard against running before user and profile are fully loaded
+    if (!user?.uid || !userProfile) return;
+
     setIsLoadingTrees(true);
     try {
       const q = query(treesColRef, where("ownerId", "==", user.uid));
@@ -46,9 +48,10 @@ export default function DashboardPage() {
     } finally {
       setIsLoadingTrees(false);
     }
-  }, [user, toast]);
+  }, [user, userProfile, toast]); // Depend on both user and userProfile
 
   useEffect(() => {
+    // This effect now correctly waits for both user and userProfile
     fetchTrees();
   }, [fetchTrees]);
 
