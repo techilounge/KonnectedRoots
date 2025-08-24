@@ -41,12 +41,13 @@ const auth = getAuth(app);
 const storage = getStorage(app);
 
 // Helper to create the user profile document
-const createUserProfileDocument = async (user: FirebaseUser) => {
+const createUserProfileDocument = async (user: FirebaseUser, displayNameOverride?: string) => {
     const userRef = doc(db, `users/${user.uid}`);
     const snapshot = await getDoc(userRef);
 
     if (!snapshot.exists()) {
-        const { email, displayName, photoURL, uid } = user;
+        const { email, photoURL, uid } = user;
+        const displayName = displayNameOverride || user.displayName;
         const createdAt = serverTimestamp();
 
         const defaultEntitlements = {
@@ -108,7 +109,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     if (userCredential.user) {
       await updateProfile(userCredential.user, { displayName: name });
-      await createUserProfileDocument(userCredential.user);
+      await createUserProfileDocument(userCredential.user, name); // Pass the name to ensure it's set correctly
       // reload user to get new profile data
       await userCredential.user.reload();
       setUser(auth.currentUser);
