@@ -182,16 +182,6 @@ export default function TreeEditorPage() {
     }
   };
 
-  // Relationship logic will need significant updates to work with the new data model
-  // For now, these functions are disabled as they rely on the deprecated `parentId` fields.
-  const handleSetRelationship = async (fromId: string, toId: string, relationship: Relationship) => {
-     toast({ variant: "destructive", title: "Not Implemented", description: "Relationship logic needs to be updated for the new data model." });
-  };
-
-  const handleSetChildOfCouple = async (childId: string, p1Id: string, p2Id: string) => {
-     toast({ variant: "destructive", title: "Not Implemented", description: "Relationship logic needs to be updated for the new data model." });
-  };
-
   if (isLoading) {
     return <div className="flex items-center justify-center h-full"><p>Loading tree data...</p></div>;
   }
@@ -227,8 +217,6 @@ export default function TreeEditorPage() {
               onNodeClick={handleEditPerson}
               onNodeDeleteRequest={handleOpenDeleteDialog}
               onNodeMove={handleNodeMove}
-              onSetRelationship={handleSetRelationship}
-              onSetChildOfCouple={handleSetChildOfCouple}
             />
           ) : (
             <div className="flex flex-col items-center justify-center h-full border-2 border-dashed border-border rounded-lg">

@@ -7,14 +7,13 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Button } from '@/components/ui/button';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { Edit, Trash2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 interface FamilyTreeCanvasPlaceholderProps {
   people: Person[];
   onNodeClick: (person: Person) => void;
   onNodeDeleteRequest: (person: Person) => void;
   onNodeMove: (personId: string, x: number, y: number) => void;
-  onSetRelationship: (fromId: string, toId: string, relationship: Relationship) => void;
-  onSetChildOfCouple: (childId: string, parent1Id: string, parent2Id: string) => void;
 }
 
 const NODE_WIDTH = 180;
@@ -35,10 +34,11 @@ type PopoverState = {
   y: number;
 };
 
-export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNodeDeleteRequest, onNodeMove, onSetRelationship, onSetChildOfCouple }: FamilyTreeCanvasPlaceholderProps) {
+export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNodeDeleteRequest, onNodeMove }: FamilyTreeCanvasPlaceholderProps) {
   const [draggingState, setDraggingState] = useState<{ personId: string; offsetX: number; offsetY: number; clickStartX: number; clickStartY: number; } | null>(null);
   const [linkingState, setLinkingState] = useState<LinkingState | null>(null);
   const [popoverState, setPopoverState] = useState<PopoverState | null>(null);
+  const { toast } = useToast();
   
   const svgRef = useRef<SVGSVGElement>(null);
 
@@ -92,27 +92,7 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
 
   const handleMouseUp = (event: React.MouseEvent) => {
     if (linkingState) {
-      const targetElement = event.target as HTMLElement;
-      
-      const draggedPersonId = linkingState.fromId;
-
-      const targetFamilyLineNode = targetElement.closest<HTMLElement>('[data-family-line-parents]');
-      const targetPersonContainer = targetElement.closest<HTMLElement>('[data-person-id]');
-      
-      if (targetFamilyLineNode) {
-        const parentIds = targetFamilyLineNode.dataset.familyLineParents?.split('--');
-        if (parentIds && parentIds.length === 2) {
-          const [p1, p2] = parentIds;
-          if (draggedPersonId !== p1 && draggedPersonId !== p2) {
-             onSetChildOfCouple(draggedPersonId, p1, p2);
-          }
-        }
-      } else if (targetPersonContainer) {
-        const targetPersonId = targetPersonContainer.dataset.personId;
-        if (targetPersonId && targetPersonId !== draggedPersonId) {
-          setPopoverState({ open: true, fromId: draggedPersonId, toId: targetPersonId, x: event.clientX, y: event.clientY });
-        }
-      }
+      toast({ variant: "destructive", title: "Not Implemented", description: "Relationship logic needs to be updated for the new data model." });
     }
     
     if (draggingState) {
@@ -131,7 +111,7 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
   
   const handleRelationshipSelect = (relationship: Relationship) => {
       if (popoverState) {
-          onSetRelationship(popoverState.fromId, popoverState.toId, relationship);
+          toast({ variant: "destructive", title: "Not Implemented", description: "Relationship logic needs to be updated for the new data model." });
           setPopoverState(null);
       }
   };
