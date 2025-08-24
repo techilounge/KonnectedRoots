@@ -2,23 +2,20 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    function authed() { return request.auth != null; }
-
-    // User avatars: /users/{uid}/profile/avatar.jpg
-    match /users/{uid}/profile/{file} {
-      allow read: if true; // make avatars public; switch to authed() if you want private
-      allow write: if authed() && request.auth.uid == uid
-        && request.resource.size < 5 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
+    // Helper function to check if the user is the owner of the tree.
+    // This function looks up the tree document in Firestore to verify ownership.
+    function isTreeOwner(treeId) {
+      return exists(/databases/$(database)/documents/trees/$(treeId)) &&
+             get(/databases/$(database)/documents/trees/$(treeId)).data.ownerId == request.auth.uid;
     }
 
-    // Tree media: /trees/{treeId}/media/{filename}
-    // Keep reads to authed users by default; for public trees, prefer signed URLs you generate via Function if needed.
-    match /trees/{treeId}/media/{file} {
-      allow read: if authed();
-      allow write: if authed()
-        && request.resource.size < 20 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*|application/pdf');
+    // Rules for profile pictures associated with a person in a specific tree.
+    match /trees/{treeId}/people/{personId}/{fileName} {
+      // Allow anyone to read images, as they need to be publicly visible in the app.
+      allow read: if true;
+      
+      // Only allow writes (uploads) if the user is authenticated and is the owner of the tree.
+      allow write: if request.auth != null && isTreeOwner(treeId);
     }
   }
 }
