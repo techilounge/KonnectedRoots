@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import FamilyTreeCanvasPlaceholder from '@/components/tree/FamilyTreeCanvasPlaceholder';
 import AddPersonToolbox from '@/components/tree/AddPersonToolbox';
 import NodeEditorDialog from '@/components/tree/NodeEditorDialog';
-import type { Person, FamilyTree, Relationship } from '@/types';
+import type { Person, FamilyTree, RelationshipType } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Users, Share2, ZoomIn, ZoomOut, UserPlus, ChevronLeft } from 'lucide-react';
 import NameSuggestor from '@/components/tree/NameSuggestor';
@@ -182,6 +182,64 @@ export default function TreeEditorPage() {
     }
   };
 
+  const handleCreateRelationship = async (fromId: string, toId: string, type: RelationshipType) => {
+    const fromPerson = people.find(p => p.id === fromId);
+    const toPerson = people.find(p => p.id === toId);
+
+    if (!fromPerson || !toPerson) {
+        toast({ variant: "destructive", title: "Error", description: "Could not find persons to link." });
+        return;
+    }
+    
+    const batch = writeBatch(db);
+
+    try {
+        if (type === 'spouse') {
+            const fromRef = doc(peopleColRef, fromId);
+            const toRef = doc(peopleColRef, toId);
+            const fromSpouses = fromPerson.spouseIds || [];
+            const toSpouses = toPerson.spouseIds || [];
+            
+            batch.update(fromRef, { spouseIds: [...fromSpouses, toId], updatedAt: serverTimestamp() });
+            batch.update(toRef, { spouseIds: [...toSpouses, fromId], updatedAt: serverTimestamp() });
+        } else if (type === 'parent' || type === 'child') {
+            const parent = type === 'parent' ? toPerson : fromPerson;
+            const child = type === 'parent' ? fromPerson : toPerson;
+
+            const childRef = doc(peopleColRef, child.id);
+            const parentRef = doc(peopleColRef, parent.id);
+
+            const parentChildren = parent.childrenIds || [];
+            if (!child.parentId1) {
+                batch.update(childRef, { parentId1: parent.id, updatedAt: serverTimestamp() });
+            } else if (!child.parentId2) {
+                batch.update(childRef, { parentId2: parent.id, updatedAt: serverTimestamp() });
+            } else {
+                throw new Error(`${child.firstName} already has two parents.`);
+            }
+             batch.update(parentRef, { childrenIds: [...parentChildren, child.id], updatedAt: serverTimestamp() });
+        }
+        
+        await batch.commit();
+
+        // Refetch data to show the new relationships
+        const querySnapshot = await getDocs(peopleColRef);
+        const fetchedPeople: Person[] = [];
+        querySnapshot.forEach((doc) => {
+          fetchedPeople.push({ id: doc.id, ...doc.data() } as Person);
+        });
+        setPeople(fetchedPeople);
+
+        toast({ title: "Relationship Created!", description: "The connection has been saved." });
+
+    } catch (error) {
+        console.error("Error creating relationship:", error);
+        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+        toast({ variant: "destructive", title: "Error", description: `Could not create relationship: ${errorMessage}` });
+    }
+  };
+
+
   if (isLoading) {
     return <div className="flex items-center justify-center h-full"><p>Loading tree data...</p></div>;
   }
@@ -217,6 +275,7 @@ export default function TreeEditorPage() {
               onNodeClick={handleEditPerson}
               onNodeDeleteRequest={handleOpenDeleteDialog}
               onNodeMove={handleNodeMove}
+              onCreateRelationship={handleCreateRelationship}
             />
           ) : (
             <div className="flex flex-col items-center justify-center h-full border-2 border-dashed border-border rounded-lg">

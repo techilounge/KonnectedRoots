@@ -1,5 +1,9 @@
 export type Relationship = 'parent' | 'child' | 'spouse';
 
+// Added RelationshipType for clarity in the new implementation
+export type RelationshipType = 'spouse' | 'parent' | 'child';
+
+
 export interface UserProfile {
   uid: string;
   displayName: string;

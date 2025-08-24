@@ -1,19 +1,19 @@
 
 "use client";
-import type { Person, Relationship } from '@/types';
+import type { Person, RelationshipType } from '@/types';
 import Image from 'next/image';
 import React, { useState, useRef, useCallback } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { Edit, Trash2 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
 
 interface FamilyTreeCanvasPlaceholderProps {
   people: Person[];
   onNodeClick: (person: Person) => void;
   onNodeDeleteRequest: (person: Person) => void;
   onNodeMove: (personId: string, x: number, y: number) => void;
+  onCreateRelationship: (fromId: string, toId: string, type: RelationshipType) => void;
 }
 
 const NODE_WIDTH = 180;
@@ -34,11 +34,10 @@ type PopoverState = {
   y: number;
 };
 
-export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNodeDeleteRequest, onNodeMove }: FamilyTreeCanvasPlaceholderProps) {
+export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNodeDeleteRequest, onNodeMove, onCreateRelationship }: FamilyTreeCanvasPlaceholderProps) {
   const [draggingState, setDraggingState] = useState<{ personId: string; offsetX: number; offsetY: number; clickStartX: number; clickStartY: number; } | null>(null);
   const [linkingState, setLinkingState] = useState<LinkingState | null>(null);
   const [popoverState, setPopoverState] = useState<PopoverState | null>(null);
-  const { toast } = useToast();
   
   const svgRef = useRef<SVGSVGElement>(null);
 
@@ -92,7 +91,17 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
 
   const handleMouseUp = (event: React.MouseEvent) => {
     if (linkingState) {
-      toast({ variant: "destructive", title: "Not Implemented", description: "Relationship logic needs to be updated for the new data model." });
+      const targetElement = (event.target as HTMLElement).closest('[data-person-id]');
+      const toId = targetElement?.getAttribute('data-person-id');
+      if (toId && toId !== linkingState.fromId) {
+        setPopoverState({
+          open: true,
+          fromId: linkingState.fromId,
+          toId: toId,
+          x: event.clientX,
+          y: event.clientY
+        });
+      }
     }
     
     if (draggingState) {
@@ -109,9 +118,9 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
     setLinkingState(null);
   };
   
-  const handleRelationshipSelect = (relationship: Relationship) => {
+  const handleRelationshipSelect = (type: RelationshipType) => {
       if (popoverState) {
-          toast({ variant: "destructive", title: "Not Implemented", description: "Relationship logic needs to be updated for the new data model." });
+          onCreateRelationship(popoverState.fromId, popoverState.toId, type);
           setPopoverState(null);
       }
   };
@@ -274,15 +283,16 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
       <Popover open={popoverState?.open} onOpenChange={() => setPopoverState(null)}>
         <PopoverTrigger asChild>
             <div 
-                style={{ position: 'absolute', left: popoverState?.x, top: popoverState?.y }} 
+                style={{ position: 'absolute', left: popoverState?.x, top: popoverState?.y, zIndex: 100 }} 
                 className="w-0 h-0"
             />
         </PopoverTrigger>
         <PopoverContent className="w-auto p-2">
             <div className="flex flex-col space-y-1">
-                <Button variant="ghost" size="sm" onClick={() => handleRelationshipSelect('parent')}>Set as Parent</Button>
-                <Button variant="ghost" size="sm" onClick={() => handleRelationshipSelect('child')}>Set as Child</Button>
-                <Button variant="ghost" size="sm" onClick={() => handleRelationshipSelect('spouse')}>Set as Spouse</Button>
+                <p className="p-2 text-xs font-semibold text-muted-foreground">Set relationship to:</p>
+                <Button variant="ghost" size="sm" onClick={() => handleRelationshipSelect('parent')}>Parent</Button>
+                <Button variant="ghost" size="sm" onClick={() => handleRelationshipSelect('child')}>Child</Button>
+                <Button variant="ghost" size="sm" onClick={() => handleRelationshipSelect('spouse')}>Spouse</Button>
             </div>
         </PopoverContent>
       </Popover>
