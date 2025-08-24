@@ -30,8 +30,13 @@ export default function DashboardPage() {
   const treesColRef = collection(db, 'trees');
 
   useEffect(() => {
+    // Define the async function to fetch trees directly inside the effect
     const fetchTrees = async () => {
-      if (!user?.uid || !userProfile) return;
+      // This guard is crucial: it ensures we have the user's UID before querying.
+      if (!user?.uid) {
+        setIsLoadingTrees(false);
+        return;
+      }
 
       setIsLoadingTrees(true);
       try {
@@ -50,10 +55,12 @@ export default function DashboardPage() {
       }
     };
     
-    // This effect now correctly waits for both user and userProfile
+    // The effect now correctly waits for both user and userProfile to be available.
+    // The check inside fetchTrees provides an additional layer of safety.
     if (user && userProfile) {
         fetchTrees();
     }
+  // The dependency array is simplified to only react to changes in user and userProfile.
   }, [user, userProfile, toast]);
 
   const handleCreateTree = async (name: string) => {
