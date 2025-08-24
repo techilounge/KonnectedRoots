@@ -15,7 +15,7 @@ import { collection, doc, addDoc, getDocs, updateDoc, deleteDoc, query, where, s
 
 
 export default function DashboardPage() {
-  const { user, userProfile } = useAuth(); // Also get userProfile
+  const { user } = useAuth();
   const { toast } = useToast();
   const [familyTrees, setFamilyTrees] = useState<FamilyTree[]>([]);
   const [isLoadingTrees, setIsLoadingTrees] = useState(true);
@@ -26,13 +26,10 @@ export default function DashboardPage() {
   const [deletingTreeId, setDeletingTreeId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Firestore collection reference for trees
   const treesColRef = collection(db, 'trees');
 
   useEffect(() => {
-    // Define the async function to fetch trees directly inside the effect
     const fetchTrees = async () => {
-      // This guard is crucial: it ensures we have the user's UID before querying.
       if (!user?.uid) {
         setIsLoadingTrees(false);
         return;
@@ -55,13 +52,14 @@ export default function DashboardPage() {
       }
     };
     
-    // The effect now correctly waits for both user and userProfile to be available.
-    // The check inside fetchTrees provides an additional layer of safety.
-    if (user && userProfile) {
+    if (user) {
         fetchTrees();
+    } else {
+        // If there's no user, we're not loading, and there are no trees.
+        setIsLoadingTrees(false);
+        setFamilyTrees([]);
     }
-  // The dependency array is simplified to only react to changes in user and userProfile.
-  }, [user, userProfile, toast]);
+  }, [user, toast]);
 
   const handleCreateTree = async (name: string) => {
     if (!user?.uid) return;
@@ -76,17 +74,12 @@ export default function DashboardPage() {
         createdAt: serverTimestamp(),
         lastUpdated: serverTimestamp(),
       };
-      await addDoc(treesColRef, newTreeDoc);
+      const docRef = await addDoc(treesColRef, newTreeDoc);
       toast({ title: "Tree Created!", description: `"${name}" has been successfully created.` });
       
-      // Manually refetch after creation
-      const q = query(treesColRef, where("ownerId", "==", user.uid));
-      const querySnapshot = await getDocs(q);
-      const trees: FamilyTree[] = [];
-      querySnapshot.forEach((doc) => {
-        trees.push({ id: doc.id, ...doc.data() } as FamilyTree);
-      });
-      setFamilyTrees(trees);
+      // Add the new tree to the local state to avoid a refetch
+      const newTree = { id: docRef.id, ...newTreeDoc, createdAt: new Date(), lastUpdated: new Date() } as FamilyTree;
+      setFamilyTrees(prev => [...prev, newTree]);
 
     } catch (error) {
       console.error("Error creating tree:", error);
@@ -152,6 +145,8 @@ export default function DashboardPage() {
   };
 
   if (!user) {
+    // This state is handled by the DashboardLayout which shows a loader or redirects.
+    // Returning null prevents a flash of content before the layout handles it.
     return null;
   }
 
@@ -180,7 +175,7 @@ export default function DashboardPage() {
           />
         ) : (
           <div className="text-center py-10 border-2 border-dashed border-border rounded-lg">
-            <p className="text-muted-foreground mb-4">You haven&apos;t created any family trees yet.</p>
+            <p className="text-muted-foreground mb-4">You haven't created any family trees yet.</p>
             <Button onClick={() => setIsCreateDialogOpen(true)} variant="outline">
               Start Your First Tree
             </Button>

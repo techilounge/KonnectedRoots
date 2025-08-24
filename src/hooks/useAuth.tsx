@@ -84,17 +84,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setLoading(true); // Start loading whenever auth state changes
       if (user) {
-        setUser(user);
+        // User is signed in, fetch profile before setting state
         const userProfileDoc = await getDoc(doc(db, `users/${user.uid}`));
         if (userProfileDoc.exists()) {
             setUserProfile(userProfileDoc.data() as UserProfile);
+            setUser(user);
+        } else {
+            // This case might happen if profile creation fails.
+            // For now, we'll treat them as not fully logged in.
+            setUser(null);
+            setUserProfile(null);
         }
       } else {
+        // User is signed out
         setUser(null);
         setUserProfile(null);
       }
-      setLoading(false);
+      setLoading(false); // Stop loading after all async operations are done
     });
 
     return () => unsubscribe();
@@ -109,14 +117,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     if (userCredential.user) {
       await updateProfile(userCredential.user, { displayName: name });
-      await createUserProfileDocument(userCredential.user, name); // Pass the name to ensure it's set correctly
-      // reload user to get new profile data
-      await userCredential.user.reload();
-      setUser(auth.currentUser);
-       const userProfileDoc = await getDoc(doc(db, `users/${userCredential.user.uid}`));
-        if (userProfileDoc.exists()) {
-            setUserProfile(userProfileDoc.data() as UserProfile);
-        }
+      await createUserProfileDocument(userCredential.user, name);
     }
     router.push('/dashboard');
   };
@@ -131,11 +132,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const userCredential = await signInWithPopup(auth, provider);
     if (userCredential.user) {
         await createUserProfileDocument(userCredential.user);
-        setUser(auth.currentUser);
-        const userProfileDoc = await getDoc(doc(db, `users/${userCredential.user.uid}`));
-        if (userProfileDoc.exists()) {
-            setUserProfile(userProfileDoc.data() as UserProfile);
-        }
     }
     router.push('/dashboard');
   };
@@ -146,16 +142,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     let photoURL = auth.currentUser.photoURL;
 
     if (photoFile) {
-      // Use new scoped path for avatars
       const storageRef = ref(storage, `users/${auth.currentUser.uid}/profile/${photoFile.name}`);
       const snapshot = await uploadBytes(storageRef, photoFile);
       photoURL = await getDownloadURL(snapshot.ref);
     }
     
-    // Update Firebase Auth profile
     await updateProfile(auth.currentUser, { displayName, photoURL });
     
-    // Update Firestore user document
     const userRef = doc(db, `users/${auth.currentUser.uid}`);
     await setDoc(userRef, { 
         displayName, 
@@ -163,10 +156,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         updatedAt: serverTimestamp()
     }, { merge: true });
 
-    // Reload user to get updated info
+    // Force a reload of the user object and profile to reflect changes immediately
     await auth.currentUser.reload(); 
-    setUser(auth.currentUser);
+    const updatedUser = auth.currentUser;
     const userProfileDoc = await getDoc(userRef);
+    
+    setUser(updatedUser);
     if (userProfileDoc.exists()) {
         setUserProfile(userProfileDoc.data() as UserProfile);
     }
@@ -185,10 +180,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const deleteUserAccount = async () => {
      if (!auth.currentUser) throw new Error("Not authenticated");
-     // Note: Deleting the user from Auth does not delete their Firestore data.
-     // A Cloud Function is recommended for cleaning up user data upon deletion.
      await deleteUser(auth.currentUser);
-     // onAuthStateChanged will handle redirect and state clearing.
   }
 
   return (
