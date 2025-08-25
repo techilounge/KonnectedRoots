@@ -15,8 +15,8 @@ service firebase.storage {
                     && request.resource.contentType.matches('image/.*')
                     && firestore.get(/databases/$(database)/documents/trees/$(treeId)).data.ownerId == request.auth.uid;
       
-      // Allow anyone with the link to read profile pictures.
-      // This can be tightened later if needed (e.g., check if user is collaborator).
+      // Allow anyone to read profile pictures for now. 
+      // This can be tightened later if needed.
       allow read;
     }
   }
