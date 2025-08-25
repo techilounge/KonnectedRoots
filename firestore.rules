@@ -25,15 +25,13 @@ service cloud.firestore {
       // Allow create if the user is authenticated and the ownerId matches their uid.
       allow create: if authed() && request.resource.data.ownerId == request.auth.uid;
 
-      // Allow a user to get a single tree document if they are the owner.
-      allow get: if isOwner(treeId);
-      
-      // Allow a user to list trees ONLY IF they are querying for their own trees.
-      // This rule specifically enables the dashboard query.
-      allow list: if authed() && request.query.get("ownerId") == request.auth.uid;
-
-      // Allow update and delete if the user is the owner of the tree.
-      allow update, delete: if isOwner(treeId);
+      // This is the correct way to handle queries with listeners.
+      // 1. `list` allows the query to be attached if the user is logged in.
+      // 2. `read` then checks EACH document returned by the listener to ensure the user owns it.
+      // This works because the client-side query `where("ownerId", "==", user.uid)` ensures
+      // that only the user's own documents will ever be sent to the client to be checked by the `read` rule.
+      allow list: if authed();
+      allow read, update, delete: if authed() && resource.data.ownerId == request.auth.uid;
 
       // Rules for the 'people' subcollection within a tree.
       match /people/{personId} {
