@@ -1,21 +1,40 @@
 rules_version = '2';
+
 service firebase.storage {
   match /b/{bucket}/o {
-    // Helper function to check if a user is authenticated
-    function authed() {
-      return request.auth != null;
+    
+    // Helper function to check if the user is the owner of a tree by looking at Firestore.
+    // This requires the corresponding Firestore rule to allow this 'get' operation.
+    function isTreeOwner(treeId) {
+      return exists(/databases/$(database)/documents/trees/$(treeId)) &&
+             get(/databases/$(database)/documents/trees/$(treeId)).data.ownerId == request.auth.uid;
     }
 
-    // Allow public read access to all files. 
-    // This is common for profile pictures and other non-sensitive assets.
-    match /{allPaths=**} {
+    // Rules for user profile pictures within a specific family tree.
+    match /trees/{treeId}/people/{personId}/{fileName} {
+      
+      // Allow writes (uploads, updates, deletes) only if:
+      // 1. The user is authenticated.
+      // 2. The user is the owner of the family tree.
+      // 3. The uploaded file is an image.
+      // 4. The uploaded file is less than 5MB.
+      allow write: if request.auth != null 
+                    && isTreeOwner(treeId)
+                    && request.resource.contentType.matches('image/.*')
+                    && request.resource.size < 5 * 1024 * 1024;
+
+      // Allow anyone with the URL to read the images.
+      // This is generally safe for non-sensitive images like profile pictures.
+      // This can be tightened to `if request.auth != null` if needed.
       allow read;
     }
 
-    // Explicitly allow authenticated users to write to the designated path for tree data.
-    // This is more secure and specific than a general write rule.
-    match /trees/{treeId}/people/{personId}/{fileName} {
-      allow write: if authed();
+    // Rules for general user profile pictures (not tied to a specific tree).
+    match /users/{userId}/profile/{fileName} {
+       allow write: if request.auth != null && request.auth.uid == userId
+                    && request.resource.contentType.matches('image/.*')
+                    && request.resource.size < 5 * 1024 * 1024;
+       allow read;
     }
   }
 }
