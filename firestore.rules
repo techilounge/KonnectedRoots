@@ -2,40 +2,42 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Helper function to check for authentication.
+    // Helper function to check for authentication
     function authed() {
       return request.auth != null;
     }
 
-    // Global helper function to check if the user is the owner of a tree.
-    // This can be called from other security rules (like Storage Rules).
-    function isOwner(treeId) {
-      return authed() && get(/databases/$(database)/documents/trees/$(treeId)).data.ownerId == request.auth.uid;
-    }
-
-    // Rules for the 'users' collection.
+    // Rules for the 'users' collection
     match /users/{userId} {
-      // Users can only read and write their own profile.
-      allow read, write: if authed() && request.auth.uid == userId;
+      // Users can only read their own profile
+      allow read: if authed() && request.auth.uid == userId;
+
+      // Allow users to create their own profile document
+      allow create: if authed() && request.auth.uid == userId;
+
+      // Allow users to update their own profile, BUT NOT their plan or entitlements
+      allow update: if authed() && request.auth.uid == userId
+        && request.resource.data.plan == resource.data.plan
+        && request.resource.data.entitleaments == resource.data.entitlements;
+      
+      // Allow users to delete their own account data
+      allow delete: if authed() && request.auth.uid == userId;
     }
 
-    // Rules for the 'trees' collection and its subcollections.
+    // Rules for the 'trees' collection and its subcollections
     match /trees/{treeId} {
       // Allow create if the user is authenticated and the ownerId matches their uid.
       allow create: if authed() && request.resource.data.ownerId == request.auth.uid;
 
-      // This combination allows a real-time listener (`onSnapshot`) to work correctly.
-      // 1. `list`: Allows the client to listen to the collection, but this rule alone doesn't grant data access.
-      // 2. `read`: Secures the listener by only allowing documents where the user is the owner to be returned.
-      // `update` and `delete` are also secured by checking ownership.
-      allow list: if authed();
-      allow read, update, delete: if isOwner(treeId);
+      // Allow read, update, delete if the user is the owner of the tree, ensuring ownerId is immutable.
+      allow read, delete: if authed() && resource.data.ownerId == request.auth.uid;
+      allow update: if authed() && resource.data.ownerId == request.auth.uid
+        && request.resource.data.ownerId == resource.data.ownerId; // ownerId is immutable
 
-      // Rules for the 'people' subcollection within a tree.
+      // Rules for the 'people' subcollection within a tree
       match /people/{personId} {
-        // Anyone who can read/edit the parent tree (the owner) can read/write people.
-        allow read, write: if isOwner(treeId);
+        // Anyone who can read/write the parent tree (the owner) can do the same for people.
+        allow read, write: if authed() && get(/databases/$(database)/documents/trees/$(treeId)).data.ownerId == request.auth.uid;
       }
     }
   }
