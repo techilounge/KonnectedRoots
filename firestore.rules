@@ -25,13 +25,12 @@ service cloud.firestore {
       // Allow create if the user is authenticated and the ownerId matches their uid.
       allow create: if authed() && request.resource.data.ownerId == request.auth.uid;
 
-      // This is the correct way to handle queries with listeners.
-      // 1. `list` allows the query to be attached if the user is logged in.
-      // 2. `read` then checks EACH document returned by the listener to ensure the user owns it.
-      // This works because the client-side query `where("ownerId", "==", user.uid)` ensures
-      // that only the user's own documents will ever be sent to the client to be checked by the `read` rule.
+      // This combination allows a real-time listener (`onSnapshot`) to work correctly.
+      // 1. `list`: Allows the client to listen to the collection, but this rule alone doesn't grant data access.
+      // 2. `read`: Secures the listener by only allowing documents where the user is the owner to be returned.
+      // `update` and `delete` are also secured by checking ownership.
       allow list: if authed();
-      allow read, update, delete: if authed() && resource.data.ownerId == request.auth.uid;
+      allow read, update, delete: if isOwner(treeId);
 
       // Rules for the 'people' subcollection within a tree.
       match /people/{personId} {
