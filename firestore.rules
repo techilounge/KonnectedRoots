@@ -20,17 +20,20 @@ service cloud.firestore {
       allow read, write: if authed() && request.auth.uid == userId;
     }
 
-    // Rules for the the 'trees' collection and its subcollections.
+    // Rules for the 'trees' collection and its subcollections.
     match /trees/{treeId} {
       // Allow create if the user is authenticated and the ownerId matches their uid.
       allow create: if authed() && request.resource.data.ownerId == request.auth.uid;
 
-      // Allow a user to query for the list of trees they own.
-      // This rule is crucial for the dashboard to function.
-      allow list: if authed() && request.query.resource.data.ownerId == request.auth.uid;
+      // Allow a user to get a single tree document if they are the owner.
+      allow get: if isOwner(treeId);
       
-      // Allow read, update, delete for a specific tree if the user is the owner.
-      allow get, update, delete: if isOwner(treeId);
+      // Allow a user to list trees ONLY IF they are querying for their own trees.
+      // This rule specifically enables the dashboard query.
+      allow list: if authed() && request.query.get("ownerId") == request.auth.uid;
+
+      // Allow update and delete if the user is the owner of the tree.
+      allow update, delete: if isOwner(treeId);
 
       // Rules for the 'people' subcollection within a tree.
       match /people/{personId} {
