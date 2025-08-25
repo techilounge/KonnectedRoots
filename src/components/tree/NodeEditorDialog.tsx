@@ -138,6 +138,9 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
   if (!person && !isOpen) return null; 
 
   const currentPersonName = formData.firstName || person?.firstName || 'New Person';
+  const srcUrl =
+    formData.profilePictureUrl ||
+    `https://placehold.co/80x80.png?text=${(currentPersonName?.[0] ?? 'P').toString().toUpperCase()}`;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -290,10 +293,7 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
                  <div className="flex items-start space-x-4">
                     <div className="relative">
                         <Image
-                          src={
-                            formData.profilePictureUrl ||
-                            `https://placehold.co/80x80.png?text=${(currentPersonName?.[0] ?? 'P').toString().toUpperCase()}`
-                          }
+                          src={srcUrl}
                           alt={currentPersonName ?? 'Profile photo'}
                           width={80}
                           height={80}
