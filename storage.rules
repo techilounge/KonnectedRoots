@@ -1,40 +1,23 @@
 rules_version = '2';
 
+// Rules for Firebase Storage
 service firebase.storage {
+  // Match the bucket for your project
   match /b/{bucket}/o {
-    
-    // Helper function to check if the user is the owner of a tree by looking at Firestore.
-    // This requires the corresponding Firestore rule to allow this 'get' operation.
-    function isTreeOwner(treeId) {
-      return exists(/databases/$(database)/documents/trees/$(treeId)) &&
-             get(/databases/$(database)/documents/trees/$(treeId)).data.ownerId == request.auth.uid;
-    }
 
-    // Rules for user profile pictures within a specific family tree.
+    // Secure the path for profile picture uploads
+    // - Users can only upload to a tree they own.
+    // - Files must be images.
+    // - Files must be less than 5MB.
     match /trees/{treeId}/people/{personId}/{fileName} {
+      allow write: if request.auth != null
+                    && request.resource.size < 5 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*')
+                    && firestore.get(/databases/(default)/documents/trees/$(treeId)).data.ownerId == request.auth.uid;
       
-      // Allow writes (uploads, updates, deletes) only if:
-      // 1. The user is authenticated.
-      // 2. The user is the owner of the family tree.
-      // 3. The uploaded file is an image.
-      // 4. The uploaded file is less than 5MB.
-      allow write: if request.auth != null 
-                    && isTreeOwner(treeId)
-                    && request.resource.contentType.matches('image/.*')
-                    && request.resource.size < 5 * 1024 * 1024;
-
-      // Allow anyone with the URL to read the images.
-      // This is generally safe for non-sensitive images like profile pictures.
-      // This can be tightened to `if request.auth != null` if needed.
+      // Allow anyone to read profile pictures for now. 
+      // This can be tightened later if needed.
       allow read;
-    }
-
-    // Rules for general user profile pictures (not tied to a specific tree).
-    match /users/{userId}/profile/{fileName} {
-       allow write: if request.auth != null && request.auth.uid == userId
-                    && request.resource.contentType.matches('image/.*')
-                    && request.resource.size < 5 * 1024 * 1024;
-       allow read;
     }
   }
 }
