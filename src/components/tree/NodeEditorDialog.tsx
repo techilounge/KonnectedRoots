@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import Image from 'next/image';
 import { UserCircle, Wand2, Save, Upload, CalendarIcon, Users, Info, Briefcase, BookOpen, ScrollText, LinkIcon, MapPin, Eye, Loader2, Sparkles, Trash2 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { handleGenerateBiography } from '@/app/actions';
+import { handleGenerateBiography, handleUploadProfilePicture } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import { useParams } from 'next/navigation';
 import { uploadPersonPhoto } from "@/lib/uploadPersonPhoto";
@@ -111,16 +111,16 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
     
     setIsUploading(true);
     try {
-        const downloadURL = await uploadPersonPhoto(file, treeId, person.id);
-        setFormData(prev => ({ ...prev, profilePictureUrl: downloadURL }));
-        toast({ title: "Picture Uploaded", description: "Your new profile picture is ready. Save changes to confirm." });
+      const downloadURL = await uploadPersonPhoto(file, treeId, person.id);
+      setFormData(prev => ({ ...prev, profilePictureUrl: downloadURL }));
+      toast({ title: "Picture Uploaded", description: "Your new profile picture is ready. Save changes to confirm." });
     } catch (e: any) {
-        console.error("Upload failed:", e);
-        toast({
-            variant: "destructive",
-            title: "Upload Failed",
-            description: e.message || "An unexpected error occurred.",
-        });
+      console.error("Upload failed:", e);
+      toast({
+          variant: "destructive",
+          title: "Upload Failed",
+          description: e.message || "An unexpected error occurred.",
+      });
     } finally {
         setIsUploading(false);
         if (event.target) {
@@ -290,12 +290,15 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
                  <div className="flex items-start space-x-4">
                     <div className="relative">
                         <Image
-                        src={formData.profilePictureUrl || `https://placehold.co/80x80.png?text=${currentPersonName?.[0] || 'P'}`}
-                        alt={currentPersonName}
-                        width={80}
-                        height={80}
-                        className="rounded-lg border flex-shrink-0 object-cover"
-                        data-ai-hint="person avatar"
+                          src={
+                            formData.profilePictureUrl ||
+                            `https://placehold.co/80x80.png?text=${(currentPersonName?.[0] ?? 'P').toString().toUpperCase()}`
+                          }
+                          alt={currentPersonName ?? 'Profile photo'}
+                          width={80}
+                          height={80}
+                          className="rounded-lg border flex-shrink-0 object-cover"
+                          data-ai-hint="person avatar"
                         />
                         {isUploading && (
                             <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-lg">
