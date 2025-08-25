@@ -18,7 +18,7 @@ service cloud.firestore {
       // Allow users to update their own profile, BUT NOT their plan or entitlements
       allow update: if authed() && request.auth.uid == userId
         && request.resource.data.plan == resource.data.plan
-        && request.resource.data.entitleaments == resource.data.entitlements;
+        && request.resource.data.entitlements == resource.data.entitlements; // Corrected typo here
       
       // Allow users to delete their own account data
       allow delete: if authed() && request.auth.uid == userId;
@@ -29,8 +29,10 @@ service cloud.firestore {
       // Allow create if the user is authenticated and the ownerId matches their uid.
       allow create: if authed() && request.resource.data.ownerId == request.auth.uid;
 
-      // Allow read, update, delete if the user is the owner of the tree, ensuring ownerId is immutable.
+      // Allow read and delete if the user is the owner of the tree.
       allow read, delete: if authed() && resource.data.ownerId == request.auth.uid;
+      
+      // Allow update if the user is the owner AND the ownerId is not being changed.
       allow update: if authed() && resource.data.ownerId == request.auth.uid
         && request.resource.data.ownerId == resource.data.ownerId; // ownerId is immutable
 
