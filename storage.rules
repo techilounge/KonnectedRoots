@@ -6,18 +6,17 @@ service firebase.storage {
   match /b/{bucket}/o {
 
     // Secure the path for profile picture uploads
-    // - Users can only upload to a tree they own (verified by the isOwner function in firestore.rules).
+    // - Users can only upload to a tree they own.
     // - Files must be images.
     // - Files must be less than 5MB.
     match /trees/{treeId}/people/{personId}/{fileName} {
       allow write: if request.auth != null
                     && request.resource.size < 5 * 1024 * 1024
                     && request.resource.contentType.matches('image/.*')
-                    && firestore.exists(/databases/(default)/documents/trees/$(treeId))
-                    && firestore.get(/databases/(default)/documents/trees/$(treeId)).data.ownerId == request.auth.uid;
+                    && firestore.get(/databases/$(database)/documents/trees/$(treeId)).data.ownerId == request.auth.uid;
       
-      // Allow anyone to read profile pictures for now. 
-      // This can be tightened later if needed.
+      // Allow anyone with the link to read profile pictures.
+      // This can be tightened later if needed (e.g., check if user is collaborator).
       allow read;
     }
   }
