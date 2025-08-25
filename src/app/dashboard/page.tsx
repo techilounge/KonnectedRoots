@@ -11,7 +11,7 @@ import { PlusCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast'; 
 import { db } from '@/lib/firebase/clients';
-import { collection, doc, addDoc, getDocs, updateDoc, deleteDoc, query, where, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, addDoc, updateDoc, deleteDoc, query, where, serverTimestamp, onSnapshot } from 'firebase/firestore';
 
 
 export default function DashboardPage() {
@@ -29,36 +29,32 @@ export default function DashboardPage() {
   const treesColRef = collection(db, 'trees');
 
   useEffect(() => {
-    const fetchTrees = async () => {
-      if (!user?.uid) {
-        setIsLoadingTrees(false);
-        return;
-      }
-
-      setIsLoadingTrees(true);
-      try {
-        const q = query(treesColRef, where("ownerId", "==", user.uid));
-        const querySnapshot = await getDocs(q);
-        const trees: FamilyTree[] = [];
-        querySnapshot.forEach((doc) => {
-          trees.push({ id: doc.id, ...doc.data() } as FamilyTree);
-        });
-        setFamilyTrees(trees);
-      } catch (error) {
-        console.error("Error fetching trees:", error);
-        toast({ variant: "destructive", title: "Error", description: "Could not load your family trees." });
-      } finally {
-        setIsLoadingTrees(false);
-      }
-    };
-    
-    if (user) {
-        fetchTrees();
-    } else {
-        // If there's no user, we're not loading, and there are no trees.
+    if (!user) {
         setIsLoadingTrees(false);
         setFamilyTrees([]);
+        return;
     }
+
+    setIsLoadingTrees(true);
+    
+    // Use onSnapshot for real-time updates
+    const q = query(treesColRef, where("ownerId", "==", user.uid));
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+        const trees: FamilyTree[] = [];
+        querySnapshot.forEach((doc) => {
+            trees.push({ id: doc.id, ...doc.data() } as FamilyTree);
+        });
+        setFamilyTrees(trees);
+        setIsLoadingTrees(false);
+    }, (error) => {
+        console.error("Error fetching trees with real-time listener:", error);
+        toast({ variant: "destructive", title: "Error", description: "Could not load your family trees." });
+        setIsLoadingTrees(false);
+    });
+
+    // Clean up the listener when the component unmounts or user changes
+    return () => unsubscribe();
+    
   }, [user, toast]);
 
   const handleCreateTree = async (name: string) => {
@@ -74,12 +70,10 @@ export default function DashboardPage() {
         createdAt: serverTimestamp(),
         lastUpdated: serverTimestamp(),
       };
-      const docRef = await addDoc(treesColRef, newTreeDoc);
+      await addDoc(treesColRef, newTreeDoc);
       toast({ title: "Tree Created!", description: `"${name}" has been successfully created.` });
       
-      // Add the new tree to the local state to avoid a refetch
-      const newTree = { id: docRef.id, ...newTreeDoc, createdAt: new Date(), lastUpdated: new Date() } as FamilyTree;
-      setFamilyTrees(prev => [...prev, newTree]);
+      // No need to manually add to state, onSnapshot will handle it.
 
     } catch (error) {
       console.error("Error creating tree:", error);
@@ -104,7 +98,7 @@ export default function DashboardPage() {
       const updatedData = { title: newName, lastUpdated: serverTimestamp() };
       await updateDoc(treeDocRef, updatedData);
       toast({ title: "Tree Updated!", description: `Tree renamed to "${newName}".` });
-      setFamilyTrees(prev => prev.map(t => t.id === editingTree.id ? { ...t, ...updatedData, title: newName } : t));
+      // No need to manually update state, onSnapshot will handle it.
     } catch (error) {
        console.error("Error updating tree:", error);
        toast({ variant: "destructive", title: "Error", description: "Failed to update tree name." });
@@ -134,7 +128,7 @@ export default function DashboardPage() {
       await deleteDoc(treeDocRef);
       
       toast({ variant: "destructive", title: "Tree Deleted!", description: `"${treeToDelete?.title}" and all its members have been deleted.` });
-      setFamilyTrees(prev => prev.filter(t => t.id !== deletingTreeId));
+      // No need to manually update state, onSnapshot will handle it.
     } catch (error) {
        console.error("Error deleting tree:", error);
        toast({ variant: "destructive", title: "Error", description: "Failed to delete the tree." });
