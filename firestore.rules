@@ -1,27 +1,37 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    function isAuthed() {
+    
+    // Helper function to check for authentication.
+    function authed() {
       return request.auth != null;
     }
 
-    match /users/{userId} {
-      // A user can read and write to their own user document
-      allow read, write: if isAuthed() && request.auth.uid == userId;
+    // Global helper function to check if the user is the owner of a tree.
+    // This can be called from other security rules (like Storage Rules).
+    function isOwner(treeId) {
+      return authed() && get(/databases/$(database)/documents/trees/$(treeId)).data.ownerId == request.auth.uid;
     }
 
-    match /trees/{treeId} {
-      // A user can create a tree if they are logged in and they are the owner
-      allow create: if isAuthed() && request.resource.data.ownerId == request.auth.uid;
-      
-      // A user can read, update, or delete a tree if they are the owner
-      // This rule works for single document reads and for the dashboard query
-      allow read, update, delete: if isAuthed() && resource.data.ownerId == request.auth.uid;
+    // Rules for the 'users' collection.
+    match /users/{userId} {
+      // Users can only read and write their own profile.
+      allow read, write: if authed() && request.auth.uid == userId;
+    }
 
+    // Rules for the 'trees' collection and its subcollections.
+    match /trees/{treeId} {
+      // Allow create if the user is authenticated and the ownerId matches their uid.
+      allow create: if authed() && request.resource.data.ownerId == request.auth.uid;
+
+      // Allow read, update, delete if the user is the owner of the tree.
+      allow read, update, delete: if isOwner(treeId);
+
+      // Rules for the 'people' subcollection within a tree.
       match /people/{personId} {
-        // A user can read/write to the people subcollection if they own the parent tree
-        allow read, write: if isAuthed() && get(/databases/$(database)/documents/trees/$(treeId)).data.ownerId == request.auth.uid;
+        // Anyone who can read/edit the parent tree (the owner) can read/write people.
+        allow read, write: if isOwner(treeId);
       }
     }
   }
