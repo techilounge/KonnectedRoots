@@ -18,9 +18,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import Image from 'next/image';
 import { UserCircle, Wand2, Save, Upload, CalendarIcon, Users, Info, Briefcase, BookOpen, ScrollText, LinkIcon, MapPin, Eye, Loader2, Sparkles, Trash2 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { handleGenerateBiography, handleUploadProfilePicture } from '@/app/actions';
+import { handleGenerateBiography } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import { useParams } from 'next/navigation';
+import { uploadPersonPhoto } from "@/lib/uploadPersonPhoto";
 
 
 interface NodeEditorDialogProps {
@@ -108,36 +109,23 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
     const file = event.target.files?.[0];
     if (!file || !person) return;
     
-    // Check file size (e.g., 5MB limit)
-    if (file.size > 5 * 1024 * 1024) {
-      toast({ variant: "destructive", title: "File too large", description: "Please select an image smaller than 5MB." });
-      return;
-    }
-
     setIsUploading(true);
-
-    const actionFormData = new FormData();
-    actionFormData.append('profilePicture', file);
-    actionFormData.append('treeId', treeId);
-    actionFormData.append('personId', person.id);
-
     try {
-      const result = await handleUploadProfilePicture(actionFormData);
-      if ('error' in result) {
-        throw new Error(result.error);
-      }
-      
-      setFormData(prev => ({ ...prev, profilePictureUrl: result.downloadURL }));
-      toast({ title: "Picture Uploaded", description: "Your new profile picture is ready. Save changes to confirm." });
-
-    } catch (error) {
-      console.error("Upload failed:", error);
-      toast({ variant: "destructive", title: "Upload Failed", description: error instanceof Error ? error.message : "Could not upload image." });
+        const downloadURL = await uploadPersonPhoto(file, treeId, person.id);
+        setFormData(prev => ({ ...prev, profilePictureUrl: downloadURL }));
+        toast({ title: "Picture Uploaded", description: "Your new profile picture is ready. Save changes to confirm." });
+    } catch (e: any) {
+        console.error("Upload failed:", e);
+        toast({
+            variant: "destructive",
+            title: "Upload Failed",
+            description: e.message || "An unexpected error occurred.",
+        });
     } finally {
-      setIsUploading(false);
-      if (event.target) {
-        event.target.value = ''; // Reset file input
-      }
+        setIsUploading(false);
+        if (event.target) {
+            event.target.value = ''; // Reset file input
+        }
     }
   };
 

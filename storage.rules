@@ -1,23 +1,41 @@
 rules_version = '2';
 
-// Rules for Firebase Storage
 service firebase.storage {
-  // Match the bucket for your project
   match /b/{bucket}/o {
 
-    // Secure the path for profile picture uploads
-    // - Users can only upload to a tree they own.
-    // - Files must be images.
-    // - Files must be less than 5MB.
+    function authed() {
+      return request.auth != null;
+    }
+
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+
+    function under5MB() {
+      return request.resource.size < 5 * 1024 * 1024;
+    }
+
+    // IMPORTANT: use (default) when reading Firestore from Storage rules
+    function ownsTree(treeId) {
+      return authed() &&
+             firestore.get(/databases/(default)/documents/trees/$(treeId)).data.ownerId == request.auth.uid;
+    }
+
+    // Profile photos & media for people inside trees
     match /trees/{treeId}/people/{personId}/{fileName} {
-      allow write: if request.auth != null
-                    && request.resource.size < 5 * 1024 * 1024
-                    && request.resource.contentType.matches('image/.*')
-                    && firestore.get(/databases/$(database)/documents/trees/$(treeId)).data.ownerId == request.auth.uid;
-      
-      // Allow anyone to read profile pictures for now. 
-      // This can be tightened later if needed.
-      allow read;
+      // You can make read public or restrict later as needed
+      allow read: if true;
+
+      // Only the tree owner can write; must be an image under 5MB
+      allow write: if ownsTree(treeId) && isImage() && under5MB();
+    }
+
+    // (Optional but recommended) add a Storage rule for user avatars
+    match /users/{uid}/profile/{fileName} {
+      allow read: if true; // or authed() if you prefer private
+      allow write: if authed() && request.auth.uid == uid
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
     }
   }
 }
