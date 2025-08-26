@@ -256,7 +256,7 @@ export default function TreeEditorPage() {
 
   return (
     <div className="flex flex-col h-full bg-secondary">
-      <header className="bg-card p-3 shadow-sm flex justify-between items-center border-b z-10">
+      <header className="bg-card p-3 shadow-sm flex justify-between items-center border-b z-20 shrink-0">
         <div className="flex items-center">
           <Button variant="ghost" size="icon" asChild className="mr-2">
             <Link href="/dashboard">
