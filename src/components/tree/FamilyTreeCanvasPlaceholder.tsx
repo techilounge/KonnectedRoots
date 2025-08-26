@@ -44,6 +44,8 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
   const [viewOffset, setViewOffset] = useState({ x: 0, y: 0 });
   
   const svgRef = useRef<SVGSVGElement>(null);
+  const transformGroupRef = useRef<SVGGElement>(null);
+
 
   const canvasDimensions = useMemo(() => {
     if (people.length === 0) {
@@ -65,16 +67,16 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
   }, [people]);
 
   const getSVGPoint = useCallback((event: React.MouseEvent | MouseEvent): { x: number; y: number } | null => {
-    if (!svgRef.current) return null;
-    let point = svgRef.current.createSVGPoint();
+    if (!svgRef.current || !transformGroupRef.current) return null;
+    const point = svgRef.current.createSVGPoint();
     point.x = event.clientX;
     point.y = event.clientY;
     
-    const CTM = svgRef.current.getScreenCTM()?.inverse();
+    const CTM = transformGroupRef.current.getScreenCTM()?.inverse();
     if(CTM){
-        point = point.matrixTransform(CTM);
+        return point.matrixTransform(CTM);
     }
-    return point;
+    return null;
   }, []);
   
   const handleNodeMouseDown = (event: React.MouseEvent<HTMLDivElement>, person: Person) => {
@@ -107,7 +109,7 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
   };
   
   const handleCanvasMouseDown = (event: React.MouseEvent<SVGSVGElement>) => {
-    if (event.target === svgRef.current || (event.target as HTMLElement).closest('svg > g')) {
+    if (event.target === svgRef.current || (event.target as HTMLElement).closest('g[data-panning-surface]')) {
       setPanState({ isPanning: true, startX: event.clientX - viewOffset.x, startY: event.clientY - viewOffset.y });
     }
   };
@@ -347,9 +349,10 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
         }}
       >
         <g 
+          ref={transformGroupRef}
           transform={`translate(${viewOffset.x}, ${viewOffset.y}) scale(${zoomLevel})`}
         >
-          <g transform={`translate(${-canvasDimensions.minX + CANVAS_PADDING}, ${-canvasDimensions.minY + CANVAS_PADDING})`}>
+          <g data-panning-surface transform={`translate(${-canvasDimensions.minX + CANVAS_PADDING}, ${-canvasDimensions.minY + CANVAS_PADDING})`}>
             {renderLines()}
 
             {linkingState && (
@@ -432,3 +435,5 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
     </div>
   );
 }
+
+    
