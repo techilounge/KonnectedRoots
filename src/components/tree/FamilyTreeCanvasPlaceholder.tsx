@@ -20,7 +20,7 @@ interface FamilyTreeCanvasPlaceholderProps {
 const NODE_WIDTH = 180;
 const NODE_HEIGHT = 70;
 const CLICK_THRESHOLD = 5;
-const CANVAS_PADDING = 200; // Extra space around the outermost nodes
+const CANVAS_PADDING = 500; // Extra space around the outermost nodes
 
 type LinkingState = {
   fromId: string;
@@ -40,6 +40,8 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
   const [draggingState, setDraggingState] = useState<{ personId: string; offsetX: number; offsetY: number; clickStartX: number; clickStartY: number; } | null>(null);
   const [linkingState, setLinkingState] = useState<LinkingState | null>(null);
   const [popoverState, setPopoverState] = useState<PopoverState | null>(null);
+  const [panState, setPanState] = useState<{ isPanning: boolean; startX: number; startY: number; }>({ isPanning: false, startX: 0, startY: 0 });
+  const [viewOffset, setViewOffset] = useState({ x: 0, y: 0 });
   
   const svgRef = useRef<SVGSVGElement>(null);
   const gRef = useRef<SVGGElement>(null);
@@ -48,42 +50,56 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
     if (people.length === 0) {
       return { width: 1200, height: 800 };
     }
-    const maxX = Math.max(...people.map(p => (p.x ?? 0) + NODE_WIDTH));
-    const maxY = Math.max(...people.map(p => (p.y ?? 0) + NODE_HEIGHT));
+    const allX = people.map(p => p.x ?? 0);
+    const allY = people.map(p => p.y ?? 0);
+    const minX = Math.min(...allX);
+    const minY = Math.min(...allY);
+    const maxX = Math.max(...allX);
+    const maxY = Math.max(...allY);
     
     return {
-      width: Math.max(maxX + CANVAS_PADDING, 1200),
-      height: Math.max(maxY + CANVAS_PADDING, 800),
+      width: Math.max(maxX - minX + NODE_WIDTH + CANVAS_PADDING * 2, 1200),
+      height: Math.max(maxY - minY + NODE_HEIGHT + CANVAS_PADDING * 2, 800),
+      offsetX: -minX + CANVAS_PADDING,
+      offsetY: -minY + CANVAS_PADDING,
     };
   }, [people]);
 
-
   const getSVGPoint = useCallback((event: React.MouseEvent | MouseEvent): { x: number; y: number } | null => {
-    if (!svgRef.current) return null;
+    if (!svgRef.current || !gRef.current) return null;
     let point = svgRef.current.createSVGPoint();
     point.x = event.clientX;
     point.y = event.clientY;
     
-    // The transformation matrix for the <g> element
-    const gMatrix = gRef.current?.getScreenCTM()?.inverse();
+    const gMatrix = gRef.current.getScreenCTM()?.inverse();
     if(gMatrix){
         point = point.matrixTransform(gMatrix);
     }
     return point;
-
   }, []);
 
-  const handleMouseDown = (event: React.MouseEvent<HTMLDivElement>, person: Person) => {
-    // Prevent starting a drag on right-click
+  const handleCanvasMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
+    // Only start panning if clicking on the background (the div itself)
+    if (event.target === event.currentTarget) {
+        setPanState({ isPanning: true, startX: event.clientX - viewOffset.x, startY: event.clientY - viewOffset.y });
+    }
+  };
+
+
+  const handleNodeMouseDown = (event: React.MouseEvent<HTMLDivElement>, person: Person) => {
     if (event.button === 2) return;
 
     const svgMousePos = getSVGPoint(event);
     if (!svgMousePos) return;
+    
+    // Adjust for canvas offset before calculating node drag offset
+    const adjustedPersonX = (person.x ?? 0) + (canvasDimensions.offsetX ?? 0);
+    const adjustedPersonY = (person.y ?? 0) + (canvasDimensions.offsetY ?? 0);
 
     setDraggingState({
       personId: person.id,
-      offsetX: svgMousePos.x - (person.x ?? 0),
-      offsetY: svgMousePos.y - (person.y ?? 0),
+      offsetX: svgMousePos.x - adjustedPersonX,
+      offsetY: svgMousePos.y - adjustedPersonY,
       clickStartX: event.clientX,
       clickStartY: event.clientY,
     });
@@ -92,19 +108,27 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
   const handleConnectorMouseDown = (event: React.MouseEvent, fromPerson: Person, position: 'top' | 'bottom' | 'left' | 'right') => {
       event.stopPropagation();
       const fromCoords = {
-          x: (fromPerson.x || 0) + (position === 'left' ? 0 : position === 'right' ? NODE_WIDTH : NODE_WIDTH / 2),
-          y: (fromPerson.y || 0) + (position === 'top' ? 0 : position === 'bottom' ? NODE_HEIGHT : NODE_HEIGHT / 2)
+          x: (fromPerson.x || 0) + (canvasDimensions.offsetX ?? 0) + (position === 'left' ? 0 : position === 'right' ? NODE_WIDTH : NODE_WIDTH / 2),
+          y: (fromPerson.y || 0) + (canvasDimensions.offsetY ?? 0) + (position === 'top' ? 0 : position === 'bottom' ? NODE_HEIGHT : NODE_HEIGHT / 2)
       };
       setLinkingState({ fromId: fromPerson.id, fromConnector: fromCoords, toConnector: { ...fromCoords } });
   };
 
   const handleMouseMove = (event: React.MouseEvent) => {
+    if (panState.isPanning) {
+        setViewOffset({
+            x: event.clientX - panState.startX,
+            y: event.clientY - panState.startY
+        });
+        return;
+    }
+
     const svgMousePos = getSVGPoint(event);
     if (!svgMousePos) return;
 
     if (draggingState) {
-      const newX = Math.max(0, svgMousePos.x - draggingState.offsetX);
-      const newY = Math.max(0, svgMousePos.y - draggingState.offsetY);
+      const newX = Math.max(0, svgMousePos.x - draggingState.offsetX - (canvasDimensions.offsetX ?? 0));
+      const newY = Math.max(0, svgMousePos.y - draggingState.offsetY - (canvasDimensions.offsetY ?? 0));
       onNodeMove(draggingState.personId, newX, newY);
     } else if (linkingState) {
       setLinkingState(prev => prev ? { ...prev, toConnector: { x: svgMousePos.x, y: svgMousePos.y } } : null);
@@ -112,6 +136,10 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
   };
 
   const handleMouseUp = (event: React.MouseEvent) => {
+    if (panState.isPanning) {
+        setPanState({ ...panState, isPanning: false });
+    }
+
     if (linkingState) {
       const targetElement = (event.target as HTMLElement).closest('[data-person-id]');
       const toId = targetElement?.getAttribute('data-person-id');
@@ -135,7 +163,6 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
       }
     }
 
-    // Always clear dragging and linking states on mouse up
     setDraggingState(null);
     setLinkingState(null);
   };
@@ -151,8 +178,8 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
     const elements: React.ReactNode[] = [];
     const drawnSpouseConnections = new Set<string>();
     const peopleMap = new Map(people.map(p => [p.id, p]));
+    const { offsetX = 0, offsetY = 0 } = canvasDimensions;
 
-    // Group children by their two parents
     const families = new Map<string, string[]>(); 
     people.forEach(person => {
         if (person.parentId1 && person.parentId2) {
@@ -164,7 +191,6 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
         }
     });
 
-    // Draw lines for family units (two parents + children)
     families.forEach((childrenIds, parentKey) => {
         const [p1Id, p2Id] = parentKey.split('--');
         const parent1 = peopleMap.get(p1Id);
@@ -172,16 +198,14 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
 
         if (!parent1 || !parent2) return;
         
-        // Make sure parents are actually spouses before drawing the family line
         const areSpouses = parent1.spouseIds?.includes(p2Id) && parent2.spouseIds?.includes(p1Id);
         if(!areSpouses) return;
 
-        const p1x = parent1.x ?? 0;
-        const p1y = parent1.y ?? 0;
-        const p2x = parent2.x ?? 0;
-        const p2y = parent2.y ?? 0;
+        const p1x = (parent1.x ?? 0) + offsetX;
+        const p1y = (parent1.y ?? 0) + offsetY;
+        const p2x = (parent2.x ?? 0) + offsetX;
+        const p2y = (parent2.y ?? 0) + offsetY;
 
-        // Draw spouse line
         const spouseKey = [p1Id, p2Id].sort().join('--');
         drawnSpouseConnections.add(spouseKey);
         elements.push(
@@ -197,17 +221,15 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
             />
         );
 
-        // Draw line from couple to children
         const children = childrenIds.map(id => peopleMap.get(id)).filter((p): p is Person => !!p);
         if (children.length === 0) return;
 
         const coupleMidX = (p1x + NODE_WIDTH / 2 + p2x + NODE_WIDTH / 2) / 2;
         const coupleY = p1y + NODE_HEIGHT / 2;
         const SIBLING_BAR_Y_OFFSET = 40;
-        const childNodeY = Math.min(...children.map(c => c.y ?? 0));
+        const childNodeY = Math.min(...children.map(c => (c.y ?? 0) + offsetY));
         const siblingBarY = childNodeY - SIBLING_BAR_Y_OFFSET;
         
-        // Node on the couple's line to add children
         elements.push(
           <circle
             key={`family-node-${parentKey}`}
@@ -222,8 +244,6 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
           />
         );
 
-
-        // Vertical line from couple's line to sibling bar
         elements.push(
             <line
                 key={`family-v-drop-${parentKey}`}
@@ -233,8 +253,7 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
             />
         );
 
-        // Sibling bar (horizontal line)
-        const childrenXCoords = children.map(c => (c.x ?? 0) + NODE_WIDTH / 2);
+        const childrenXCoords = children.map(c => ((c.x ?? 0) + offsetX) + NODE_WIDTH / 2);
         const minChildX = Math.min(...childrenXCoords);
         const maxChildX = Math.max(...childrenXCoords);
         if(children.length > 1) {
@@ -248,34 +267,31 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
             );
         }
 
-        // Connect each child to the sibling bar
         children.forEach(child => {
             elements.push(
                 <line
                     key={`child-v-connect-${child.id}`}
-                    x1={(child.x ?? 0) + NODE_WIDTH / 2} y1={siblingBarY}
-                    x2={(child.x ?? 0) + NODE_WIDTH / 2} y2={child.y ?? 0}
+                    x1={((child.x ?? 0) + offsetX) + NODE_WIDTH / 2} y1={siblingBarY}
+                    x2={((child.x ?? 0) + offsetX) + NODE_WIDTH / 2} y2={(child.y ?? 0) + offsetY}
                     stroke="hsl(var(--muted-foreground))" strokeWidth="2"
                 />
             );
         });
     });
     
-    // Draw remaining spouse lines (for childless couples)
     people.forEach(p => {
         (p.spouseIds || []).forEach(spouseId => {
             const key = [p.id, spouseId].sort().join('--');
             if(!drawnSpouseConnections.has(key)) {
                 const spouse = peopleMap.get(spouseId);
                 if(spouse) {
-                    elements.push(<line key={`spouse-${key}`} x1={(p.x??0)+NODE_WIDTH} y1={(p.y??0)+NODE_HEIGHT/2} x2={(spouse.x??0)} y2={(spouse.y??0)+NODE_HEIGHT/2} stroke="hsl(var(--muted-foreground))" strokeWidth="1.5" strokeDasharray="4,4" />);
+                    elements.push(<line key={`spouse-${key}`} x1={((p.x??0)+offsetX)+NODE_WIDTH} y1={((p.y??0)+offsetY)+NODE_HEIGHT/2} x2={((spouse.x??0)+offsetX)} y2={((spouse.y??0)+offsetY)+NODE_HEIGHT/2} stroke="hsl(var(--muted-foreground))" strokeWidth="1.5" strokeDasharray="4,4" />);
                     drawnSpouseConnections.add(key);
                 }
             }
         });
     });
 
-    // Draw single-parent lines
     people.forEach(person => {
         const hasBothParentsInFamilyUnit = person.parentId1 && person.parentId2 && families.has([person.parentId1, person.parentId2].sort().join('--'));
         if(hasBothParentsInFamilyUnit) return;
@@ -284,7 +300,7 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
             if(parentId) {
                 const parent = peopleMap.get(parentId);
                 if(parent) {
-                    elements.push(<line key={`single-parent-${person.id}-${parentId}`} x1={(parent.x??0) + NODE_WIDTH/2} y1={(parent.y??0) + NODE_HEIGHT} x2={(person.x??0) + NODE_WIDTH/2} y2={(person.y??0)} stroke="hsl(var(--muted-foreground))" strokeWidth="2" />);
+                    elements.push(<line key={`single-parent-${person.id}-${parentId}`} x1={((parent.x??0)+offsetX) + NODE_WIDTH/2} y1={((parent.y??0)+offsetY) + NODE_HEIGHT} x2={((person.x??0)+offsetX) + NODE_WIDTH/2} y2={((person.y??0)+offsetY)} stroke="hsl(var(--muted-foreground))" strokeWidth="2" />);
                 }
             }
         });
@@ -297,10 +313,11 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
 
   return (
     <div 
-      className="w-full h-full relative border border-dashed border-border rounded-lg bg-slate-50 overflow-auto"
+      className={`w-full h-full relative border border-dashed border-border rounded-lg bg-slate-50 overflow-auto ${panState.isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
+      onMouseDown={handleCanvasMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp} // End drag if mouse leaves canvas
+      onMouseLeave={handleMouseUp}
     >
       <Popover open={popoverState?.open} onOpenChange={() => setPopoverState(null)}>
         <PopoverTrigger asChild>
@@ -324,7 +341,11 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
         width={canvasDimensions.width} 
         height={canvasDimensions.height}
       >
-        <g ref={gRef} transform={`scale(${zoomLevel})`}>
+        <g 
+          ref={gRef} 
+          transform={`translate(${viewOffset.x}, ${viewOffset.y}) scale(${zoomLevel})`}
+          style={{ transformOrigin: '0 0' }}
+        >
             {renderLines()}
 
             {linkingState && (
@@ -338,8 +359,8 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
             {people.map((person) => (
             <foreignObject 
                 key={person.id} 
-                x={person.x ?? 0} 
-                y={person.y ?? 0} 
+                x={(person.x ?? 0) + (canvasDimensions.offsetX ?? 0)} 
+                y={(person.y ?? 0) + (canvasDimensions.offsetY ?? 0)} 
                 width={NODE_WIDTH} 
                 height={NODE_HEIGHT}
                 className={`${draggingState?.personId === person.id ? 'cursor-grabbing' : 'cursor-grab'}`}
@@ -348,7 +369,7 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
                 <ContextMenuTrigger>
                     <div 
                     className="group/node relative w-full h-full select-none"
-                    onMouseDown={(e) => handleMouseDown(e, person)}
+                    onMouseDown={(e) => handleNodeMouseDown(e, person)}
                     data-person-id={person.id}
                     >
                     <div className="w-full h-full p-2 bg-card rounded-md shadow-md border-2 border-primary group-hover/node:border-accent group-hover/node:shadow-lg transition-all duration-200 flex items-center space-x-2 overflow-hidden">
@@ -367,7 +388,6 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
                         </div>
                     </div>
 
-                    {/* Connector Nodes */}
                     {['top', 'bottom', 'left', 'right'].map((pos) => (
                         <div
                             key={pos}
@@ -401,8 +421,10 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
         </g>
       </svg>
        <div className="absolute top-4 right-4 p-2 bg-card/80 rounded-md text-xs text-muted-foreground">
-        Drag nodes to move. Drag from circles on border to create relationships.
+        Drag nodes or canvas. Drag connectors to link people.
       </div>
     </div>
   );
 }
+
+    
