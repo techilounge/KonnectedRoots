@@ -2,7 +2,7 @@
 "use client";
 import type { Person, RelationshipType } from '@/types';
 import Image from 'next/image';
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
@@ -20,6 +20,7 @@ interface FamilyTreeCanvasPlaceholderProps {
 const NODE_WIDTH = 180;
 const NODE_HEIGHT = 70;
 const CLICK_THRESHOLD = 5;
+const CANVAS_PADDING = 200; // Extra space around the outermost nodes
 
 type LinkingState = {
   fromId: string;
@@ -42,6 +43,19 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
   
   const svgRef = useRef<SVGSVGElement>(null);
   const gRef = useRef<SVGGElement>(null);
+
+  const canvasDimensions = useMemo(() => {
+    if (people.length === 0) {
+      return { width: 1200, height: 800 };
+    }
+    const maxX = Math.max(...people.map(p => (p.x ?? 0) + NODE_WIDTH));
+    const maxY = Math.max(...people.map(p => (p.y ?? 0) + NODE_HEIGHT));
+    
+    return {
+      width: Math.max(maxX + CANVAS_PADDING, 1200),
+      height: Math.max(maxY + CANVAS_PADDING, 800),
+    };
+  }, [people]);
 
 
   const getSVGPoint = useCallback((event: React.MouseEvent | MouseEvent): { x: number; y: number } | null => {
@@ -89,8 +103,8 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
     if (!svgMousePos) return;
 
     if (draggingState) {
-      const newX = svgMousePos.x - draggingState.offsetX;
-      const newY = svgMousePos.y - draggingState.offsetY;
+      const newX = Math.max(0, svgMousePos.x - draggingState.offsetX);
+      const newY = Math.max(0, svgMousePos.y - draggingState.offsetY);
       onNodeMove(draggingState.personId, newX, newY);
     } else if (linkingState) {
       setLinkingState(prev => prev ? { ...prev, toConnector: { x: svgMousePos.x, y: svgMousePos.y } } : null);
@@ -283,7 +297,7 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
 
   return (
     <div 
-      className="w-full h-full relative border border-dashed border-border rounded-lg bg-slate-50 overflow-auto p-10"
+      className="w-full h-full relative border border-dashed border-border rounded-lg bg-slate-50 overflow-auto"
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp} // End drag if mouse leaves canvas
@@ -307,9 +321,8 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
 
       <svg 
         ref={svgRef}
-        width="100%" 
-        height="100%" 
-        style={{ minWidth: '1200px', minHeight: '800px' }}
+        width={canvasDimensions.width} 
+        height={canvasDimensions.height}
       >
         <g ref={gRef} transform={`scale(${zoomLevel})`}>
             {renderLines()}
@@ -344,6 +357,7 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
                         alt={person.firstName || 'Person'}
                         width={40}
                         height={40}
+                        unoptimized
                         className="rounded-full flex-shrink-0"
                         data-ai-hint="person avatar"
                         />
