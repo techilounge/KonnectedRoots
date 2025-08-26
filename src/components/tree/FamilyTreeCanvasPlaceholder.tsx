@@ -44,11 +44,10 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
   const [viewOffset, setViewOffset] = useState({ x: 0, y: 0 });
   
   const svgRef = useRef<SVGSVGElement>(null);
-  const gRef = useRef<SVGGElement>(null);
 
   const canvasDimensions = useMemo(() => {
     if (people.length === 0) {
-      return { width: 1200, height: 800 };
+      return { width: 1200, height: 800, offsetX: CANVAS_PADDING, offsetY: CANVAS_PADDING };
     }
     const allX = people.map(p => p.x ?? 0);
     const allY = people.map(p => p.y ?? 0);
@@ -66,45 +65,35 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
   }, [people]);
 
   const getSVGPoint = useCallback((event: React.MouseEvent | MouseEvent): { x: number; y: number } | null => {
-    if (!svgRef.current || !gRef.current) return null;
+    if (!svgRef.current) return null;
     let point = svgRef.current.createSVGPoint();
     point.x = event.clientX;
     point.y = event.clientY;
     
-    const gMatrix = gRef.current.getScreenCTM()?.inverse();
-    if(gMatrix){
-        point = point.matrixTransform(gMatrix);
+    const CTM = svgRef.current.getScreenCTM()?.inverse();
+    if(CTM){
+        point = point.matrixTransform(CTM);
     }
     return point;
   }, []);
-
-  const handleCanvasMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
-    // Only start panning if clicking on the background (the div itself)
-    if (event.target === event.currentTarget) {
-        setPanState({ isPanning: true, startX: event.clientX - viewOffset.x, startY: event.clientY - viewOffset.y });
-    }
-  };
-
-
+  
   const handleNodeMouseDown = (event: React.MouseEvent<HTMLDivElement>, person: Person) => {
+    // Prevent panning when clicking on a node
+    event.stopPropagation();
     if (event.button === 2) return;
 
     const svgMousePos = getSVGPoint(event);
     if (!svgMousePos) return;
-    
-    // Adjust for canvas offset before calculating node drag offset
-    const adjustedPersonX = (person.x ?? 0) + (canvasDimensions.offsetX ?? 0);
-    const adjustedPersonY = (person.y ?? 0) + (canvasDimensions.offsetY ?? 0);
 
     setDraggingState({
       personId: person.id,
-      offsetX: svgMousePos.x - adjustedPersonX,
-      offsetY: svgMousePos.y - adjustedPersonY,
+      offsetX: svgMousePos.x / zoomLevel - (person.x ?? 0) - canvasDimensions.offsetX - viewOffset.x / zoomLevel,
+      offsetY: svgMousePos.y / zoomLevel - (person.y ?? 0) - canvasDimensions.offsetY - viewOffset.y / zoomLevel,
       clickStartX: event.clientX,
       clickStartY: event.clientY,
     });
   };
-  
+
   const handleConnectorMouseDown = (event: React.MouseEvent, fromPerson: Person, position: 'top' | 'bottom' | 'left' | 'right') => {
       event.stopPropagation();
       const fromCoords = {
@@ -112,6 +101,14 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
           y: (fromPerson.y || 0) + (canvasDimensions.offsetY ?? 0) + (position === 'top' ? 0 : position === 'bottom' ? NODE_HEIGHT : NODE_HEIGHT / 2)
       };
       setLinkingState({ fromId: fromPerson.id, fromConnector: fromCoords, toConnector: { ...fromCoords } });
+  };
+  
+  const handleCanvasMouseDown = (event: React.MouseEvent<SVGSVGElement>) => {
+    // This now fires on the SVG itself. If the event bubbles up from a node, it means we didn't stop propagation.
+    // If target is the SVG, we pan.
+    if (event.target === svgRef.current || (event.target as HTMLElement).closest('g')) {
+      setPanState({ isPanning: true, startX: event.clientX - viewOffset.x, startY: event.clientY - viewOffset.y });
+    }
   };
 
   const handleMouseMove = (event: React.MouseEvent) => {
@@ -127,11 +124,19 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
     if (!svgMousePos) return;
 
     if (draggingState) {
-      const newX = Math.max(0, svgMousePos.x - draggingState.offsetX - (canvasDimensions.offsetX ?? 0));
-      const newY = Math.max(0, svgMousePos.y - draggingState.offsetY - (canvasDimensions.offsetY ?? 0));
+      const newX = svgMousePos.x / zoomLevel - draggingState.offsetX - canvasDimensions.offsetX - viewOffset.x / zoomLevel;
+      const newY = svgMousePos.y / zoomLevel - draggingState.offsetY - canvasDimensions.offsetY - viewOffset.y / zoomLevel;
       onNodeMove(draggingState.personId, newX, newY);
     } else if (linkingState) {
-      setLinkingState(prev => prev ? { ...prev, toConnector: { x: svgMousePos.x, y: svgMousePos.y } } : null);
+      // Adjust linking line for both pan and zoom
+      const CTM = svgRef.current?.getScreenCTM()?.inverse();
+      if (CTM) {
+          let point = svgRef.current!.createSVGPoint();
+          point.x = event.clientX;
+          point.y = event.clientY;
+          point = point.matrixTransform(CTM);
+          setLinkingState(prev => prev ? { ...prev, toConnector: { x: point.x, y: point.y } } : null);
+      }
     }
   };
 
@@ -313,11 +318,7 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
 
   return (
     <div 
-      className={`w-full h-full relative border border-dashed border-border rounded-lg bg-slate-50 overflow-auto ${panState.isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
-      onMouseDown={handleCanvasMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
+      className={`w-full h-full relative border border-dashed border-border rounded-lg bg-slate-50 overflow-hidden`}
     >
       <Popover open={popoverState?.open} onOpenChange={() => setPopoverState(null)}>
         <PopoverTrigger asChild>
@@ -338,14 +339,18 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
 
       <svg 
         ref={svgRef}
-        width={canvasDimensions.width} 
-        height={canvasDimensions.height}
+        width="100%"
+        height="100%"
+        className={`${panState.isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
+        onMouseDown={handleCanvasMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
       >
         <g 
-          ref={gRef} 
           transform={`translate(${viewOffset.x}, ${viewOffset.y}) scale(${zoomLevel})`}
-          style={{ transformOrigin: '0 0' }}
         >
+          <g transform={`translate(${canvasDimensions.offsetX}, ${canvasDimensions.offsetY})`}>
             {renderLines()}
 
             {linkingState && (
@@ -353,14 +358,15 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
                 x1={linkingState.fromConnector.x} y1={linkingState.fromConnector.y}
                 x2={linkingState.toConnector.x} y2={linkingState.toConnector.y}
                 stroke="hsl(var(--primary))" strokeWidth="2"
+                transform={`translate(-${canvasDimensions.offsetX}, -${canvasDimensions.offsetY})`}
             />
             )}
 
             {people.map((person) => (
             <foreignObject 
                 key={person.id} 
-                x={(person.x ?? 0) + (canvasDimensions.offsetX ?? 0)} 
-                y={(person.y ?? 0) + (canvasDimensions.offsetY ?? 0)} 
+                x={person.x ?? 0}
+                y={person.y ?? 0}
                 width={NODE_WIDTH} 
                 height={NODE_HEIGHT}
                 className={`${draggingState?.personId === person.id ? 'cursor-grabbing' : 'cursor-grab'}`}
@@ -418,6 +424,7 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
                 </ContextMenu>
             </foreignObject>
             ))}
+          </g>
         </g>
       </svg>
        <div className="absolute top-4 right-4 p-2 bg-card/80 rounded-md text-xs text-muted-foreground">
@@ -427,4 +434,3 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
   );
 }
 
-    
