@@ -1,6 +1,6 @@
 
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import TreeList from '@/components/dashboard/TreeList';
 import CreateTreeDialog from '@/components/dashboard/CreateTreeDialog';
 import EditTreeDialog from '@/components/dashboard/EditTreeDialog'; 
@@ -29,6 +29,59 @@ export default function DashboardPage() {
 
 
   const treesColRef = collection(db, 'trees');
+
+  const handleFixMemberCounts = useCallback(async () => {
+    if (!user) return;
+    setIsFixing(true);
+    toast({ title: "Starting Data Fix...", description: "Please wait while we correct member data." });
+
+    try {
+        const oldPeopleColRef = collection(db, 'people');
+        const q = query(oldPeopleColRef, where("ownerId", "==", user.uid));
+        const oldPeopleSnapshot = await getDocs(q);
+
+        if (oldPeopleSnapshot.empty) {
+            toast({ title: "No Old Data Found", description: "Your data structure seems to be up to date already." });
+            setIsFixing(false);
+            return;
+        }
+
+        const batch = writeBatch(db);
+        let movedCount = 0;
+        
+        // Create a map of the user's trees for quick lookup
+        const userTrees = new Map(familyTrees.map(tree => [tree.id, tree]));
+
+        for (const oldDoc of oldPeopleSnapshot.docs) {
+            const personData = oldDoc.data();
+            const treeId = personData.treeId;
+
+            // Ensure the treeId exists and belongs to the current user
+            if (treeId && userTrees.has(treeId)) {
+                const newPersonRef = doc(db, 'trees', treeId, 'people', oldDoc.id);
+                batch.set(newPersonRef, personData); // Move data to new location
+                batch.delete(oldDoc.ref); // Delete from old location
+                movedCount++;
+            }
+        }
+        
+        if (movedCount > 0) {
+            await batch.commit();
+            toast({ title: "Data Fix Complete!", description: `Successfully moved ${movedCount} member records. Counts will now update automatically.` });
+        } else {
+             toast({ title: "All Good!", description: `No records needed to be moved. Your data is correctly structured.` });
+        }
+
+
+    } catch (error) {
+        console.error("Error during data migration:", error);
+        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+        toast({ variant: "destructive", title: "Error", description: `An error occurred while fixing data: ${errorMessage}` });
+    } finally {
+        setIsFixing(false);
+    }
+  }, [user, familyTrees, toast]);
+
 
   useEffect(() => {
     if (!user) {
@@ -140,49 +193,6 @@ export default function DashboardPage() {
     }
   };
 
-  const handleFixMemberCounts = async () => {
-    if (!user) return;
-    setIsFixing(true);
-    toast({ title: "Starting Data Fix...", description: "Please wait while we correct member data." });
-
-    try {
-        const oldPeopleColRef = collection(db, 'people');
-        const q = query(oldPeopleColRef, where("ownerId", "==", user.uid));
-        const oldPeopleSnapshot = await getDocs(q);
-
-        if (oldPeopleSnapshot.empty) {
-            toast({ title: "No Old Data Found", description: "Your data structure seems to be up to date already." });
-            setIsFixing(false);
-            return;
-        }
-
-        const batch = writeBatch(db);
-        let movedCount = 0;
-
-        oldPeopleSnapshot.forEach(oldDoc => {
-            const personData = oldDoc.data();
-            const treeId = personData.treeId;
-
-            if (treeId && familyTrees.some(t => t.id === treeId)) {
-                const newPersonRef = doc(db, 'trees', treeId, 'people', oldDoc.id);
-                batch.set(newPersonRef, personData); // Move data to new location
-                batch.delete(oldDoc.ref); // Delete from old location
-                movedCount++;
-            }
-        });
-
-        await batch.commit();
-
-        toast({ title: "Data Fix Complete!", description: `Successfully moved ${movedCount} member records. Counts will now update automatically.` });
-
-    } catch (error) {
-        console.error("Error during data migration:", error);
-        toast({ variant: "destructive", title: "Error", description: "An error occurred while fixing data." });
-    } finally {
-        setIsFixing(false);
-    }
-  };
-
 
   if (!user) {
     // This state is handled by the DashboardLayout which shows a loader or redirects.
@@ -197,7 +207,7 @@ export default function DashboardPage() {
           Welcome, <span className="text-primary">{user.displayName || 'User'}</span>!
         </h1>
         <div className="flex space-x-2">
-            <Button onClick={handleFixMemberCounts} variant="outline" disabled={isFixing}>
+            <Button onClick={handleFixMemberCounts} variant="outline" disabled={isFixing || isLoadingTrees}>
               <Wrench className="mr-2 h-5 w-5" />
               {isFixing ? 'Fixing...' : 'Fix Member Counts'}
             </Button>
