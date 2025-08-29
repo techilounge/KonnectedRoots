@@ -6,7 +6,7 @@ import CreateTreeDialog from '@/components/dashboard/CreateTreeDialog';
 import EditTreeDialog from '@/components/dashboard/EditTreeDialog'; 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'; 
 import { Button } from '@/components/ui/button';
-import type { FamilyTree } from '@/types';
+import type { FamilyTree, Person } from '@/types';
 import { PlusCircle, Loader2, Wrench } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast'; 
@@ -31,14 +31,17 @@ export default function DashboardPage() {
   const treesColRef = collection(db, 'trees');
 
   const handleFixMemberCounts = useCallback(async () => {
-    if (!user) return;
+    if (!user || familyTrees.length === 0) {
+        toast({ title: "No Trees Found", description: "You must have at least one tree to fix." });
+        return;
+    };
     setIsFixing(true);
     toast({ title: "Starting Data Fix...", description: "Please wait while we correct member data." });
 
     try {
         const oldPeopleColRef = collection(db, 'people');
-        const q = query(oldPeopleColRef, where("ownerId", "==", user.uid));
-        const oldPeopleSnapshot = await getDocs(q);
+        // Query without ownerId since it was missing
+        const oldPeopleSnapshot = await getDocs(oldPeopleColRef); 
 
         if (oldPeopleSnapshot.empty) {
             toast({ title: "No Old Data Found", description: "Your data structure seems to be up to date already." });
@@ -49,25 +52,36 @@ export default function DashboardPage() {
         const batch = writeBatch(db);
         let movedCount = 0;
         
-        // Create a map of the user's trees for quick lookup
-        const userTrees = new Map(familyTrees.map(tree => [tree.id, tree]));
+        // Let's assume the orphaned people belong to the user's FIRST tree for this fix.
+        // This is a reasonable assumption in a single-user-multiple-tree scenario
+        // where this bug occurred early on.
+        const targetTree = familyTrees.find(t => t.title === "Odoemene") || familyTrees[0];
+        if (!targetTree) {
+             toast({ variant: "destructive", title: "Error", description: "Could not find a target tree to move members to." });
+             setIsFixing(false);
+             return;
+        }
+
 
         for (const oldDoc of oldPeopleSnapshot.docs) {
-            const personData = oldDoc.data();
-            const treeId = personData.treeId;
+            const personData = oldDoc.data() as Partial<Person>;
+            
+            // Add the missing ownerId and treeId
+            const correctedPersonData = {
+                ...personData,
+                ownerId: user.uid,
+                treeId: targetTree.id,
+            };
 
-            // Ensure the treeId exists and belongs to the current user
-            if (treeId && userTrees.has(treeId)) {
-                const newPersonRef = doc(db, 'trees', treeId, 'people', oldDoc.id);
-                batch.set(newPersonRef, personData); // Move data to new location
-                batch.delete(oldDoc.ref); // Delete from old location
-                movedCount++;
-            }
+            const newPersonRef = doc(db, 'trees', targetTree.id, 'people', oldDoc.id);
+            batch.set(newPersonRef, correctedPersonData); // Move data to new location
+            batch.delete(oldDoc.ref); // Delete from old location
+            movedCount++;
         }
         
         if (movedCount > 0) {
             await batch.commit();
-            toast({ title: "Data Fix Complete!", description: `Successfully moved ${movedCount} member records. Counts will now update automatically.` });
+            toast({ title: "Data Fix Complete!", description: `Successfully moved ${movedCount} member records to "${targetTree.title}". Counts will now update automatically.` });
         } else {
              toast({ title: "All Good!", description: `No records needed to be moved. Your data is correctly structured.` });
         }
@@ -92,7 +106,6 @@ export default function DashboardPage() {
 
     setIsLoadingTrees(true);
     
-    // Use onSnapshot for real-time updates
     const q = query(treesColRef, where("ownerId", "==", user.uid));
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
         const trees: FamilyTree[] = [];
@@ -107,7 +120,6 @@ export default function DashboardPage() {
         setIsLoadingTrees(false);
     });
 
-    // Clean up the listener when the component unmounts or user changes
     return () => unsubscribe();
     
   }, [user, toast]);
@@ -128,8 +140,6 @@ export default function DashboardPage() {
       await addDoc(treesColRef, newTreeDoc);
       toast({ title: "Tree Created!", description: `"${name}" has been successfully created.` });
       
-      // No need to manually add to state, onSnapshot will handle it.
-
     } catch (error) {
       console.error("Error creating tree:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to create new tree." });
@@ -153,7 +163,6 @@ export default function DashboardPage() {
       const updatedData = { title: newName, lastUpdated: serverTimestamp() };
       await updateDoc(treeDocRef, updatedData);
       toast({ title: "Tree Updated!", description: `Tree renamed to "${newName}".` });
-      // No need to manually update state, onSnapshot will handle it.
     } catch (error) {
        console.error("Error updating tree:", error);
        toast({ variant: "destructive", title: "Error", description: "Failed to update tree name." });
@@ -183,7 +192,6 @@ export default function DashboardPage() {
       await deleteDoc(treeDocRef);
       
       toast({ variant: "destructive", title: "Tree Deleted!", description: `"${treeToDelete?.title}" and all its members have been deleted.` });
-      // No need to manually update state, onSnapshot will handle it.
     } catch (error) {
        console.error("Error deleting tree:", error);
        toast({ variant: "destructive", title: "Error", description: "Failed to delete the tree." });
@@ -195,8 +203,6 @@ export default function DashboardPage() {
 
 
   if (!user) {
-    // This state is handled by the DashboardLayout which shows a loader or redirects.
-    // Returning null prevents a flash of content before the layout handles it.
     return null;
   }
 
