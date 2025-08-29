@@ -7,11 +7,11 @@ import EditTreeDialog from '@/components/dashboard/EditTreeDialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'; 
 import { Button } from '@/components/ui/button';
 import type { FamilyTree } from '@/types';
-import { PlusCircle, Loader2 } from 'lucide-react';
+import { PlusCircle, Loader2, Wrench } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast'; 
 import { db } from '@/lib/firebase/clients';
-import { collection, doc, addDoc, updateDoc, deleteDoc, query, where, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { collection, doc, addDoc, updateDoc, deleteDoc, query, where, serverTimestamp, onSnapshot, getDocs, writeBatch } from 'firebase/firestore';
 
 
 export default function DashboardPage() {
@@ -25,6 +25,8 @@ export default function DashboardPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [deletingTreeId, setDeletingTreeId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isFixing, setIsFixing] = useState(false);
+
 
   const treesColRef = collection(db, 'trees');
 
@@ -138,6 +140,50 @@ export default function DashboardPage() {
     }
   };
 
+  const handleFixMemberCounts = async () => {
+    if (!user) return;
+    setIsFixing(true);
+    toast({ title: "Starting Data Fix...", description: "Please wait while we correct member data." });
+
+    try {
+        const oldPeopleColRef = collection(db, 'people');
+        const q = query(oldPeopleColRef, where("ownerId", "==", user.uid));
+        const oldPeopleSnapshot = await getDocs(q);
+
+        if (oldPeopleSnapshot.empty) {
+            toast({ title: "No Old Data Found", description: "Your data structure seems to be up to date already." });
+            setIsFixing(false);
+            return;
+        }
+
+        const batch = writeBatch(db);
+        let movedCount = 0;
+
+        oldPeopleSnapshot.forEach(oldDoc => {
+            const personData = oldDoc.data();
+            const treeId = personData.treeId;
+
+            if (treeId && familyTrees.some(t => t.id === treeId)) {
+                const newPersonRef = doc(db, 'trees', treeId, 'people', oldDoc.id);
+                batch.set(newPersonRef, personData); // Move data to new location
+                batch.delete(oldDoc.ref); // Delete from old location
+                movedCount++;
+            }
+        });
+
+        await batch.commit();
+
+        toast({ title: "Data Fix Complete!", description: `Successfully moved ${movedCount} member records. Counts will now update automatically.` });
+
+    } catch (error) {
+        console.error("Error during data migration:", error);
+        toast({ variant: "destructive", title: "Error", description: "An error occurred while fixing data." });
+    } finally {
+        setIsFixing(false);
+    }
+  };
+
+
   if (!user) {
     // This state is handled by the DashboardLayout which shows a loader or redirects.
     // Returning null prevents a flash of content before the layout handles it.
@@ -150,9 +196,15 @@ export default function DashboardPage() {
         <h1 className="text-3xl font-headline font-bold text-foreground">
           Welcome, <span className="text-primary">{user.displayName || 'User'}</span>!
         </h1>
-        <Button onClick={() => setIsCreateDialogOpen(true)} className="bg-primary hover:bg-primary/90">
-          <PlusCircle className="mr-2 h-5 w-5" /> Create New Tree
-        </Button>
+        <div className="flex space-x-2">
+            <Button onClick={handleFixMemberCounts} variant="outline" disabled={isFixing}>
+              <Wrench className="mr-2 h-5 w-5" />
+              {isFixing ? 'Fixing...' : 'Fix Member Counts'}
+            </Button>
+            <Button onClick={() => setIsCreateDialogOpen(true)} className="bg-primary hover:bg-primary/90">
+              <PlusCircle className="mr-2 h-5 w-5" /> Create New Tree
+            </Button>
+        </div>
       </div>
       
       <div className="bg-card p-6 rounded-lg shadow-md">

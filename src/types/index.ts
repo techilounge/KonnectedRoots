@@ -1,3 +1,4 @@
+
 export type Relationship = 'parent' | 'child' | 'spouse';
 
 // Added RelationshipType for clarity in the new implementation
@@ -34,6 +35,8 @@ export interface FamilyTree {
 
 export interface Person {
   id: string;
+  ownerId: string; // To associate person with a user
+  treeId: string; // To associate person with a tree
   firstName: string;
   middleName?: string;
   lastName?: string;

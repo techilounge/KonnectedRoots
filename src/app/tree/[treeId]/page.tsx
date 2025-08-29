@@ -14,7 +14,7 @@ import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { db } from '@/lib/firebase/clients';
-import { collection, doc, getDocs, setDoc, deleteDoc, writeBatch, serverTimestamp, getDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, setDoc, deleteDoc, writeBatch, serverTimestamp, getDoc, updateDoc, query, where } from 'firebase/firestore';
 import { useAuth } from '@/hooks/useAuth';
 
 
@@ -49,6 +49,9 @@ export default function TreeEditorPage() {
         const treeDocSnap = await getDoc(treeDocRef);
         if (treeDocSnap.exists()) {
             setTreeData({ id: treeDocSnap.id, ...treeDocSnap.data() } as FamilyTree);
+        } else {
+             toast({ variant: "destructive", title: "Error", description: "This tree does not exist or you don't have permission to view it." });
+             return;
         }
 
         const querySnapshot = await getDocs(peopleColRef);
@@ -69,14 +72,17 @@ export default function TreeEditorPage() {
   }, [treeId, user, toast]);
 
   const handleAddPerson = async (newPersonDetails: Partial<Person>) => {
-    const newPersonId = String(Date.now()); // Using timestamp is simple but not collision-proof. Consider uuid.
+    if (!user) return;
+    const newPersonId = String(Date.now()); 
     const personWithDefaults: Person = {
       id: newPersonId,
+      ownerId: user.uid, // Add ownerId
+      treeId: treeId, // Add treeId
       firstName: 'New Person',
       gender: 'unknown',
       living: true,
-      x: Math.random() * 500 + 50, // Default X required by rules
-      y: Math.random() * 300 + 50, // Default Y required by rules
+      x: Math.random() * 500 + 50,
+      y: Math.random() * 300 + 50,
       ...newPersonDetails,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -91,7 +97,6 @@ export default function TreeEditorPage() {
       
       await batch.commit();
 
-      // Manually add to local state to avoid refetch, createdAt will be null until server roundtrip
       setPeople(prev => [...prev, { ...personWithDefaults, createdAt: new Date(), updatedAt: new Date() }]);
       setSelectedPerson(personWithDefaults);
       setIsEditorOpen(true);
@@ -114,9 +119,9 @@ export default function TreeEditorPage() {
         
         const dataToSave: Partial<Person> & { updatedAt: any, createdAt?: any } = { 
             ...updatedPerson,
-            firstName: updatedPerson.firstName || 'Unnamed', // Ensure firstName is not empty
-            x: updatedPerson.x ?? Math.random() * 500 + 50, // Ensure x is set
-            y: updatedPerson.y ?? Math.random() * 300 + 50, // Ensure y is set
+            firstName: updatedPerson.firstName || 'Unnamed',
+            x: updatedPerson.x ?? Math.random() * 500 + 50,
+            y: updatedPerson.y ?? Math.random() * 300 + 50,
             updatedAt: serverTimestamp() 
         };
 
@@ -162,9 +167,7 @@ export default function TreeEditorPage() {
     
     try {
         const batch = writeBatch(db);
-        // Delete the person document
         batch.delete(doc(peopleColRef, personIdToDelete));
-        // Update the parent tree's timestamp
         batch.update(treeDocRef, { lastUpdated: serverTimestamp() });
         
         await batch.commit();
@@ -193,15 +196,12 @@ export default function TreeEditorPage() {
     );
     try {
         const personDocRef = doc(peopleColRef, personId);
-        // Also update the main tree timestamp on move
-        await Promise.all([
-          setDoc(personDocRef, { x: newX, y: newY, updatedAt: serverTimestamp() }, { merge: true }),
-          updateDoc(treeDocRef, { lastUpdated: serverTimestamp() })
-        ]);
+        const batch = writeBatch(db);
+        batch.update(personDocRef, { x: newX, y: newY, updatedAt: serverTimestamp() });
+        batch.update(treeDocRef, { lastUpdated: serverTimestamp() });
+        await batch.commit();
     } catch (error) {
         console.error("Error saving node position:", error);
-        // This can be noisy, so maybe remove toast for just node moves
-        // toast({ variant: "destructive", title: "Sync Error", description: "Failed to save new position." });
     }
   };
 
@@ -243,12 +243,10 @@ export default function TreeEditorPage() {
              batch.update(parentRef, { childrenIds: [...parentChildren, child.id], updatedAt: serverTimestamp() });
         }
         
-        // Update the lastUpdated timestamp on the main tree document
         batch.update(treeDocRef, { lastUpdated: serverTimestamp() });
 
         await batch.commit();
 
-        // Refetch data to show the new relationships
         const querySnapshot = await getDocs(peopleColRef);
         const fetchedPeople: Person[] = [];
         querySnapshot.forEach((doc) => {
@@ -267,9 +265,9 @@ export default function TreeEditorPage() {
   
   const handleZoom = (direction: 'in' | 'out') => {
     if (direction === 'in') {
-      setZoomLevel(prev => Math.min(prev * 1.2, 2)); // Zoom in by 20%, max 200%
+      setZoomLevel(prev => Math.min(prev * 1.2, 2));
     } else {
-      setZoomLevel(prev => Math.max(prev / 1.2, 0.5)); // Zoom out by 20%, min 50%
+      setZoomLevel(prev => Math.max(prev / 1.2, 0.5));
     }
   };
 
@@ -393,5 +391,3 @@ export default function TreeEditorPage() {
     </div>
   );
 }
-
-    
