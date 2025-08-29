@@ -14,7 +14,7 @@ import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { db } from '@/lib/firebase/clients';
-import { collection, doc, getDocs, setDoc, deleteDoc, writeBatch, serverTimestamp, getDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, setDoc, deleteDoc, writeBatch, serverTimestamp, getDoc, updateDoc } from 'firebase/firestore';
 import { useAuth } from '@/hooks/useAuth';
 
 
@@ -38,6 +38,7 @@ export default function TreeEditorPage() {
 
   // Firestore collection reference
   const peopleColRef = collection(db, `trees/${treeId}/people`);
+  const treeDocRef = doc(db, 'trees', treeId);
 
   useEffect(() => {
     if (!user || !treeId) return;
@@ -45,7 +46,7 @@ export default function TreeEditorPage() {
     const fetchPeople = async () => {
       setIsLoading(true);
       try {
-        const treeDocSnap = await getDoc(doc(db, 'trees', treeId));
+        const treeDocSnap = await getDoc(treeDocRef);
         if (treeDocSnap.exists()) {
             setTreeData({ id: treeDocSnap.id, ...treeDocSnap.data() } as FamilyTree);
         }
@@ -83,7 +84,13 @@ export default function TreeEditorPage() {
 
     try {
       const personDocRef = doc(peopleColRef, newPersonId);
-      await setDoc(personDocRef, personWithDefaults);
+      const batch = writeBatch(db);
+      
+      batch.set(personDocRef, personWithDefaults);
+      batch.update(treeDocRef, { lastUpdated: serverTimestamp() });
+      
+      await batch.commit();
+
       // Manually add to local state to avoid refetch, createdAt will be null until server roundtrip
       setPeople(prev => [...prev, { ...personWithDefaults, createdAt: new Date(), updatedAt: new Date() }]);
       setSelectedPerson(personWithDefaults);
@@ -119,7 +126,10 @@ export default function TreeEditorPage() {
             dataToSave.createdAt = serverTimestamp();
         }
 
-        await setDoc(personDocRef, dataToSave, { merge: true });
+        const batch = writeBatch(db);
+        batch.set(personDocRef, dataToSave, { merge: true });
+        batch.update(treeDocRef, { lastUpdated: serverTimestamp() });
+        await batch.commit();
         
         setPeople(prev => prev.map(p => p.id === updatedPerson.id ? { ...p, ...dataToSave, updatedAt: new Date() } : p));
         toast({ title: "Person Updated", description: `${updatedPerson.firstName} has been saved.` });
@@ -151,8 +161,14 @@ export default function TreeEditorPage() {
     const personIdToDelete = personToDelete.id;
     
     try {
-        // Just delete the person doc. The onPersonWrite cloud function will update memberCount.
-        await deleteDoc(doc(peopleColRef, personIdToDelete));
+        const batch = writeBatch(db);
+        // Delete the person document
+        batch.delete(doc(peopleColRef, personIdToDelete));
+        // Update the parent tree's timestamp
+        batch.update(treeDocRef, { lastUpdated: serverTimestamp() });
+        
+        await batch.commit();
+
         setPeople(prevPeople => prevPeople.filter(p => p.id !== personIdToDelete));
         toast({ variant: "destructive", title: "Person Deleted", description: `"${personToDelete.firstName}" has been removed.` });
     } catch (error) {
@@ -177,7 +193,11 @@ export default function TreeEditorPage() {
     );
     try {
         const personDocRef = doc(peopleColRef, personId);
-        await setDoc(personDocRef, { x: newX, y: newY, updatedAt: serverTimestamp() }, { merge: true });
+        // Also update the main tree timestamp on move
+        await Promise.all([
+          setDoc(personDocRef, { x: newX, y: newY, updatedAt: serverTimestamp() }, { merge: true }),
+          updateDoc(treeDocRef, { lastUpdated: serverTimestamp() })
+        ]);
     } catch (error) {
         console.error("Error saving node position:", error);
         // This can be noisy, so maybe remove toast for just node moves
@@ -223,6 +243,9 @@ export default function TreeEditorPage() {
              batch.update(parentRef, { childrenIds: [...parentChildren, child.id], updatedAt: serverTimestamp() });
         }
         
+        // Update the lastUpdated timestamp on the main tree document
+        batch.update(treeDocRef, { lastUpdated: serverTimestamp() });
+
         await batch.commit();
 
         // Refetch data to show the new relationships
