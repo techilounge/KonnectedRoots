@@ -37,7 +37,7 @@ export default function TreeEditorPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   // Firestore collection reference
-  const peopleColRef = collection(db, `trees/${treeId}/people`);
+  const peopleColRef = collection(db, 'trees', treeId, 'people');
   const treeDocRef = doc(db, 'trees', treeId);
 
   useEffect(() => {
