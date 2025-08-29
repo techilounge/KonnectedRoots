@@ -14,6 +14,7 @@ import * as admin from "firebase-admin";
 // Initialize the Admin SDK
 admin.initializeApp();
 const auth = admin.auth();
+const db = admin.firestore();
 
 // This function triggers whenever a document in the 'trees' collection is written (created or updated).
 // It sets a custom claim on the owner's user account, enabling security rules to quickly verify ownership.
@@ -56,4 +57,28 @@ export const setTreeOwnerClaim = onDocumentWritten("trees/{treeId}", async (even
   } catch (error) {
     logger.error(`Failed to set custom claim for user ${ownerId} on tree ${event.params.treeId}`, error);
   }
+});
+
+
+// This function triggers whenever a person is added, updated, or deleted in a tree.
+// It recounts the total number of people in the tree and updates the 'memberCount' field.
+export const updateTreeMemberCount = onDocumentWritten("trees/{treeId}/people/{personId}", async (event) => {
+    const treeId = event.params.treeId;
+    const treeDocRef = db.collection('trees').doc(treeId);
+
+    try {
+        // Get the collection of people for the affected tree.
+        const peopleColRef = treeDocRef.collection('people');
+        
+        // Use the efficient .count() aggregation to get the number of documents.
+        const snapshot = await peopleColRef.count().get();
+        const memberCount = snapshot.data().count;
+
+        // Update the memberCount on the parent tree document.
+        await treeDocRef.update({ memberCount: memberCount });
+
+        logger.info(`Successfully updated memberCount for tree ${treeId} to ${memberCount}.`);
+    } catch (error) {
+        logger.error(`Failed to update memberCount for tree ${treeId}.`, error);
+    }
 });
