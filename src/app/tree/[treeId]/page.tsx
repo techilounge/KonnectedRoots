@@ -106,7 +106,9 @@ export default function TreeEditorPage() {
       
       setSelectedPerson(personWithDefaults);
       setIsEditorOpen(true);
-      toast({ title: "Person Added", description: "New person saved to the tree. The member count will update automatically." });
+      toast({ title: "Person Added", description: "New person saved to the tree." });
+      // Also update the parent tree's lastUpdated timestamp to trigger UI refreshes elsewhere if needed
+      await updateDoc(treeDocRef, { lastUpdated: serverTimestamp() });
     } catch (error) {
         console.error("Error adding person to Firestore:", error);
         toast({ variant: "destructive", title: "Error", description: "Failed to save new person." });
@@ -133,8 +135,10 @@ export default function TreeEditorPage() {
         // Remove id because we don't save it inside the document itself
         delete dataToSave.id;
 
-        // The real-time listener will handle updating the local state
-        await setDoc(personDocRef, dataToSave, { merge: true });
+        const batch = writeBatch(db);
+        batch.set(personDocRef, dataToSave, { merge: true });
+        batch.update(treeDocRef, { lastUpdated: serverTimestamp() });
+        await batch.commit();
         
         toast({ title: "Person Updated", description: `${updatedPerson.firstName} has been saved.` });
     } catch (error) {
@@ -164,8 +168,10 @@ export default function TreeEditorPage() {
     if (!personToDelete) return;
     
     try {
-        // The real-time listener will update local state, and the cloud function will update count.
-        await deleteDoc(doc(peopleColRef, personToDelete.id));
+        const batch = writeBatch(db);
+        batch.delete(doc(peopleColRef, personToDelete.id));
+        batch.update(treeDocRef, { lastUpdated: serverTimestamp() });
+        await batch.commit();
         toast({ variant: "destructive", title: "Person Deleted", description: `"${personToDelete.firstName}" has been removed.` });
     } catch (error) {
         console.error("Error deleting person:", error);
@@ -231,7 +237,12 @@ export default function TreeEditorPage() {
             } else if (!child.parentId2) {
                 batch.update(childRef, { parentId2: parent.id, updatedAt: serverTimestamp() });
             } else {
-                throw new Error(`${child.firstName} already has two parents.`);
+                toast({
+                  variant: "destructive",
+                  title: "Cannot Add Parent",
+                  description: `${child.firstName} already has two parents assigned.`,
+                });
+                return; // Stop execution to prevent further updates
             }
              batch.update(parentRef, { childrenIds: [...parentChildren, child.id], updatedAt: serverTimestamp() });
         }
