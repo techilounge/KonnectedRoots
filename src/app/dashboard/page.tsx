@@ -31,64 +31,64 @@ export default function DashboardPage() {
   const treesColRef = collection(db, 'trees');
 
   const handleFixMemberCounts = useCallback(async () => {
-    if (!user || familyTrees.length === 0) {
-        toast({ title: "No Trees Found", description: "You must have at least one tree to fix." });
-        return;
-    };
+    if (!user) return;
     setIsFixing(true);
     toast({ title: "Starting Data Fix...", description: "Please wait while we correct member data." });
 
-    try {
-        const oldPeopleColRef = collection(db, 'people');
-        // Query without ownerId since it was missing
-        const oldPeopleSnapshot = await getDocs(oldPeopleColRef); 
+    const odoemeneTree = familyTrees.find(t => t.title === "Odoemene");
 
-        if (oldPeopleSnapshot.empty) {
-            toast({ title: "No Old Data Found", description: "Your data structure seems to be up to date already." });
+    if (!odoemeneTree) {
+        toast({
+            variant: "destructive",
+            title: "Odoemene Tree Not Found",
+            description: "Could not find the specific tree needing a fix. Please ensure a tree named 'Odoemene' exists.",
+        });
+        setIsFixing(false);
+        return;
+    }
+
+    try {
+        // This is the correct path to the orphaned data
+        const orphanedPeopleColRef = collection(db, 'trees', odoemeneTree.id, 'people');
+        const orphanedSnapshot = await getDocs(orphanedPeopleColRef);
+
+        if (orphanedSnapshot.empty) {
+            toast({ title: "No Data to Fix", description: "Your data structure seems to be up to date already." });
             setIsFixing(false);
             return;
         }
 
         const batch = writeBatch(db);
-        let movedCount = 0;
-        
-        // Let's assume the orphaned people belong to the user's FIRST tree for this fix.
-        // This is a reasonable assumption in a single-user-multiple-tree scenario
-        // where this bug occurred early on.
-        const targetTree = familyTrees.find(t => t.title === "Odoemene") || familyTrees[0];
-        if (!targetTree) {
-             toast({ variant: "destructive", title: "Error", description: "Could not find a target tree to move members to." });
-             setIsFixing(false);
-             return;
-        }
+        let fixedCount = 0;
 
+        orphanedSnapshot.forEach(docSnap => {
+            const personData = docSnap.data() as Partial<Person>;
+            // The document is in the right place, but is missing the ownerId and treeId fields.
+            if (!personData.ownerId || !personData.treeId) {
+                batch.update(docSnap.ref, {
+                    ownerId: user.uid,
+                    treeId: odoemeneTree.id,
+                    updatedAt: serverTimestamp()
+                });
+                fixedCount++;
+            }
+        });
 
-        for (const oldDoc of oldPeopleSnapshot.docs) {
-            const personData = oldDoc.data() as Partial<Person>;
-            
-            // Add the missing ownerId and treeId
-            const correctedPersonData = {
-                ...personData,
-                ownerId: user.uid,
-                treeId: targetTree.id,
-            };
-
-            const newPersonRef = doc(db, 'trees', targetTree.id, 'people', oldDoc.id);
-            batch.set(newPersonRef, correctedPersonData); // Move data to new location
-            batch.delete(oldDoc.ref); // Delete from old location
-            movedCount++;
-        }
-        
-        if (movedCount > 0) {
+        if (fixedCount > 0) {
             await batch.commit();
-            toast({ title: "Data Fix Complete!", description: `Successfully moved ${movedCount} member records to "${targetTree.title}". Counts will now update automatically.` });
+            toast({
+                title: "Data Fix Complete!",
+                description: `Successfully repaired ${fixedCount} member records in "${odoemeneTree.title}". The member count will now update automatically.`,
+            });
         } else {
-             toast({ title: "All Good!", description: `No records needed to be moved. Your data is correctly structured.` });
+            toast({
+                title: "All Good!",
+                description: "No records needed fixing. Your data appears to be correctly structured.",
+            });
         }
-
 
     } catch (error) {
-        console.error("Error during data migration:", error);
+        console.error("Error during data fix:", error);
         const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
         toast({ variant: "destructive", title: "Error", description: `An error occurred while fixing data: ${errorMessage}` });
     } finally {
@@ -286,3 +286,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    
