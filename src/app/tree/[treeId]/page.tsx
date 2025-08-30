@@ -22,7 +22,7 @@ export default function TreeEditorPage() {
   const params = useParams();
   const treeId = params.treeId as string;
   const { toast } = useToast();
-  const { user } from useAuth();
+  const { user } = useAuth();
 
   const [treeData, setTreeData] = useState<FamilyTree | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
