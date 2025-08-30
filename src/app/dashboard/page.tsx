@@ -1,17 +1,17 @@
 
 "use client";
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import TreeList from '@/components/dashboard/TreeList';
 import CreateTreeDialog from '@/components/dashboard/CreateTreeDialog';
 import EditTreeDialog from '@/components/dashboard/EditTreeDialog'; 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'; 
 import { Button } from '@/components/ui/button';
-import type { FamilyTree, Person } from '@/types';
-import { PlusCircle, Loader2, Wrench } from 'lucide-react';
+import type { FamilyTree } from '@/types';
+import { PlusCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast'; 
 import { db } from '@/lib/firebase/clients';
-import { collection, doc, addDoc, updateDoc, deleteDoc, query, where, serverTimestamp, onSnapshot, getDocs, writeBatch } from 'firebase/firestore';
+import { collection, doc, addDoc, updateDoc, deleteDoc, query, where, serverTimestamp, onSnapshot } from 'firebase/firestore';
 
 
 export default function DashboardPage() {
@@ -25,78 +25,9 @@ export default function DashboardPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [deletingTreeId, setDeletingTreeId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isFixing, setIsFixing] = useState(false);
 
 
   const treesColRef = collection(db, 'trees');
-
-  const handleFixMemberCounts = useCallback(async () => {
-    if (!user) return;
-    setIsFixing(true);
-    toast({ title: "Starting Data Fix...", description: "Please wait while we correct member data." });
-
-    const odoemeneTree = familyTrees.find(t => t.title === "Odoemene");
-
-    if (!odoemeneTree) {
-        toast({
-            variant: "destructive",
-            title: "Odoemene Tree Not Found",
-            description: "Could not find the specific tree needing a fix. Please ensure a tree named 'Odoemene' exists.",
-        });
-        setIsFixing(false);
-        return;
-    }
-
-    try {
-        const peopleInTreeColRef = collection(db, 'trees', odoemeneTree.id, 'people');
-        const peopleSnapshot = await getDocs(peopleInTreeColRef);
-
-        if (peopleSnapshot.empty) {
-            toast({ title: "No Data to Fix", description: "No members were found in the specified tree." });
-            setIsFixing(false);
-            return;
-        }
-
-        const batch = writeBatch(db);
-        let fixedCount = 0;
-
-        peopleSnapshot.forEach(docSnap => {
-            const personData = docSnap.data() as Partial<Person>;
-            if (!personData.ownerId || !personData.treeId) {
-                batch.update(docSnap.ref, {
-                    ownerId: user.uid,
-                    treeId: odoemeneTree.id,
-                });
-                fixedCount++;
-            }
-        });
-
-        if (fixedCount > 0) {
-            await batch.commit();
-
-            // *** CRITICAL FIX: Update the parent tree's timestamp to trigger the real-time listener ***
-            const treeDocRef = doc(db, 'trees', odoemeneTree.id);
-            await updateDoc(treeDocRef, { lastUpdated: serverTimestamp() });
-            
-            toast({
-                title: "Data Fix Complete!",
-                description: `Successfully repaired ${fixedCount} member records in "${odoemeneTree.title}". The member count will now update automatically.`,
-            });
-        } else {
-            toast({
-                title: "All Good!",
-                description: "No records needed fixing. Your data appears to be correctly structured.",
-            });
-        }
-
-    } catch (error) {
-        console.error("Error during data fix:", error);
-        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
-        toast({ variant: "destructive", title: "Error", description: `An error occurred while fixing data: ${errorMessage}` });
-    } finally {
-        setIsFixing(false);
-    }
-  }, [user, familyTrees, toast]);
 
 
   useEffect(() => {
@@ -215,10 +146,6 @@ export default function DashboardPage() {
           Welcome, <span className="text-primary">{user.displayName || 'User'}</span>!
         </h1>
         <div className="flex space-x-2">
-            <Button onClick={handleFixMemberCounts} variant="outline" disabled={isFixing || isLoadingTrees}>
-              <Wrench className="mr-2 h-5 w-5" />
-              {isFixing ? 'Fixing...' : 'Fix Member Counts'}
-            </Button>
             <Button onClick={() => setIsCreateDialogOpen(true)} className="bg-primary hover:bg-primary/90">
               <PlusCircle className="mr-2 h-5 w-5" /> Create New Tree
             </Button>
@@ -288,5 +215,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    

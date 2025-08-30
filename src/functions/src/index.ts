@@ -62,7 +62,7 @@ export const setTreeOwnerClaim = onDocumentWritten("trees/{treeId}", async (even
 
 // This function triggers whenever a person is added, updated, or deleted in a tree.
 // It recounts the total number of people in the tree and updates the 'memberCount' field.
-export const updateTreeMemberCount = onDocumentWritten("trees/{treeId}/people/{personId}", async (event) => {
+export const updateTreeMemberCount = onDocumentWritten("trees/{treeId}", async (event) => {
     const treeId = event.params.treeId;
     const treeDocRef = db.collection('trees').doc(treeId);
 
