@@ -48,12 +48,11 @@ export default function DashboardPage() {
     }
 
     try {
-        // This is the correct path to the orphaned data
-        const orphanedPeopleColRef = collection(db, 'trees', odoemeneTree.id, 'people');
-        const orphanedSnapshot = await getDocs(orphanedPeopleColRef);
+        const peopleInTreeColRef = collection(db, 'trees', odoemeneTree.id, 'people');
+        const peopleSnapshot = await getDocs(peopleInTreeColRef);
 
-        if (orphanedSnapshot.empty) {
-            toast({ title: "No Data to Fix", description: "Your data structure seems to be up to date already." });
+        if (peopleSnapshot.empty) {
+            toast({ title: "No Data to Fix", description: "No members were found in the specified tree." });
             setIsFixing(false);
             return;
         }
@@ -61,14 +60,12 @@ export default function DashboardPage() {
         const batch = writeBatch(db);
         let fixedCount = 0;
 
-        orphanedSnapshot.forEach(docSnap => {
+        peopleSnapshot.forEach(docSnap => {
             const personData = docSnap.data() as Partial<Person>;
-            // The document is in the right place, but is missing the ownerId and treeId fields.
             if (!personData.ownerId || !personData.treeId) {
                 batch.update(docSnap.ref, {
                     ownerId: user.uid,
                     treeId: odoemeneTree.id,
-                    updatedAt: serverTimestamp()
                 });
                 fixedCount++;
             }
@@ -76,6 +73,11 @@ export default function DashboardPage() {
 
         if (fixedCount > 0) {
             await batch.commit();
+
+            // *** CRITICAL FIX: Update the parent tree's timestamp to trigger the real-time listener ***
+            const treeDocRef = doc(db, 'trees', odoemeneTree.id);
+            await updateDoc(treeDocRef, { lastUpdated: serverTimestamp() });
+            
             toast({
                 title: "Data Fix Complete!",
                 description: `Successfully repaired ${fixedCount} member records in "${odoemeneTree.title}". The member count will now update automatically.`,
