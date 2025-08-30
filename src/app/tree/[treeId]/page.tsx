@@ -1,20 +1,20 @@
 
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import FamilyTreeCanvasPlaceholder from '@/components/tree/FamilyTreeCanvasPlaceholder';
 import AddPersonToolbox from '@/components/tree/AddPersonToolbox';
 import NodeEditorDialog from '@/components/tree/NodeEditorDialog';
-import ShareDialog from '@/components/tree/ShareDialog'; // Import the new dialog
+import ShareDialog from '@/components/tree/ShareDialog';
 import type { Person, FamilyTree, RelationshipType } from '@/types';
 import { Button } from '@/components/ui/button';
-import { Users, Share2, ZoomIn, ZoomOut, UserPlus, ChevronLeft } from 'lucide-react';
+import { Users, Share2, ZoomIn, ZoomOut, UserPlus, ChevronLeft, Loader2 } from 'lucide-react';
 import NameSuggestor from '@/components/tree/NameSuggestor';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { db } from '@/lib/firebase/clients';
-import { collection, doc, getDocs, setDoc, deleteDoc, writeBatch, serverTimestamp, getDoc, updateDoc, query, where } from 'firebase/firestore';
+import { collection, doc, getDocs, setDoc, deleteDoc, writeBatch, serverTimestamp, getDoc, updateDoc, query, where, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '@/hooks/useAuth';
 
 
@@ -22,62 +22,73 @@ export default function TreeEditorPage() {
   const params = useParams();
   const treeId = params.treeId as string;
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user } from useAuth();
 
   const [treeData, setTreeData] = useState<FamilyTree | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isNameSuggestorOpen, setIsNameSuggestorOpen] = useState(false);
-  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false); // State for share dialog
-  const [zoomLevel, setZoomLevel] = useState(1); // State for zoom
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(1);
   const [personForSuggestion, setPersonForSuggestion] = useState<Partial<Person> | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [personToDelete, setPersonToDelete] = useState<Person | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Firestore collection reference
-  const peopleColRef = collection(db, 'trees', treeId, 'people');
+  // Firestore collection references
   const treeDocRef = doc(db, 'trees', treeId);
+  const peopleColRef = collection(db, 'trees', treeId, 'people');
 
   useEffect(() => {
-    if (!user || !treeId) return;
-    
-    const fetchPeople = async () => {
-      setIsLoading(true);
-      try {
-        const treeDocSnap = await getDoc(treeDocRef);
-        if (treeDocSnap.exists()) {
-            setTreeData({ id: treeDocSnap.id, ...treeDocSnap.data() } as FamilyTree);
-        } else {
-             toast({ variant: "destructive", title: "Error", description: "This tree does not exist or you don't have permission to view it." });
-             return;
-        }
+    if (!user || !treeId) {
+        setIsLoading(false);
+        return;
+    };
 
-        const querySnapshot = await getDocs(peopleColRef);
+    setIsLoading(true);
+
+    // Subscribe to tree document changes
+    const treeUnsubscribe = onSnapshot(treeDocRef, (docSnap) => {
+        if (docSnap.exists()) {
+            setTreeData({ id: docSnap.id, ...docSnap.data() } as FamilyTree);
+        } else {
+            toast({ variant: "destructive", title: "Error", description: "This tree does not exist or you don't have permission to view it." });
+            setIsLoading(false);
+        }
+    }, (error) => {
+        console.error("Error fetching tree details:", error);
+        toast({ variant: "destructive", title: "Error", description: "Could not load tree details." });
+        setIsLoading(false);
+    });
+
+    // Subscribe to people subcollection changes
+    const peopleUnsubscribe = onSnapshot(peopleColRef, (querySnapshot) => {
         const fetchedPeople: Person[] = [];
         querySnapshot.forEach((doc) => {
-          fetchedPeople.push({ id: doc.id, ...doc.data() } as Person);
+            fetchedPeople.push({ id: doc.id, ...doc.data() } as Person);
         });
         setPeople(fetchedPeople);
-      } catch (error) {
+        setIsLoading(false); // Only set loading to false after both snapshots are ready
+    }, (error) => {
         console.error("Error fetching people from Firestore:", error);
         toast({ variant: "destructive", title: "Error", description: "Could not load family tree data." });
-      } finally {
         setIsLoading(false);
-      }
+    });
+
+    return () => {
+        treeUnsubscribe();
+        peopleUnsubscribe();
     };
-    
-    fetchPeople();
   }, [treeId, user, toast]);
 
   const handleAddPerson = async (newPersonDetails: Partial<Person>) => {
     if (!user) return;
-    const newPersonId = String(Date.now()); 
+    const newPersonId = doc(peopleColRef).id; // Generate a new ID from the collection ref
     const personWithDefaults: Person = {
       id: newPersonId,
-      ownerId: user.uid, // Add ownerId
-      treeId: treeId, // Add treeId
+      ownerId: user.uid,
+      treeId: treeId,
       firstName: 'New Person',
       gender: 'unknown',
       living: true,
@@ -90,17 +101,12 @@ export default function TreeEditorPage() {
 
     try {
       const personDocRef = doc(peopleColRef, newPersonId);
-      const batch = writeBatch(db);
+      // The real-time listener will handle updating the local state (setPeople)
+      await setDoc(personDocRef, personWithDefaults);
       
-      batch.set(personDocRef, personWithDefaults);
-      batch.update(treeDocRef, { lastUpdated: serverTimestamp() });
-      
-      await batch.commit();
-
-      setPeople(prev => [...prev, { ...personWithDefaults, createdAt: new Date(), updatedAt: new Date() }]);
       setSelectedPerson(personWithDefaults);
       setIsEditorOpen(true);
-      toast({ title: "Person Added", description: "New person saved to the tree." });
+      toast({ title: "Person Added", description: "New person saved to the tree. The member count will update automatically." });
     } catch (error) {
         console.error("Error adding person to Firestore:", error);
         toast({ variant: "destructive", title: "Error", description: "Failed to save new person." });
@@ -115,28 +121,21 @@ export default function TreeEditorPage() {
   const handleSavePerson = async (updatedPerson: Person) => {
     try {
         const personDocRef = doc(peopleColRef, updatedPerson.id);
-        const snap = await getDoc(personDocRef);
         
-        const dataToSave: Partial<Person> & { updatedAt: any, createdAt?: any } = { 
+        const dataToSave: Partial<Person> & { updatedAt: any } = { 
             ...updatedPerson,
             firstName: updatedPerson.firstName || 'Unnamed',
             x: updatedPerson.x ?? Math.random() * 500 + 50,
             y: updatedPerson.y ?? Math.random() * 300 + 50,
             updatedAt: serverTimestamp() 
         };
-
-        if (snap.exists()) {
-            dataToSave.createdAt = snap.data().createdAt;
-        } else {
-            dataToSave.createdAt = serverTimestamp();
-        }
-
-        const batch = writeBatch(db);
-        batch.set(personDocRef, dataToSave, { merge: true });
-        batch.update(treeDocRef, { lastUpdated: serverTimestamp() });
-        await batch.commit();
         
-        setPeople(prev => prev.map(p => p.id === updatedPerson.id ? { ...p, ...dataToSave, updatedAt: new Date() } : p));
+        // Remove id because we don't save it inside the document itself
+        delete dataToSave.id;
+
+        // The real-time listener will handle updating the local state
+        await setDoc(personDocRef, dataToSave, { merge: true });
+        
         toast({ title: "Person Updated", description: `${updatedPerson.firstName} has been saved.` });
     } catch (error) {
         console.error("Error updating person in Firestore:", error);
@@ -163,16 +162,10 @@ export default function TreeEditorPage() {
 
   const handleConfirmDelete = async () => {
     if (!personToDelete) return;
-    const personIdToDelete = personToDelete.id;
     
     try {
-        const batch = writeBatch(db);
-        batch.delete(doc(peopleColRef, personIdToDelete));
-        batch.update(treeDocRef, { lastUpdated: serverTimestamp() });
-        
-        await batch.commit();
-
-        setPeople(prevPeople => prevPeople.filter(p => p.id !== personIdToDelete));
+        // The real-time listener will update local state, and the cloud function will update count.
+        await deleteDoc(doc(peopleColRef, personToDelete.id));
         toast({ variant: "destructive", title: "Person Deleted", description: `"${personToDelete.firstName}" has been removed.` });
     } catch (error) {
         console.error("Error deleting person:", error);
@@ -189,6 +182,7 @@ export default function TreeEditorPage() {
   };
 
   const handleNodeMove = async (personId: string, newX: number, newY: number) => {
+    // Optimistically update local state for smooth UX
      setPeople(prevPeople =>
       prevPeople.map(p =>
         p.id === personId ? { ...p, x: newX, y: newY } : p
@@ -196,12 +190,11 @@ export default function TreeEditorPage() {
     );
     try {
         const personDocRef = doc(peopleColRef, personId);
-        const batch = writeBatch(db);
-        batch.update(personDocRef, { x: newX, y: newY, updatedAt: serverTimestamp() });
-        batch.update(treeDocRef, { lastUpdated: serverTimestamp() });
-        await batch.commit();
+        // This is a background update, no need to wait for it.
+        await updateDoc(personDocRef, { x: newX, y: newY, updatedAt: serverTimestamp() });
     } catch (error) {
         console.error("Error saving node position:", error);
+        // Optional: revert local state or show toast on error
     }
   };
 
@@ -243,16 +236,7 @@ export default function TreeEditorPage() {
              batch.update(parentRef, { childrenIds: [...parentChildren, child.id], updatedAt: serverTimestamp() });
         }
         
-        batch.update(treeDocRef, { lastUpdated: serverTimestamp() });
-
         await batch.commit();
-
-        const querySnapshot = await getDocs(peopleColRef);
-        const fetchedPeople: Person[] = [];
-        querySnapshot.forEach((doc) => {
-          fetchedPeople.push({ id: doc.id, ...doc.data() } as Person);
-        });
-        setPeople(fetchedPeople);
 
         toast({ title: "Relationship Created!", description: "The connection has been saved." });
 
@@ -272,7 +256,12 @@ export default function TreeEditorPage() {
   };
 
   if (isLoading) {
-    return <div className="flex items-center justify-center h-full"><p>Loading tree data...</p></div>;
+    return (
+        <div className="flex items-center justify-center h-full w-full bg-secondary">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="ml-4 text-muted-foreground">Loading tree data...</p>
+        </div>
+    );
   }
 
   return (
@@ -293,7 +282,9 @@ export default function TreeEditorPage() {
           <Button variant="outline" size="sm" onClick={() => handleZoom('in')}><ZoomIn className="h-4 w-4" /></Button>
           <Button variant="outline" size="sm" onClick={() => handleZoom('out')}><ZoomOut className="h-4 w-4" /></Button>
           <Button variant="outline" size="sm" onClick={() => setIsShareDialogOpen(true)}><Share2 className="mr-2 h-4 w-4" /> Share</Button>
-          <Button variant="outline" size="sm" onClick={() => setIsShareDialogOpen(true)}><Users className="mr-2 h-4 w-4" /> {people.length} Members</Button>
+          <Button variant="outline" size="sm">
+            <Users className="mr-2 h-4 w-4" /> {treeData?.memberCount ?? people.length} Members
+          </Button>
         </div>
       </header>
 
