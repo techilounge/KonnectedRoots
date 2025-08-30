@@ -1,25 +1,32 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Users can only read/write their own user profile
+    
+    // A user can read/write their own user profile document.
     match /users/{userId} {
-      allow read, write: if request.auth.uid == userId;
+      allow read, update: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null;
     }
 
-    // Trees can be read by anyone if public, otherwise only by the owner.
-    // Owners can write to their own trees.
+    // Rules for the 'trees' collection and its 'people' subcollection.
     match /trees/{treeId} {
-      allow read: if resource.data.visibility == 'public' || request.auth.uid == resource.data.ownerId;
-      allow write: if request.auth.uid == resource.data.ownerId;
+      // A user can create a tree for themselves.
+      allow create: if request.auth != null && request.resource.data.ownerId == request.auth.uid;
+      
+      // An owner can read, update, or delete their own tree.
+      allow read, update, delete: if request.auth != null && resource.data.ownerId == request.auth.uid;
 
-      // People subcollection can be read/written by the owner of the parent tree.
+      // Rules for the 'people' subcollection within a tree.
       match /people/{personId} {
-        allow read, write: if request.auth.uid == get(/databases/$(database)/documents/trees/$(treeId)).data.ownerId;
+        // An owner of the parent tree can perform any action on the people within it.
+        allow read, write, delete: if request.auth != null && get(/databases/$(database)/documents/trees/$(treeId)).data.ownerId == request.auth.uid;
       }
     }
-    
-    // This rule is specifically for the one-time data migration.
-    // It allows an authenticated user to read from the old top-level people collection.
+
+    // ONE-TIME MIGRATION RULE: Allow any authenticated user to read the old, top-level 'people' collection.
+    // This is required for the "Fix Member Counts" button to find and move the orphaned data.
+    // This rule can be removed after the migration is complete for enhanced security.
     match /people/{personId} {
       allow read, delete: if request.auth != null;
     }
