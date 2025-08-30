@@ -66,11 +66,13 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
     };
   }, [people]);
 
-  const getSVGPoint = useCallback((event: React.MouseEvent | MouseEvent): { x: number; y: number } | null => {
+  const getSVGPoint = useCallback((clientX: number, clientY: number): { x: number; y: number } | null => {
     if (!svgRef.current || !transformGroupRef.current) return null;
+    
+    const svgRect = svgRef.current.getBoundingClientRect();
     const point = svgRef.current.createSVGPoint();
-    point.x = event.clientX;
-    point.y = event.clientY;
+    point.x = clientX - svgRect.left;
+    point.y = clientY - svgRect.top;
     
     const CTM = transformGroupRef.current.getScreenCTM()?.inverse();
     if(CTM){
@@ -83,7 +85,7 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
     event.stopPropagation();
     if (event.button === 2) return;
 
-    const point = getSVGPoint(event);
+    const point = getSVGPoint(event.clientX, event.clientY);
     if (!point) return;
 
     setDraggingState({
@@ -97,7 +99,7 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
 
   const handleConnectorMouseDown = (event: React.MouseEvent, fromPerson: Person, position: 'top' | 'bottom' | 'left' | 'right') => {
       event.stopPropagation();
-      const point = getSVGPoint(event);
+      const point = getSVGPoint(event.clientX, event.clientY);
       if (!point) return;
       
       const fromCoords = {
@@ -122,8 +124,8 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
         });
         return;
     }
-
-    const point = getSVGPoint(event);
+    
+    const point = getSVGPoint(event.clientX, event.clientY);
     if (!point) return;
     
     if (draggingState) {
@@ -435,5 +437,7 @@ export default function FamilyTreeCanvasPlaceholder({ people, onNodeClick, onNod
     </div>
   );
 }
+
+    
 
     
