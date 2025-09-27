@@ -38,6 +38,11 @@ export default function TreeEditorPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [personToDelete, setPersonToDelete] = useState<Person | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const isLinkingModeRef = useRef(isLinkingMode);
+
+  useEffect(() => {
+    isLinkingModeRef.current = isLinkingMode;
+  }, [isLinkingMode]);
 
   // Firestore collection references
   const treeDocRef = doc(db, 'trees', treeId);
@@ -271,20 +276,23 @@ export default function TreeEditorPage() {
 
   const handleToggleRelationshipMode = () => {
     if (!selectedPerson) return;
-
-    setIsLinkingMode(prev => {
-        const newMode = !prev;
-        if (newMode) {
-            toast({
-                title: "Linking Mode Active",
-                description: `Click another person to form a relationship with ${selectedPerson.firstName}. Press Esc or Cancel to exit.`,
-            });
-        } else {
-            toast({ title: "Linking Canceled" });
-        }
-        return newMode;
-    });
+    setIsLinkingMode(prev => !prev);
   };
+  
+  // Effect to show toast messages when linking mode changes
+  useEffect(() => {
+    // We don't want to show a toast on the initial render
+    if (!isLinkingModeRef.current && !isLinkingMode) return;
+
+    if (isLinkingMode) {
+      toast({
+        title: "Linking Mode Active",
+        description: `Click another person to form a relationship with ${selectedPerson?.firstName}. Press Esc or Cancel to exit.`,
+      });
+    } else {
+      toast({ title: "Linking Canceled" });
+    }
+  }, [isLinkingMode, selectedPerson?.firstName, toast]);
 
   const handleInitiatePhotoUpload = () => {
       if (!selectedPerson) return;
@@ -293,14 +301,13 @@ export default function TreeEditorPage() {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-        if (event.key === 'Escape' && isLinkingMode) {
+        if (event.key === 'Escape' && isLinkingModeRef.current) {
             setIsLinkingMode(false);
-            toast({ title: "Linking Canceled" });
         }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isLinkingMode, toast]);
+  }, []);
 
   if (isLoading) {
     return (
