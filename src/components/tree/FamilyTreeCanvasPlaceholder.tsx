@@ -6,7 +6,7 @@ import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
-import { Edit, Trash2 } from 'lucide-react';
+import { Edit, Trash2, Link2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 
@@ -19,6 +19,7 @@ interface FamilyTreeCanvasPlaceholderProps {
   onCreateRelationship: (fromId: string, toId: string, type: RelationshipType) => void;
   zoomLevel: number;
   selectedPersonId: string | null;
+  isLinkingMode: boolean;
 }
 
 const NODE_WIDTH = 180;
@@ -48,7 +49,8 @@ export default function FamilyTreeCanvasPlaceholder({
     onNodeMove, 
     onCreateRelationship, 
     zoomLevel,
-    selectedPersonId 
+    selectedPersonId,
+    isLinkingMode
 }: FamilyTreeCanvasPlaceholderProps) {
   const [draggingState, setDraggingState] = useState<{ personId: string; offsetX: number; offsetY: number; clickStartX: number; clickStartY: number; moved: boolean } | null>(null);
   const [linkingState, setLinkingState] = useState<LinkingState | null>(null);
@@ -104,6 +106,10 @@ export default function FamilyTreeCanvasPlaceholder({
   const handleNodeMouseDown = (event: React.MouseEvent<HTMLDivElement>, person: Person) => {
     event.stopPropagation();
     if (event.button === 2) return; // Ignore right-click for dragging
+    if (isLinkingMode) {
+        onNodeClick(person); // Pass click to parent handler for linking
+        return;
+    }
 
     const point = getSVGPoint(event.clientX, event.clientY);
     if (!point) return;
@@ -347,7 +353,10 @@ export default function FamilyTreeCanvasPlaceholder({
 
   return (
     <div 
-      className={`w-full h-full relative border border-dashed border-border rounded-lg bg-slate-50 overflow-hidden`}
+      className={cn(
+        `w-full h-full relative border border-dashed border-border rounded-lg bg-slate-50 overflow-hidden`,
+        isLinkingMode ? 'cursor-crosshair' : 'cursor-default'
+      )}
     >
       <Popover open={popoverState?.open} onOpenChange={() => setPopoverState(null)}>
         <PopoverTrigger asChild>
@@ -370,7 +379,9 @@ export default function FamilyTreeCanvasPlaceholder({
         ref={svgRef}
         width="100%"
         height="100%"
-        className={`${panState.isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
+        className={cn(
+            isLinkingMode ? 'cursor-crosshair' : panState.isPanning ? 'cursor-grabbing' : 'cursor-grab'
+        )}
         onMouseDown={handleCanvasMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
@@ -403,7 +414,10 @@ export default function FamilyTreeCanvasPlaceholder({
                 y={person.y ?? 0}
                 width={NODE_WIDTH} 
                 height={NODE_HEIGHT}
-                className={`${draggingState?.personId === person.id ? 'cursor-grabbing' : 'cursor-grab'}`}
+                className={cn(
+                    draggingState?.personId === person.id ? 'cursor-grabbing' : 'cursor-grab',
+                    isLinkingMode && 'cursor-crosshair'
+                )}
             >
                 <ContextMenu>
                 <ContextMenuTrigger>
@@ -414,7 +428,8 @@ export default function FamilyTreeCanvasPlaceholder({
                     >
                     <div className={cn(
                       "w-full h-full p-2 bg-card rounded-md shadow-md border-2 border-primary group-hover/node:border-accent group-hover/node:shadow-lg transition-all duration-200 flex items-center space-x-2 overflow-hidden",
-                      selectedPersonId === person.id && "border-accent ring-2 ring-accent"
+                      selectedPersonId === person.id && "border-accent ring-2 ring-accent",
+                      isLinkingMode && selectedPersonId !== person.id && "hover:border-green-500 hover:ring-2 hover:ring-green-500"
                     )}>
                         <Image
                         src={person.profilePictureUrl || `https://placehold.co/40x40.png?text=${person.firstName?.[0]}`}
@@ -464,8 +479,11 @@ export default function FamilyTreeCanvasPlaceholder({
           </g>
         </g>
       </svg>
-       <div className="absolute top-4 right-4 p-2 bg-card/80 rounded-md text-xs text-muted-foreground">
-        Click to select, Double-click to edit. Drag connectors to link people.
+       <div className="absolute top-4 right-4 p-2 bg-card/80 rounded-md text-xs text-muted-foreground pointer-events-none">
+        {isLinkingMode 
+            ? "Linking Mode: Click a person to connect."
+            : "Click to select, Double-click to edit. Drag connectors to link people."
+        }
       </div>
     </div>
   );

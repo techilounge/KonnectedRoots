@@ -30,6 +30,7 @@ export default function TreeEditorPage() {
   const [people, setPeople] = useState<Person[]>([]);
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [isLinkingMode, setIsLinkingMode] = useState(false);
   const [isNameSuggestorOpen, setIsNameSuggestorOpen] = useState(false);
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
@@ -270,18 +271,28 @@ export default function TreeEditorPage() {
 
   const handleInitiateRelationship = () => {
     if (!selectedPerson) return;
+    setIsLinkingMode(true);
     toast({
-        title: "Start Linking",
-        description: `Drag a connector from ${selectedPerson.firstName} to another person to create a relationship.`,
+        title: "Linking Mode Active",
+        description: `Click another person to form a relationship with ${selectedPerson.firstName}. Press Esc to cancel.`,
     });
   };
 
   const handleInitiatePhotoUpload = () => {
       if (!selectedPerson) return;
-      // Open the node editor dialog to the media tab, or trigger a file input
       handleEditPerson(selectedPerson);
   };
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+        if (event.key === 'Escape' && isLinkingMode) {
+            setIsLinkingMode(false);
+            toast({ title: "Linking Canceled" });
+        }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isLinkingMode, toast]);
 
   if (isLoading) {
     return (
@@ -322,18 +333,29 @@ export default function TreeEditorPage() {
           selectedPerson={selectedPerson}
           onInitiateRelationship={handleInitiateRelationship}
           onInitiatePhotoUpload={handleInitiatePhotoUpload}
+          isLinkingMode={isLinkingMode}
         />
         <main className="flex-1 relative overflow-auto p-4 bg-background">
           {people.length > 0 ? (
             <FamilyTreeCanvasPlaceholder
               people={people}
-              onNodeClick={(person) => setSelectedPerson(person)}
+              onNodeClick={(person) => {
+                if (isLinkingMode && selectedPerson && selectedPerson.id !== person.id) {
+                    // This is where you would pop up the relationship type selector
+                    // For now, we'll just log it and disable linking mode.
+                    handleCreateRelationship(selectedPerson.id, person.id, 'spouse'); // Defaulting to spouse for now
+                    setIsLinkingMode(false);
+                } else {
+                    setSelectedPerson(person);
+                }
+              }}
               onNodeDoubleClick={handleEditPerson}
               onNodeDeleteRequest={handleOpenDeleteDialog}
               onNodeMove={handleNodeMove}
               onCreateRelationship={handleCreateRelationship}
               zoomLevel={zoomLevel}
               selectedPersonId={selectedPerson?.id || null}
+              isLinkingMode={isLinkingMode}
             />
           ) : (
             <div className="flex flex-col items-center justify-center h-full border-2 border-dashed border-border rounded-lg">

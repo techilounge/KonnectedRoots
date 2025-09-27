@@ -2,14 +2,16 @@
 "use client";
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { UserPlus, Wand2, Link2, UploadCloud } from 'lucide-react';
+import { UserPlus, Wand2, Link2, UploadCloud, XCircle } from 'lucide-react';
 import type { Person } from '@/types';
+import { cn } from '@/lib/utils';
 
 interface AddPersonToolboxProps {
   onAddPerson: (personDetails?: Partial<Person>) => void;
   selectedPerson: Person | null;
   onInitiateRelationship: () => void;
   onInitiatePhotoUpload: () => void;
+  isLinkingMode: boolean;
 }
 
 export default function AddPersonToolbox({ 
@@ -17,6 +19,7 @@ export default function AddPersonToolbox({
   selectedPerson,
   onInitiateRelationship,
   onInitiatePhotoUpload,
+  isLinkingMode,
 }: AddPersonToolboxProps) {
   return (
     <aside className="w-64 bg-card p-4 border-r space-y-4 shadow-md flex flex-col">
@@ -63,9 +66,8 @@ export default function AddPersonToolbox({
         </CardContent>
       </Card>
       
-      {/* New Tools */}
       <div className="pt-4 border-t space-y-4 flex-grow">
-          <Card className="bg-secondary/50">
+          <Card className={cn("bg-secondary/50 transition-all", isLinkingMode && "ring-2 ring-accent")}>
             <CardHeader className="p-3">
               <CardTitle className="text-md font-headline flex items-center">
                 <Link2 className="mr-2 h-5 w-5 text-primary" /> Create Relationship
@@ -73,16 +75,17 @@ export default function AddPersonToolbox({
             </CardHeader>
             <CardContent className="p-3">
               <CardDescription className="text-xs mb-2">
-                {selectedPerson ? `Now, click the connector on '${selectedPerson.firstName}' and drag it to another person.` : 'Select a person on the canvas to start linking.'}
+                {isLinkingMode ? `Click another person to link with ${selectedPerson?.firstName}.` : (selectedPerson ? `Link '${selectedPerson.firstName}' to another person.` : 'Select a person to start linking.')}
               </CardDescription>
               <Button 
-                variant="outline" 
+                variant={isLinkingMode ? "destructive" : "outline"} 
                 size="sm" 
                 className="w-full"
                 onClick={onInitiateRelationship}
                 disabled={!selectedPerson}
               >
-                Start Linking
+                {isLinkingMode ? <XCircle className="mr-2 h-4 w-4" /> : <Link2 className="mr-2 h-4 w-4" />}
+                {isLinkingMode ? "Cancel Linking" : "Start Linking"}
               </Button>
             </CardContent>
           </Card>
