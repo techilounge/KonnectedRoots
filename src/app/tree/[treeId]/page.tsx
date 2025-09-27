@@ -269,12 +269,20 @@ export default function TreeEditorPage() {
     }
   };
 
-  const handleInitiateRelationship = () => {
+  const handleToggleRelationshipMode = () => {
     if (!selectedPerson) return;
-    setIsLinkingMode(true);
-    toast({
-        title: "Linking Mode Active",
-        description: `Click another person to form a relationship with ${selectedPerson.firstName}. Press Esc to cancel.`,
+
+    setIsLinkingMode(prev => {
+        const newMode = !prev;
+        if (newMode) {
+            toast({
+                title: "Linking Mode Active",
+                description: `Click another person to form a relationship with ${selectedPerson.firstName}. Press Esc or Cancel to exit.`,
+            });
+        } else {
+            toast({ title: "Linking Canceled" });
+        }
+        return newMode;
     });
   };
 
@@ -331,7 +339,7 @@ export default function TreeEditorPage() {
         <AddPersonToolbox 
           onAddPerson={(details) => handleOpenNameSuggestor(details)}
           selectedPerson={selectedPerson}
-          onInitiateRelationship={handleInitiateRelationship}
+          onInitiateRelationship={handleToggleRelationshipMode}
           onInitiatePhotoUpload={handleInitiatePhotoUpload}
           isLinkingMode={isLinkingMode}
         />
