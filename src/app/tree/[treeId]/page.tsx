@@ -1,6 +1,6 @@
 
 "use client";
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import FamilyTreeCanvasPlaceholder from '@/components/tree/FamilyTreeCanvasPlaceholder';
 import AddPersonToolbox from '@/components/tree/AddPersonToolbox';
@@ -23,6 +23,8 @@ export default function TreeEditorPage() {
   const treeId = params.treeId as string;
   const { toast } = useToast();
   const { user } = useAuth();
+  const photoUploadInputRef = useRef<HTMLInputElement>(null);
+
 
   const [treeData, setTreeData] = useState<FamilyTree | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
@@ -266,6 +268,21 @@ export default function TreeEditorPage() {
     }
   };
 
+  const handleInitiateRelationship = () => {
+    if (!selectedPerson) return;
+    toast({
+        title: "Start Linking",
+        description: `Drag a connector from ${selectedPerson.firstName} to another person to create a relationship.`,
+    });
+  };
+
+  const handleInitiatePhotoUpload = () => {
+      if (!selectedPerson) return;
+      // Open the node editor dialog to the media tab, or trigger a file input
+      handleEditPerson(selectedPerson);
+  };
+
+
   if (isLoading) {
     return (
         <div className="flex items-center justify-center h-full w-full bg-secondary">
@@ -300,16 +317,23 @@ export default function TreeEditorPage() {
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        <AddPersonToolbox onAddPerson={(details) => handleOpenNameSuggestor(details)} />
+        <AddPersonToolbox 
+          onAddPerson={(details) => handleOpenNameSuggestor(details)}
+          selectedPerson={selectedPerson}
+          onInitiateRelationship={handleInitiateRelationship}
+          onInitiatePhotoUpload={handleInitiatePhotoUpload}
+        />
         <main className="flex-1 relative overflow-auto p-4 bg-background">
           {people.length > 0 ? (
             <FamilyTreeCanvasPlaceholder
               people={people}
-              onNodeClick={handleEditPerson}
+              onNodeClick={(person) => setSelectedPerson(person)}
+              onNodeDoubleClick={handleEditPerson}
               onNodeDeleteRequest={handleOpenDeleteDialog}
               onNodeMove={handleNodeMove}
               onCreateRelationship={handleCreateRelationship}
               zoomLevel={zoomLevel}
+              selectedPersonId={selectedPerson?.id || null}
             />
           ) : (
             <div className="flex flex-col items-center justify-center h-full border-2 border-dashed border-border rounded-lg">
