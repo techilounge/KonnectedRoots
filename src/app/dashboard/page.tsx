@@ -41,11 +41,11 @@ export default function DashboardPage() {
     
     const q = query(treesColRef, where("ownerId", "==", user.uid));
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
-        const trees: FamilyTree[] = [];
-        querySnapshot.forEach((doc) => {
-            trees.push({ id: doc.id, ...doc.data() } as FamilyTree);
-        });
-        setFamilyTrees(trees);
+        const treesData = querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as FamilyTree));
+        setFamilyTrees(treesData);
         setIsLoadingTrees(false);
     }, (error) => {
         console.error("Error fetching trees with real-time listener:", error);
