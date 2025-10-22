@@ -60,22 +60,25 @@ export const setTreeOwnerClaim = onDocumentWritten("trees/{treeId}", async (even
 });
 
 
-// This function triggers whenever a person is added, updated, or deleted in a tree.
-// It recounts the total number of people in the tree and updates the 'memberCount' field.
+// This function triggers whenever a person is added, updated, or deleted in a tree's 'people' subcollection.
+// It recounts the total number of people in the tree and updates the 'memberCount' field on the parent tree document.
 export const updateTreeMemberCount = onDocumentWritten("trees/{treeId}/people/{personId}", async (event) => {
     const treeId = event.params.treeId;
     const treeDocRef = db.collection('trees').doc(treeId);
 
     try {
-        // Get the collection of people for the affected tree.
+        // Get a reference to the 'people' collection for the affected tree.
         const peopleColRef = treeDocRef.collection('people');
         
-        // Use the efficient .count() aggregation to get the number of documents.
+        // Use the efficient .count() aggregation to get the total number of documents.
         const snapshot = await peopleColRef.count().get();
         const memberCount = snapshot.data().count;
 
         // Update the memberCount on the parent tree document.
-        await treeDocRef.update({ memberCount: memberCount });
+        await treeDocRef.update({ 
+          memberCount: memberCount,
+          lastUpdated: admin.firestore.FieldValue.serverTimestamp() 
+        });
 
         logger.info(`Successfully updated memberCount for tree ${treeId} to ${memberCount}.`);
     } catch (error) {
