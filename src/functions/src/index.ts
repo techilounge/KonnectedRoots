@@ -71,7 +71,7 @@ export const updateTreeMemberCount = onDocumentWritten("trees/{treeId}/people/{p
         const peopleColRef = treeDocRef.collection('people');
         
         // Use the efficient .count() aggregation to get the total number of documents.
-        const snapshot = await peopleColRef.count().get();
+        const snapshot = await peopleCol.count().get();
         const memberCount = snapshot.data().count;
 
         // Update the memberCount on the parent tree document.
