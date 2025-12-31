@@ -9,11 +9,11 @@
  * - SuggestNameOutput - The return type for the suggestName function.
  */
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import { ai } from '@/ai/genkit';
+import { z } from 'genkit';
 
 const SuggestNameInputSchema = z.object({
-  gender: z.enum(['male', 'female']).describe('The gender of the person.'), // Updated gender
+  gender: z.enum(['male', 'female', 'other', 'unknown']).describe('The gender of the person.'), // Updated gender
   origin: z.string().optional().describe('The cultural origin of the person.'),
   historicalPeriod: z.string().optional().describe('The historical period the person lived in.'),
 });
@@ -31,8 +31,8 @@ export async function suggestName(input: SuggestNameInput): Promise<SuggestNameO
 
 const prompt = ai.definePrompt({
   name: 'suggestNamePrompt',
-  input: {schema: SuggestNameInputSchema},
-  output: {schema: SuggestNameOutputSchema},
+  input: { schema: SuggestNameInputSchema },
+  output: { schema: SuggestNameOutputSchema },
   prompt: `You are an expert in historical names and naming conventions.
 
   Based on the following information, suggest a name for the person and explain your reasoning.
@@ -49,9 +49,9 @@ const suggestNameFlow = ai.defineFlow(
     outputSchema: SuggestNameOutputSchema,
   },
   async input => {
-    const {output} = await prompt(input);
+    const { output } = await prompt(input);
     if (!output) {
-        throw new Error("AI failed to suggest a name.");
+      throw new Error("AI failed to suggest a name.");
     }
     return output;
   }

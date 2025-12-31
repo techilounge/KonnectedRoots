@@ -32,10 +32,8 @@ export default function AuthForm({ mode }: AuthFormProps) {
   const formSchema = z.object({
     email: z.string().email({ message: "Invalid email address." }),
     password: z.string().min(6, { message: "Password must be at least 6 characters." }),
-    ...(mode === "signup" && {
-      name: z.string().min(2, { message: "Name must be at least 2 characters." }),
-      confirmPassword: z.string(),
-    }),
+    name: mode === "signup" ? z.string().min(2, { message: "Name must be at least 2 characters." }) : z.string().optional(),
+    confirmPassword: mode === "signup" ? z.string() : z.string().optional(),
   }).refine(data => {
     if (mode === 'signup') {
       return data.password === data.confirmPassword;
@@ -43,7 +41,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
     return true;
   }, {
     message: "Passwords don't match",
-    path: ["confirmPassword"], 
+    path: ["confirmPassword"],
   });
 
   type FormValues = z.infer<typeof formSchema>;
@@ -53,7 +51,8 @@ export default function AuthForm({ mode }: AuthFormProps) {
     defaultValues: {
       email: "",
       password: "",
-      ...(mode === "signup" && { name: "", confirmPassword: "" }),
+      name: "",
+      confirmPassword: "",
     },
   });
 
@@ -64,34 +63,36 @@ export default function AuthForm({ mode }: AuthFormProps) {
       if (mode === "login") {
         await login(values.email, values.password);
       } else if (mode === "signup" && values.name) {
-        await signup(values.email, values.password, values.name);
+        if (values.name) {
+          await signup(values.email, values.password, values.name);
+        }
       }
     } catch (err: any) {
-        if (err instanceof Error) {
-            // Map common Firebase auth errors to friendlier messages
-            switch (err.code) {
-                case 'auth/user-not-found':
-                case 'auth/wrong-password':
-                    setError('Invalid email or password. Please try again.');
-                    break;
-                case 'auth/email-already-in-use':
-                    setError('An account with this email already exists.');
-                    break;
-                case 'auth/weak-password':
-                    setError('The password is too weak. Please choose a stronger one.');
-                    break;
-                default:
-                    setError(err.message);
-            }
-        } else {
-            setError("An unknown error occurred.");
+      if (err instanceof Error) {
+        // Map common Firebase auth errors to friendlier messages
+        switch ((err as any).code) {
+          case 'auth/user-not-found':
+          case 'auth/wrong-password':
+            setError('Invalid email or password. Please try again.');
+            break;
+          case 'auth/email-already-in-use':
+            setError('An account with this email already exists.');
+            break;
+          case 'auth/weak-password':
+            setError('The password is too weak. Please choose a stronger one.');
+            break;
+          default:
+            setError(err.message);
         }
+      } else {
+        setError("An unknown error occurred.");
+      }
     } finally {
       setIsLoading(false);
     }
   }
 
-   const handleGoogleSignIn = async () => {
+  const handleGoogleSignIn = async () => {
     setIsLoading(true);
     setError(null);
     try {
@@ -194,12 +195,12 @@ export default function AuthForm({ mode }: AuthFormProps) {
           </div>
         </div>
         <Button variant="outline" className="w-full" onClick={handleGoogleSignIn} disabled={isLoading}>
-            {isLoading ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-                <GoogleIcon className="mr-2 h-5 w-5" />
-            )}
-            Google
+          {isLoading ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <GoogleIcon className="mr-2 h-5 w-5" />
+          )}
+          Google
         </Button>
       </CardContent>
       <CardFooter className="flex flex-col space-y-2 text-sm pt-6">
@@ -218,11 +219,11 @@ export default function AuthForm({ mode }: AuthFormProps) {
             </Button>
           </p>
         )}
-         {mode === "login" && (
-            <Button variant="link" asChild className="p-0 h-auto text-sm text-muted-foreground hover:text-accent">
-              <Link href="/forgot-password">Forgot password?</Link>
-            </Button>
-          )}
+        {mode === "login" && (
+          <Button variant="link" asChild className="p-0 h-auto text-sm text-muted-foreground hover:text-accent">
+            <Link href="/forgot-password">Forgot password?</Link>
+          </Button>
+        )}
       </CardFooter>
     </Card>
   );

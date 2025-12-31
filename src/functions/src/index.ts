@@ -8,7 +8,7 @@
  */
 
 import * as logger from "firebase-functions/logger";
-import {onDocumentWritten} from "firebase-functions/v2/firestore";
+import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
 
 // Initialize the Admin SDK
@@ -47,7 +47,7 @@ export const setTreeOwnerClaim = onDocumentWritten("trees/{treeId}", async (even
         ...existingClaims,
         [customClaimKey]: true,
       };
-      
+
       await auth.setCustomUserClaims(ownerId, newClaims);
       logger.info(`Successfully set custom claim '${customClaimKey}' for user ${ownerId}.`);
     } else {
@@ -63,25 +63,25 @@ export const setTreeOwnerClaim = onDocumentWritten("trees/{treeId}", async (even
 // This function triggers whenever a person is added, updated, or deleted in a tree's 'people' subcollection.
 // It recounts the total number of people in the tree and updates the 'memberCount' field on the parent tree document.
 export const updateTreeMemberCount = onDocumentWritten("trees/{treeId}/people/{personId}", async (event) => {
-    const treeId = event.params.treeId;
-    const treeDocRef = db.collection('trees').doc(treeId);
+  const treeId = event.params.treeId;
+  const treeDocRef = db.collection('trees').doc(treeId);
 
-    try {
-        // Get a reference to the 'people' collection for the affected tree.
-        const peopleColRef = treeDocRef.collection('people');
-        
-        // Use the efficient .count() aggregation to get the total number of documents.
-        const snapshot = await peopleCol.count().get();
-        const memberCount = snapshot.data().count;
+  try {
+    // Get a reference to the 'people' collection for the affected tree.
+    const peopleColRef = treeDocRef.collection('people');
 
-        // Update the memberCount on the parent tree document.
-        await treeDocRef.update({ 
-          memberCount: memberCount,
-          lastUpdated: admin.firestore.FieldValue.serverTimestamp() 
-        });
+    // Use the efficient .count() aggregation to get the total number of documents.
+    const snapshot = await peopleColRef.count().get();
+    const memberCount = snapshot.data().count;
 
-        logger.info(`Successfully updated memberCount for tree ${treeId} to ${memberCount}.`);
-    } catch (error) {
-        logger.error(`Failed to update memberCount for tree ${treeId}.`, error);
-    }
+    // Update the memberCount on the parent tree document.
+    await treeDocRef.update({
+      memberCount: memberCount,
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    logger.info(`Successfully updated memberCount for tree ${treeId} to ${memberCount}.`);
+  } catch (error) {
+    logger.error(`Failed to update memberCount for tree ${treeId}.`, error);
+  }
 });

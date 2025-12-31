@@ -27,8 +27,8 @@ service cloud.firestore {
     // ONE-TIME MIGRATION RULE: Allow any authenticated user to read the old, top-level 'people' collection.
     // This is required for the "Fix Member Counts" button to find and move the orphaned data.
     // This rule can be removed after the migration is complete for enhanced security.
-    match /people/{personId} {
-      allow read, delete: if request.auth != null;
-    }
+    // match /people/{personId} {
+    //   allow read, delete: if request.auth != null;
+    // }
   }
 }

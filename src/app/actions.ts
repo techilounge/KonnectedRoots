@@ -11,7 +11,7 @@ import { getAuth } from 'firebase/auth';
 const storage = getStorage(app);
 
 const SuggestNameActionSchema = z.object({
-  gender: z.enum(['male', 'female']), 
+  gender: z.enum(['male', 'female', 'other', 'unknown']),
   origin: z.string().optional(),
   historicalPeriod: z.string().optional(),
 });
@@ -73,7 +73,7 @@ export async function handleUploadProfilePicture(formData: FormData): Promise<{ 
   if (!file || !treeId || !personId) {
     return { error: "Missing required data for file upload." };
   }
-  
+
   // Note: In a real app, you'd get the current user's ID from a session, not assume auth().currentUser
   // This is a simplified example. You should add proper authentication checks here.
 
@@ -81,10 +81,10 @@ export async function handleUploadProfilePicture(formData: FormData): Promise<{ 
     // Sanitize filename
     const safeFilename = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
     const storageRef = ref(storage, `trees/${treeId}/people/${personId}/${safeFilename}`);
-    
+
     const snapshot = await uploadBytes(storageRef, file);
     const downloadURL = await getDownloadURL(snapshot.ref);
-    
+
     return { downloadURL };
   } catch (error) {
     console.error("Error uploading profile picture:", error);

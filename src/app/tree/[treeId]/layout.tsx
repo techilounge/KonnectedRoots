@@ -10,7 +10,7 @@ export default function TreeEditorLayout({
   params,
 }: {
   children: React.ReactNode;
-  params: { treeId: string };
+  params: Promise<{ treeId: string }>;
 }) {
   const { user, loading } = useAuth();
   const router = useRouter();

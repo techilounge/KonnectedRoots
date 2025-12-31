@@ -25,12 +25,12 @@ import { useToast } from '@/hooks/use-toast';
 interface NameSuggestorProps {
   isOpen: boolean;
   onClose: () => void;
-  personDetails?: Partial<Person> | null; 
+  personDetails?: Partial<Person> | null;
   onNameSuggested: (name: string, reason: string) => void;
 }
 
 const formSchema = z.object({
-  gender: z.enum(['male', 'female'], { required_error: "Gender is required." }),
+  gender: z.enum(['male', 'female', 'other', 'unknown'], { required_error: "Gender is required." }),
   origin: z.string().optional(),
   historicalPeriod: z.string().optional(),
 });
@@ -57,7 +57,7 @@ export default function NameSuggestor({ isOpen, onClose, personDetails, onNameSu
       origin: personDetails?.origin || '',
       historicalPeriod: personDetails?.historicalPeriod || '',
     });
-    setSuggestion(null); 
+    setSuggestion(null);
   }, [personDetails, form, isOpen]);
 
 
@@ -77,15 +77,15 @@ export default function NameSuggestor({ isOpen, onClose, personDetails, onNameSu
       setSuggestion(result);
       toast({
         title: "Name Suggested!",
-        description: `AI suggested: ${result.name}. Reason: ${result.reason.substring(0,50)}...`,
+        description: `AI suggested: ${result.name}. Reason: ${result.reason.substring(0, 50)}...`,
       });
     }
   }
-  
+
   const handleUseSuggestion = () => {
     if (suggestion) {
       onNameSuggested(suggestion.name, suggestion.reason);
-      onClose(); 
+      onClose();
     }
   };
 
@@ -101,7 +101,7 @@ export default function NameSuggestor({ isOpen, onClose, personDetails, onNameSu
             Let AI help you find a name. Provide some details for better suggestions.
           </DialogDescription>
         </DialogHeader>
-        
+
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
             <FormField
@@ -167,11 +167,11 @@ export default function NameSuggestor({ isOpen, onClose, personDetails, onNameSu
             </Button>
           </div>
         )}
-        
+
         <DialogFooter className="mt-4">
-            <Button type="button" variant="outline" onClick={() => { onClose(); form.reset(); setSuggestion(null); }}>
-              Close
-            </Button>
+          <Button type="button" variant="outline" onClick={() => { onClose(); form.reset(); setSuggestion(null); }}>
+            Close
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
