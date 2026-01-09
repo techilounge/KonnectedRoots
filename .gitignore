@@ -38,3 +38,8 @@ pnpm-debug.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# firebase secrets
+service-account.json
+*-firebase-adminsdk-*.json
+.firebase/

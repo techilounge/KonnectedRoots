@@ -3,6 +3,7 @@
 
 import { suggestName as suggestNameFlow, type SuggestNameInput, type SuggestNameOutput } from '@/ai/flows/suggest-name';
 import { generateBiography as generateBiographyFlow, type GenerateBiographyInput, type GenerateBiographyOutput } from '@/ai/flows/generate-biography-flow';
+import { findRelationship as findRelationshipFlow, type FindRelationshipInput, type FindRelationshipOutput } from '@/ai/flows/find-relationship-flow';
 import { z } from 'zod';
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { app } from '@/lib/firebase/clients';
@@ -62,6 +63,17 @@ export async function handleGenerateBiography(input: GenerateBiographyInput): Pr
     console.error("Error in handleGenerateBiography:", error);
     const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
     return { error: `Failed to generate biography: ${errorMessage}. Please try again.` };
+  }
+}
+
+export async function handleFindRelationship(input: FindRelationshipInput): Promise<FindRelationshipOutput | { error: string }> {
+  try {
+    const result = await findRelationshipFlow(input);
+    return result;
+  } catch (error) {
+    console.error("Error in handleFindRelationship:", error);
+    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+    return { error: `Failed to find relationship: ${errorMessage}. Please try again.` };
   }
 }
 

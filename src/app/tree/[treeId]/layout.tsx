@@ -30,7 +30,7 @@ export default function TreeEditorLayout({
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-theme(spacing.16))]"> {/* Adjust if footer is present on this page */}
+    <div className="fixed inset-0 top-16 flex flex-col bg-background z-40">
       {children}
     </div>
   );

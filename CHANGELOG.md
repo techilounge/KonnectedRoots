@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Tree Export**: Export family trees as PNG images, PDF documents, and GEDCOM files for backup/sharing.
+- **Initials Avatars**: Persons without profile photos now display colored avatars with first+last name initials.
+- **Image Hover Preview**: Hover over profile pictures to see enlarged 120x120 preview with name.
+- **HoverCard UI Component**: Created reusable HoverCard component using Radix UI primitives.
+
+### Fixed
+- **Export Styling**: Fixed missing borders, text, and image styling in PNG/PDF exports by inlining computed CSS styles.
+- **Export Border Clipping**: Expanded foreignObject dimensions to prevent right/bottom borders from being clipped.
+- **Firebase CORS**: Configured Firebase Storage CORS to allow cross-origin image loading for exports.
+
+### Changed
+- **Placeholder Avatars**: Switched from `placehold.co` to `ui-avatars.com` for better styled initials avatars.
+- **Undo/Redo**: Temporarily disabled (marked as "Coming Soon") due to complexity with Firestore real-time sync.
+
 ### Security
 - **Critical**: Updated `next` to `16.1.1` to resolve CVE-2025-55182.
 - Updated Genkit packages (`@genkit-ai/*`, `genkit`) to `1.27.0` to resolve peer dependency conflicts with Next.js 16.
@@ -15,11 +30,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Fixed Build**: Resolved multiple TypeScript errors (`AuthForm`, `NameSuggestor`) and Next.js 15 breaking changes in `layout.tsx`.
 - **Configuration**: Added fallback environment variables for Firebase to ensure build resilience in CI/CD.
 - **Configuration**: Temporarily enabled unoptimized images to fix landing page prerendering.
-
-### Added
-- Added global `error.tsx` boundary to catch and display unhandled runtime errors with a retry option.
-- Added custom `not-found.tsx` (404) page to improve user experience for broken links.
-- Created `CHANGELOG.md` to track project history.
 
 ## [0.1.0] - 2025-12-31
 
