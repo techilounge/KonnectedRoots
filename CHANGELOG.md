@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Image Hover Preview**: Hover over profile pictures to see enlarged 120x120 preview with name.
 - **HoverCard UI Component**: Created reusable HoverCard component using Radix UI primitives.
 - **Orphan Card Styling**: Unlinked persons (no relationships) now display with an orange border and background tint for easy identification on the canvas.
+- **Undo/Redo**: Command-pattern based undo/redo for Add Person, Delete Person, Edit Person, and Create Relationship. Keyboard shortcuts: Ctrl+Z (undo), Ctrl+Shift+Z or Ctrl+Y (redo).
 
 ### Fixed
 - **Export Styling**: Fixed missing borders, text, and image styling in PNG/PDF exports by inlining computed CSS styles.
@@ -22,7 +23,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Placeholder Avatars**: Switched from `placehold.co` to `ui-avatars.com` for better styled initials avatars.
-- **Undo/Redo**: Temporarily disabled (marked as "Coming Soon") due to complexity with Firestore real-time sync.
 
 ### Security
 - **Critical**: Updated `next` to `16.1.1` to resolve CVE-2025-55182.

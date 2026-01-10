@@ -19,6 +19,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { db } from '@/lib/firebase/clients';
 import { collection, doc, getDocs, setDoc, deleteDoc, writeBatch, serverTimestamp, getDoc, updateDoc, query, where, onSnapshot, increment } from 'firebase/firestore';
 import { useAuth } from '@/hooks/useAuth';
+import { useUndoRedo } from '@/hooks/useUndoRedo';
 import { handleFindRelationship } from '@/app/actions';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Download } from 'lucide-react';
@@ -29,6 +30,7 @@ export default function TreeEditorPage() {
   const treeId = params.treeId as string;
   const { toast } = useToast();
   const { user } = useAuth();
+  const { pushCommand, undo, redo, canUndo, canRedo, isProcessing: isUndoProcessing } = useUndoRedo(treeId);
   const photoUploadInputRef = useRef<HTMLInputElement>(null);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
 
@@ -135,16 +137,21 @@ export default function TreeEditorPage() {
     };
 
     try {
-      // Save current state for undo - DISABLED
-      // pushToHistory(people);
-
       const personDocRef = doc(peopleColRef, newPersonId);
       // The real-time listener will handle updating the local state (setPeople)
       await setDoc(personDocRef, personWithDefaults);
 
-      setSelectedPerson(personWithDefaults);
-      setIsEditorOpen(true);
-      toast({ title: "Person Added", description: "New person saved to the tree." });
+      // Push undo command
+      pushCommand({
+        type: 'ADD_PERSON',
+        treeId,
+        personId: newPersonId,
+        data: personWithDefaults
+      });
+
+      // Note: Don't auto-open editor - user can double-click to edit
+      // This prevents duplicate undo commands (add + save)
+      toast({ title: "Person Added", description: "Double-click to edit details." });
       // Also update the parent tree's lastUpdated timestamp to trigger UI refreshes elsewhere if needed
       await updateDoc(treeDocRef, { lastUpdated: serverTimestamp(), memberCount: increment(1) });
     } catch (error) {
@@ -154,13 +161,17 @@ export default function TreeEditorPage() {
   };
 
   const handleEditPerson = (person: Person) => {
-    setSelectedPerson(person);
-    setIsEditorOpen(true);
+    // Delay opening the dialog to allow ContextMenu to fully close first
+    // This prevents Radix UI components from conflicting over body styles
+    setTimeout(() => {
+      setSelectedPerson(person);
+      setIsEditorOpen(true);
+    }, 150);
   };
 
   const handleSavePerson = async (updatedPerson: Person) => {
-    // Save current state for undo - DISABLED
-    // pushToHistory(people);
+    // Find current state before update (for undo)
+    const beforePerson = people.find(p => p.id === updatedPerson.id);
 
     try {
       const personDocRef = doc(peopleColRef, updatedPerson.id);
@@ -180,6 +191,17 @@ export default function TreeEditorPage() {
       batch.set(personDocRef, dataToSave, { merge: true });
       batch.update(treeDocRef, { lastUpdated: serverTimestamp() });
       await batch.commit();
+
+      // Push undo command with before/after state
+      if (beforePerson) {
+        pushCommand({
+          type: 'UPDATE_PERSON',
+          treeId,
+          personId: updatedPerson.id,
+          before: beforePerson,
+          after: updatedPerson
+        });
+      }
 
       toast({ title: "Person Updated", description: `${updatedPerson.firstName} has been saved.` });
     } catch (error) {
@@ -216,10 +238,10 @@ export default function TreeEditorPage() {
   const handleConfirmDelete = async () => {
     if (!personToDelete) return;
 
-    try {
-      // Save current state for undo - DISABLED
-      // pushToHistory(people);
+    // Capture full person data for undo before deleting
+    const personDataForUndo = { ...personToDelete };
 
+    try {
       // Clear selectedPerson if it's the person being deleted
       if (selectedPerson?.id === personToDelete.id) {
         setSelectedPerson(null);
@@ -233,7 +255,16 @@ export default function TreeEditorPage() {
       handleCloseDeleteDialog();
 
       await batch.commit();
-      toast({ variant: "destructive", title: "Person Deleted", description: `"${personToDelete.firstName}" has been removed.` });
+
+      // Push undo command
+      pushCommand({
+        type: 'DELETE_PERSON',
+        treeId,
+        personId: personDataForUndo.id,
+        data: personDataForUndo
+      });
+
+      toast({ variant: "destructive", title: "Person Deleted", description: `"${personDataForUndo.firstName}" has been removed.` });
     } catch (error) {
       console.error("Error deleting person:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to delete person." });
@@ -255,11 +286,11 @@ export default function TreeEditorPage() {
     );
     try {
       const personDocRef = doc(peopleColRef, personId);
-      // This is a background update, no need to wait for it.
       await updateDoc(personDocRef, { x: newX, y: newY, updatedAt: serverTimestamp() });
+      // Note: Not adding undo for move because it fires per-pixel during drag
+      // Would need onNodeMoveEnd callback to properly support undo
     } catch (error) {
       console.error("Error saving node position:", error);
-      // Optional: revert local state or show toast on error
     }
   };
 
@@ -272,6 +303,24 @@ export default function TreeEditorPage() {
       return;
     }
 
+    // Capture before state for undo
+    const beforeP1 = {
+      spouseIds: fromPerson.spouseIds || [],
+      parentId1: fromPerson.parentId1,
+      parentId2: fromPerson.parentId2,
+      childrenIds: fromPerson.childrenIds || []
+    };
+    const beforeP2 = {
+      spouseIds: toPerson.spouseIds || [],
+      parentId1: toPerson.parentId1,
+      parentId2: toPerson.parentId2,
+      childrenIds: toPerson.childrenIds || []
+    };
+
+    // Prepare after state based on relationship type
+    let afterP1 = { ...beforeP1 };
+    let afterP2 = { ...beforeP2 };
+
     const batch = writeBatch(db);
 
     try {
@@ -283,6 +332,10 @@ export default function TreeEditorPage() {
 
         batch.update(fromRef, { spouseIds: [...fromSpouses, toId], updatedAt: serverTimestamp() });
         batch.update(toRef, { spouseIds: [...toSpouses, fromId], updatedAt: serverTimestamp() });
+
+        // Update after state
+        afterP1 = { ...afterP1, spouseIds: [...fromSpouses, toId] };
+        afterP2 = { ...afterP2, spouseIds: [...toSpouses, fromId] };
       } else if (type === 'parent' || type === 'child') {
         const parent = type === 'parent' ? toPerson : fromPerson;
         const child = type === 'parent' ? fromPerson : toPerson;
@@ -293,8 +346,20 @@ export default function TreeEditorPage() {
         const parentChildren = parent.childrenIds || [];
         if (!child.parentId1) {
           batch.update(childRef, { parentId1: parent.id, updatedAt: serverTimestamp() });
+          // Update after state
+          if (type === 'parent') {
+            afterP1 = { ...afterP1, parentId1: parent.id };
+          } else {
+            afterP2 = { ...afterP2, parentId1: parent.id };
+          }
         } else if (!child.parentId2) {
           batch.update(childRef, { parentId2: parent.id, updatedAt: serverTimestamp() });
+          // Update after state
+          if (type === 'parent') {
+            afterP1 = { ...afterP1, parentId2: parent.id };
+          } else {
+            afterP2 = { ...afterP2, parentId2: parent.id };
+          }
         } else {
           toast({
             variant: "destructive",
@@ -304,9 +369,26 @@ export default function TreeEditorPage() {
           return; // Stop execution to prevent further updates
         }
         batch.update(parentRef, { childrenIds: [...parentChildren, child.id], updatedAt: serverTimestamp() });
+        // Update after state for parent
+        if (type === 'parent') {
+          afterP2 = { ...afterP2, childrenIds: [...parentChildren, child.id] };
+        } else {
+          afterP1 = { ...afterP1, childrenIds: [...parentChildren, child.id] };
+        }
       }
 
       await batch.commit();
+
+      // Push undo command with before and after states
+      pushCommand({
+        type: 'CREATE_RELATIONSHIP',
+        treeId,
+        relationshipType: type,
+        person1Id: fromId,
+        person2Id: toId,
+        before: { p1: beforeP1, p2: beforeP2 },
+        after: { p1: afterP1, p2: afterP2 }
+      });
 
       toast({ title: "Relationship Created!", description: "The connection has been saved." });
 
@@ -476,10 +558,27 @@ export default function TreeEditorPage() {
       if (event.key === 'Escape' && isLinkingModeRef.current) {
         setIsLinkingMode(false);
       }
+
+      // Undo/Redo keyboard shortcuts
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
+        event.preventDefault();
+        if (event.shiftKey) {
+          // Ctrl+Shift+Z = Redo
+          redo();
+        } else {
+          // Ctrl+Z = Undo
+          undo();
+        }
+      }
+      // Also support Ctrl+Y for redo (common on Windows)
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') {
+        event.preventDefault();
+        redo();
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [undo, redo]);
 
   if (isLoading) {
     return (
@@ -508,21 +607,31 @@ export default function TreeEditorPage() {
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="outline" size="sm" disabled>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!canUndo || isUndoProcessing}
+                  onClick={undo}
+                >
                   <Undo2 className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Undo (Coming Soon)</TooltipContent>
+              <TooltipContent side="bottom">Undo (Ctrl+Z)</TooltipContent>
             </Tooltip>
           </TooltipProvider>
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="outline" size="sm" disabled>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!canRedo || isUndoProcessing}
+                  onClick={redo}
+                >
                   <Redo2 className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Redo (Coming Soon)</TooltipContent>
+              <TooltipContent side="bottom">Redo (Ctrl+Shift+Z)</TooltipContent>
             </Tooltip>
           </TooltipProvider>
           <Button variant="outline" size="sm" onClick={() => handleZoom('in')}><ZoomIn className="h-4 w-4" /></Button>
