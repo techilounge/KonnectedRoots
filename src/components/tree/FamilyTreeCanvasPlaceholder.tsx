@@ -58,9 +58,28 @@ export default function FamilyTreeCanvasPlaceholder({
   const [draggingState, setDraggingState] = useState<{ personId: string; offsetX: number; offsetY: number; clickStartX: number; clickStartY: number; moved: boolean } | null>(null);
   const [linkingState, setLinkingState] = useState<LinkingState | null>(null);
   const [popoverState, setPopoverState] = useState<PopoverState | null>(null);
+  const [hoveredPerson, setHoveredPerson] = useState<{ person: Person; x: number; y: number } | null>(null);
+
+  // Clean up states if the referenced person is deleted
+  useEffect(() => {
+    const peopleIds = new Set(people.map(p => p.id));
+
+    if (hoveredPerson && !peopleIds.has(hoveredPerson.person.id)) {
+      setHoveredPerson(null);
+    }
+    if (draggingState && !peopleIds.has(draggingState.personId)) {
+      setDraggingState(null);
+    }
+    if (linkingState && !peopleIds.has(linkingState.fromId)) {
+      setLinkingState(null);
+    }
+    if (popoverState && (!peopleIds.has(popoverState.fromId) || !peopleIds.has(popoverState.toId))) {
+      setPopoverState(null);
+    }
+  }, [people]);
+
   const [panState, setPanState] = useState<{ isPanning: boolean; startX: number; startY: number; }>({ isPanning: false, startX: 0, startY: 0 });
   const [viewOffset, setViewOffset] = useState({ x: 0, y: 0 });
-  const [hoveredPerson, setHoveredPerson] = useState<{ person: Person; x: number; y: number } | null>(null);
   const lastClickTimeRef = useRef(0);
 
   const svgRef = useRef<SVGSVGElement>(null);
@@ -434,54 +453,70 @@ export default function FamilyTreeCanvasPlaceholder({
                         onMouseDown={(e) => handleNodeMouseDown(e, person)}
                         data-person-id={person.id}
                       >
-                        <div className={cn(
-                          "w-full h-full p-2 rounded-md shadow-md border-2 group-hover/node:shadow-lg transition-all duration-200 flex items-center space-x-2 overflow-hidden",
-                          selectedPersonId === person.id && "border-accent ring-2 ring-accent",
-                          isLinkingMode && selectedPersonId !== person.id && "hover:border-green-500 hover:ring-2 hover:ring-green-500",
-                          // Deceased styling: gray background and muted border
-                          person.livingStatus === 'deceased'
-                            ? "bg-muted/80 border-muted-foreground/50 group-hover/node:border-muted-foreground"
-                            : "bg-card border-primary group-hover/node:border-accent"
-                        )}>
-                          <Image
-                            src={person.profilePictureUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent((person.firstName?.[0] || '') + (person.lastName?.[0] || ''))}&background=166534&color=fff&size=80&bold=true`}
-                            alt={person.firstName || 'Person'}
-                            width={40}
-                            height={40}
-                            unoptimized
-                            className={cn(
-                              "rounded-full flex-shrink-0 cursor-pointer",
-                              person.livingStatus === 'deceased' && "grayscale opacity-70"
-                            )}
-                            data-ai-hint="person avatar"
-                            onMouseEnter={(e) => {
-                              const rect = e.currentTarget.getBoundingClientRect();
-                              setHoveredPerson({ person, x: rect.right + 10, y: rect.top });
-                            }}
-                            onMouseLeave={() => setHoveredPerson(null)}
-                          />
-                          <div className="truncate">
-                            <p className={cn(
-                              "text-sm font-semibold truncate",
-                              person.livingStatus === 'deceased' ? "text-muted-foreground" : "text-foreground"
-                            )}>{person.firstName || 'Unnamed'} {person.lastName || ''}</p>
-                            {person.livingStatus === 'deceased' && (
-                              <p className="text-xs text-muted-foreground/70 truncate italic">Deceased</p>
-                            )}
-                          </div>
-                        </div>
+                        {(() => {
+                          // Check if person is an orphan (no relationships)
+                          const isOrphan =
+                            (!person.spouseIds || person.spouseIds.length === 0) &&
+                            !person.parentId1 && !person.parentId2 &&
+                            (!person.childrenIds || person.childrenIds.length === 0);
 
-                        {['top', 'bottom', 'left', 'right'].map((pos) => (
-                          <div
-                            key={pos}
-                            onMouseDown={(e) => handleConnectorMouseDown(e, person, pos as any)}
-                            className="absolute bg-primary/50 border border-primary rounded-full w-3 h-3 cursor-crosshair opacity-0 group-hover/node:opacity-100 transition-opacity"
-                            style={{
-                              top: pos === 'top' ? '-6px' : pos === 'bottom' ? 'calc(100% - 6px)' : 'calc(50% - 6px)',
-                              left: pos === 'left' ? '-6px' : pos === 'right' ? 'calc(100% - 6px)' : 'calc(50% - 6px)',
-                            }}
-                          />
-                        ))}
+                          return (
+                            <>
+                              <div className={cn(
+                                "w-full h-full p-2 rounded-md shadow-md border-2 group-hover/node:shadow-lg transition-all duration-200 flex items-center space-x-2 overflow-hidden",
+                                selectedPersonId === person.id && "border-accent ring-2 ring-accent",
+                                isLinkingMode && selectedPersonId !== person.id && "hover:border-green-500 hover:ring-2 hover:ring-green-500",
+                                // Orphan styling: orange/amber border for unlinked people
+                                isOrphan && selectedPersonId !== person.id && "border-orange-500 ring-1 ring-orange-300",
+                                // Deceased styling: gray background and muted border
+                                person.livingStatus === 'deceased'
+                                  ? "bg-muted/80 border-muted-foreground/50 group-hover/node:border-muted-foreground"
+                                  : isOrphan && selectedPersonId !== person.id
+                                    ? "bg-orange-50 dark:bg-orange-950/30"
+                                    : "bg-card border-primary group-hover/node:border-accent"
+                              )}>
+                                <Image
+                                  src={person.profilePictureUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent((person.firstName?.[0] || '') + (person.lastName?.[0] || ''))}&background=166534&color=fff&size=80&bold=true`}
+                                  alt={person.firstName || 'Person'}
+                                  width={40}
+                                  height={40}
+                                  unoptimized
+                                  className={cn(
+                                    "rounded-full flex-shrink-0 cursor-pointer",
+                                    person.livingStatus === 'deceased' && "grayscale opacity-70"
+                                  )}
+                                  data-ai-hint="person avatar"
+                                  onMouseEnter={(e) => {
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    setHoveredPerson({ person, x: rect.right + 10, y: rect.top });
+                                  }}
+                                  onMouseLeave={() => setHoveredPerson(null)}
+                                />
+                                <div className="truncate">
+                                  <p className={cn(
+                                    "text-sm font-semibold truncate",
+                                    person.livingStatus === 'deceased' ? "text-muted-foreground" : "text-foreground"
+                                  )}>{person.firstName || 'Unnamed'} {person.lastName || ''}</p>
+                                  {person.livingStatus === 'deceased' && (
+                                    <p className="text-xs text-muted-foreground/70 truncate italic">Deceased</p>
+                                  )}
+                                </div>
+                              </div>
+
+                              {['top', 'bottom', 'left', 'right'].map((pos) => (
+                                <div
+                                  key={pos}
+                                  onMouseDown={(e) => handleConnectorMouseDown(e, person, pos as any)}
+                                  className="absolute bg-primary/50 border border-primary rounded-full w-3 h-3 cursor-crosshair opacity-0 group-hover/node:opacity-100 transition-opacity"
+                                  style={{
+                                    top: pos === 'top' ? '-6px' : pos === 'bottom' ? 'calc(100% - 6px)' : 'calc(50% - 6px)',
+                                    left: pos === 'left' ? '-6px' : pos === 'right' ? 'calc(100% - 6px)' : 'calc(50% - 6px)',
+                                  }}
+                                />
+                              ))}
+                            </>
+                          );
+                        })()}
                       </div>
                     </ContextMenuTrigger>
                     <ContextMenuContent>
@@ -514,7 +549,9 @@ export default function FamilyTreeCanvasPlaceholder({
 
       {/* Portal-rendered image preview tooltip */}
       {
-        hoveredPerson && typeof document !== 'undefined' && createPortal(
+        hoveredPerson &&
+        people.some(p => p.id === hoveredPerson.person.id) &&
+        typeof document !== 'undefined' && createPortal(
           <div
             className="fixed z-[9999] bg-card border-2 border-primary rounded-lg shadow-xl p-3 pointer-events-none"
             style={{ left: hoveredPerson.x, top: hoveredPerson.y }}

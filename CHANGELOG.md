@@ -12,11 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Initials Avatars**: Persons without profile photos now display colored avatars with first+last name initials.
 - **Image Hover Preview**: Hover over profile pictures to see enlarged 120x120 preview with name.
 - **HoverCard UI Component**: Created reusable HoverCard component using Radix UI primitives.
+- **Orphan Card Styling**: Unlinked persons (no relationships) now display with an orange border and background tint for easy identification on the canvas.
 
 ### Fixed
 - **Export Styling**: Fixed missing borders, text, and image styling in PNG/PDF exports by inlining computed CSS styles.
 - **Export Border Clipping**: Expanded foreignObject dimensions to prevent right/bottom borders from being clipped.
 - **Firebase CORS**: Configured Firebase Storage CORS to allow cross-origin image loading for exports.
+- **App Freeze on Delete**: Fixed UI freeze after closing the delete confirmation dialog. Root cause was a timing conflict between Radix UI ContextMenu and AlertDialog components fighting over `pointer-events` body styles.
 
 ### Changed
 - **Placeholder Avatars**: Switched from `placehold.co` to `ui-avatars.com` for better styled initials avatars.

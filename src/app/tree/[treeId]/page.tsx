@@ -55,111 +55,21 @@ export default function TreeEditorPage() {
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const isLinkingModeRef = useRef(isLinkingMode);
 
-  // Undo/Redo history
-  const [historyStack, setHistoryStack] = useState<Person[][]>([]);
-  const [historyIndex, setHistoryIndex] = useState(-1);
-  const maxHistoryLength = 50;
-  const isPerformingUndoRedo = useRef(false);
-
-  const canUndo = historyIndex > 0;
-  const canRedo = historyIndex < historyStack.length - 1;
-
   useEffect(() => {
     isLinkingModeRef.current = isLinkingMode;
   }, [isLinkingMode]);
 
-  // Push current state to history - use functional update to avoid stale closures
-  const pushToHistory = useCallback((currentPeople: Person[]) => {
-    if (isPerformingUndoRedo.current) return; // Don't push during undo/redo
-
-    setHistoryStack(prevStack => {
-      setHistoryIndex(prevIndex => {
-        const newStack = prevStack.slice(0, prevIndex + 1);
-        newStack.push(JSON.parse(JSON.stringify(currentPeople)));
-        if (newStack.length > maxHistoryLength) {
-          newStack.shift();
-          return prevIndex; // Index stays same after shift
-        }
-        return prevIndex + 1;
-      });
-      return prevStack.slice(0, historyIndex + 1).concat([JSON.parse(JSON.stringify(currentPeople))]).slice(-maxHistoryLength);
-    });
-  }, [historyIndex]);
-
-  const handleUndo = useCallback(async () => {
-    if (!canUndo || !user) return;
-    const prevState = historyStack[historyIndex - 1];
-    setHistoryIndex(prev => prev - 1);
-
-    // Sync restored state to Firestore
-    try {
-      const batch = writeBatch(db);
-
-      // Delete all current people
-      for (const person of people) {
-        batch.delete(doc(peopleColRef, person.id));
-      }
-
-      // Add all people from previous state
-      for (const person of prevState) {
-        const personDocRef = doc(peopleColRef, person.id);
-        const { id, ...personData } = person;
-        batch.set(personDocRef, { ...personData, updatedAt: serverTimestamp() });
-      }
-
-      batch.update(treeDocRef, { lastUpdated: serverTimestamp(), memberCount: prevState.length });
-      await batch.commit();
-      toast({ title: "Undo", description: "Action undone." });
-    } catch (error) {
-      console.error("Error during undo:", error);
-      toast({ variant: "destructive", title: "Error", description: "Failed to undo." });
-    }
-  }, [canUndo, historyStack, historyIndex, people, user, toast]);
-
-  const handleRedo = useCallback(async () => {
-    if (!canRedo || !user) return;
-    const nextState = historyStack[historyIndex + 1];
-    setHistoryIndex(prev => prev + 1);
-
-    // Sync restored state to Firestore
-    try {
-      const batch = writeBatch(db);
-
-      // Delete all current people
-      for (const person of people) {
-        batch.delete(doc(peopleColRef, person.id));
-      }
-
-      // Add all people from next state
-      for (const person of nextState) {
-        const personDocRef = doc(peopleColRef, person.id);
-        const { id, ...personData } = person;
-        batch.set(personDocRef, { ...personData, updatedAt: serverTimestamp() });
-      }
-
-      batch.update(treeDocRef, { lastUpdated: serverTimestamp(), memberCount: nextState.length });
-      await batch.commit();
-      toast({ title: "Redo", description: "Action redone." });
-    } catch (error) {
-      console.error("Error during redo:", error);
-      toast({ variant: "destructive", title: "Error", description: "Failed to redo." });
-    }
-  }, [canRedo, historyStack, historyIndex, people, user, toast]);
-
-  // Keyboard shortcuts for undo/redo
+  // Force reset body pointer-events when delete dialog closes
+  // This is a workaround for Radix UI not properly cleaning up its body lock
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-        e.preventDefault();
-        handleUndo();
-      } else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
-        e.preventDefault();
-        handleRedo();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleUndo, handleRedo]);
+    if (!isDeleteDialogOpen && typeof document !== 'undefined') {
+      // Small delay to ensure Radix has finished its animations
+      const timeoutId = setTimeout(() => {
+        document.body.style.pointerEvents = '';
+      }, 100);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [isDeleteDialogOpen]);
 
   // Firestore collection references
   const treeDocRef = doc(db, 'trees', treeId);
@@ -194,11 +104,6 @@ export default function TreeEditorPage() {
         fetchedPeople.push({ id: doc.id, ...doc.data() } as Person);
       });
       setPeople(fetchedPeople);
-      // Initialize history on first load
-      if (historyStack.length === 0) {
-        setHistoryStack([JSON.parse(JSON.stringify(fetchedPeople))]);
-        setHistoryIndex(0);
-      }
       setIsLoading(false);
     }, (error) => {
       console.error("Error fetching people from Firestore:", error);
@@ -230,8 +135,8 @@ export default function TreeEditorPage() {
     };
 
     try {
-      // Save current state for undo
-      pushToHistory(people);
+      // Save current state for undo - DISABLED
+      // pushToHistory(people);
 
       const personDocRef = doc(peopleColRef, newPersonId);
       // The real-time listener will handle updating the local state (setPeople)
@@ -254,8 +159,8 @@ export default function TreeEditorPage() {
   };
 
   const handleSavePerson = async (updatedPerson: Person) => {
-    // Save current state for undo
-    pushToHistory(people);
+    // Save current state for undo - DISABLED
+    // pushToHistory(people);
 
     try {
       const personDocRef = doc(peopleColRef, updatedPerson.id);
@@ -287,37 +192,52 @@ export default function TreeEditorPage() {
   };
 
   const handleOpenDeleteDialog = (person: Person) => {
-    setPersonToDelete(person);
-    setIsDeleteDialogOpen(true);
-    if (isEditorOpen && selectedPerson?.id === person.id) {
-      setIsEditorOpen(false);
-      setSelectedPerson(null);
-    }
+    // Delay opening the AlertDialog to allow ContextMenu to fully close first
+    // This prevents Radix UI components from conflicting over body styles
+    setTimeout(() => {
+      setPersonToDelete(person);
+      setIsDeleteDialogOpen(true);
+      if (isEditorOpen && selectedPerson?.id === person.id) {
+        setIsEditorOpen(false);
+        setSelectedPerson(null);
+      }
+    }, 150);
   };
 
   const handleCloseDeleteDialog = () => {
     setPersonToDelete(null);
     setIsDeleteDialogOpen(false);
+    // Force reset body pointer-events in case Radix UI doesn't clean up properly
+    if (typeof document !== 'undefined') {
+      document.body.style.pointerEvents = '';
+    }
   };
 
   const handleConfirmDelete = async () => {
     if (!personToDelete) return;
 
     try {
-      // Save current state for undo
-      pushToHistory(people);
+      // Save current state for undo - DISABLED
+      // pushToHistory(people);
+
+      // Clear selectedPerson if it's the person being deleted
+      if (selectedPerson?.id === personToDelete.id) {
+        setSelectedPerson(null);
+      }
 
       const batch = writeBatch(db);
       batch.delete(doc(peopleColRef, personToDelete.id));
       batch.update(treeDocRef, { lastUpdated: serverTimestamp(), memberCount: increment(-1) });
+
+      // Close dialog BEFORE commit to prevent state conflicts
+      handleCloseDeleteDialog();
+
       await batch.commit();
       toast({ variant: "destructive", title: "Person Deleted", description: `"${personToDelete.firstName}" has been removed.` });
     } catch (error) {
       console.error("Error deleting person:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to delete person." });
     }
-
-    handleCloseDeleteDialog();
   };
 
   const handleOpenNameSuggestor = (personDetails?: Partial<Person>) => {
@@ -715,7 +635,15 @@ export default function TreeEditorPage() {
         }}
       />
 
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+      <AlertDialog
+        open={isDeleteDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsDeleteDialogOpen(false);
+            setPersonToDelete(null);
+          }
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
@@ -724,7 +652,7 @@ export default function TreeEditorPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={handleCloseDeleteDialog}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmDelete}
               className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
