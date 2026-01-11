@@ -22,6 +22,7 @@ interface FamilyTreeCanvasPlaceholderProps {
   selectedPersonId: string | null;
   isLinkingMode: boolean;
   onViewRelationships?: (person: Person) => void;
+  readOnly?: boolean;
 }
 
 const NODE_WIDTH = 180;
@@ -53,7 +54,8 @@ export default function FamilyTreeCanvasPlaceholder({
   zoomLevel,
   selectedPersonId,
   isLinkingMode,
-  onViewRelationships
+  onViewRelationships,
+  readOnly
 }: FamilyTreeCanvasPlaceholderProps) {
   const [draggingState, setDraggingState] = useState<{ personId: string; offsetX: number; offsetY: number; clickStartX: number; clickStartY: number; moved: boolean } | null>(null);
   const [linkingState, setLinkingState] = useState<LinkingState | null>(null);
@@ -128,6 +130,10 @@ export default function FamilyTreeCanvasPlaceholder({
 
   const handleNodeMouseDown = (event: React.MouseEvent<HTMLDivElement>, person: Person) => {
     event.stopPropagation();
+    if (readOnly) {
+      if (!isLinkingMode) onNodeClick(person); // Allow selecting but not dragging
+      return;
+    }
     if (event.button === 2) return; // Ignore right-click for dragging
     if (isLinkingMode) {
       onNodeClick(person); // Pass click to parent handler for linking
@@ -150,6 +156,8 @@ export default function FamilyTreeCanvasPlaceholder({
 
   const handleConnectorMouseDown = (event: React.MouseEvent, fromPerson: Person, position: 'top' | 'bottom' | 'left' | 'right') => {
     event.stopPropagation();
+    if (readOnly) return;
+
     const point = getSVGPoint(event.clientX, event.clientY);
     if (!point) return;
 
@@ -442,12 +450,12 @@ export default function FamilyTreeCanvasPlaceholder({
                   width={NODE_WIDTH}
                   height={NODE_HEIGHT}
                   className={cn(
-                    draggingState?.personId === person.id ? 'cursor-grabbing' : 'cursor-grab',
+                    draggingState?.personId === person.id ? 'cursor-grabbing' : (readOnly ? 'cursor-default' : 'cursor-grab'),
                     isLinkingMode && 'cursor-crosshair'
                   )}
                 >
                   <ContextMenu>
-                    <ContextMenuTrigger>
+                    <ContextMenuTrigger disabled={readOnly}>
                       <div
                         className="group/node relative w-full h-full select-none"
                         onMouseDown={(e) => handleNodeMouseDown(e, person)}

@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **HoverCard UI Component**: Created reusable HoverCard component using Radix UI primitives.
 - **Orphan Card Styling**: Unlinked persons (no relationships) now display with an orange border and background tint for easy identification on the canvas.
 - **Undo/Redo**: Command-pattern based undo/redo for Add Person, Delete Person, Edit Person, and Create Relationship. Keyboard shortcuts: Ctrl+Z (undo), Ctrl+Shift+Z or Ctrl+Y (redo).
+- **Email Invitations**: Send email invitations to collaborators via Resend API with verified domain support.
+- **Resend Invitation Button**: Re-send pending invitation emails with a single click.
+- **Auto-Link Invitations**: Pending invitations automatically link to new users on signup.
+- **Public Invite Page**: Guests can view invitation details before logging in to accept.
+- **Collaborator Profiles**: Share dialog now displays real collaborator emails fetched from Firestore.
+- **Viewer-Only Mode**: Viewers can browse trees but cannot make edits (enforced via security rules and UI).
 
 ### Fixed
 - **Export Styling**: Fixed missing borders, text, and image styling in PNG/PDF exports by inlining computed CSS styles.

@@ -13,7 +13,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/hooks/useAuth';
 import { Settings, LayoutDashboard, LogOut, UserCircle } from 'lucide-react';
-import Logo from './Logo'; // Import the new Logo component
+import Logo from './Logo';
+import NotificationBell from '@/components/NotificationBell';
 
 export default function Header() {
   const { user, logout, loading } = useAuth();
@@ -46,7 +47,8 @@ export default function Header() {
               <div className="h-8 w-20 bg-muted rounded-md animate-pulse"></div>
             ) : user ? (
               <>
-                 <DropdownMenu>
+                <NotificationBell />
+                <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" className="relative h-10 w-10 rounded-full">
                       <Avatar className="h-9 w-9">
