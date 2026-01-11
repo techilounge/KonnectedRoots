@@ -1,0 +1,23 @@
+{
+    "indexes": [
+        {
+            "collectionGroup": "invitations",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "inviterUid",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "treeId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "status",
+                    "order": "ASCENDING"
+                }
+            ]
+        }
+    ],
+    "fieldOverrides": []
+}

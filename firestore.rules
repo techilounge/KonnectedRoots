@@ -4,23 +4,62 @@ service cloud.firestore {
   match /databases/{database}/documents {
     
     // A user can read/write their own user profile document.
+    // Any authenticated user can query users by email (for invitations)
     match /users/{userId} {
-      allow read, update: if request.auth != null && request.auth.uid == userId;
+      // Anyone authenticated can read user profiles (needed for invitations)
+      allow read: if request.auth != null;
+      // Only the user can update their own profile
+      allow update: if request.auth != null && request.auth.uid == userId;
       allow create: if request.auth != null;
     }
 
     // Rules for the 'trees' collection and its 'people' subcollection.
+    // Rules for the 'trees' collection and its 'people' subcollection.
     match /trees/{treeId} {
+      // Helper function to check if user is owner
+      function isOwner() {
+        return request.auth != null && resource.data.ownerId == request.auth.uid;
+      }
+      
+      // Helper function to check if user is a collaborator
+      function isCollaborator() {
+        return request.auth != null && resource.data.collaborators[request.auth.uid] != null;
+      }
+
+      // Helper function to check collaborator role
+      function hasRole(role) {
+        return request.auth != null && resource.data.collaborators[request.auth.uid] == role;
+      }
+
       // A user can create a tree for themselves.
       allow create: if request.auth != null && request.resource.data.ownerId == request.auth.uid;
       
-      // An owner can read, update, or delete their own tree.
-      allow read, update, delete: if request.auth != null && resource.data.ownerId == request.auth.uid;
+      // Owner can do anything. Collaborators can read. Managers can update.
+      allow read: if isOwner() || isCollaborator();
+      allow update: if isOwner() || hasRole('manager');
+      allow delete: if isOwner();
 
       // Rules for the 'people' subcollection within a tree.
       match /people/{personId} {
-        // An owner of the parent tree can perform any action on the people within it.
-        allow read, write, delete: if request.auth != null && get(/databases/$(database)/documents/trees/$(treeId)).data.ownerId == request.auth.uid;
+        function rootIsOwner() {
+          return get(/databases/$(database)/documents/trees/$(treeId)).data.ownerId == request.auth.uid;
+        }
+        
+        function rootHasRole(role) {
+          let treeData = get(/databases/$(database)/documents/trees/$(treeId)).data;
+          return treeData.collaborators[request.auth.uid] == role;
+        }
+        
+        function rootIsCollaborator() {
+          let treeData = get(/databases/$(database)/documents/trees/$(treeId)).data;
+          return treeData.collaborators[request.auth.uid] != null;
+        }
+
+        // Owner can do anything.
+        // Viewers can read.
+        // Editors and Managers can write.
+        allow read: if rootIsOwner() || rootIsCollaborator();
+        allow write, delete: if rootIsOwner() || rootHasRole('editor') || rootHasRole('manager');
       }
     }
 
@@ -30,5 +69,36 @@ service cloud.firestore {
     // match /people/{personId} {
     //   allow read, delete: if request.auth != null;
     // }
+
+    // Invitations collection for tree collaboration
+    match /invitations/{invitationId} {
+      // Anyone authenticated can create an invitation (for their own trees)
+      allow create: if request.auth != null && request.resource.data.inviterUid == request.auth.uid;
+      
+      // Allow anyone to READ an invitation (needed for invite page display before login)
+      // This is safe - just shows "You've been invited by X to tree Y"
+      allow read: if true;
+      
+      // Inviter can update (resend) and delete their invitations
+      allow update, delete: if request.auth != null && resource.data.inviterUid == request.auth.uid;
+      
+      // Invitee can update (accept/decline) their invitations
+      allow update: if request.auth != null && request.auth.token.email == resource.data.inviteeEmail;
+      
+      // Allow update by inviteeUid if set
+      allow update: if request.auth != null && resource.data.inviteeUid == request.auth.uid;
+    }
+
+    // Notifications collection for in-app notifications
+    match /notifications/{notificationId} {
+      // Only the recipient can read their notifications
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      
+      // Only the recipient can update (mark as read)
+      allow update: if request.auth != null && resource.data.userId == request.auth.uid;
+      
+      // Any authenticated user can create notifications (for invites, etc.)
+      allow create: if request.auth != null;
+    }
   }
 }

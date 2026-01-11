@@ -38,6 +38,19 @@ export default function TreeEditorPage() {
   const [treeData, setTreeData] = useState<FamilyTree | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
+
+  // Derived permissions state
+  const userRole = treeData && user ?
+    (treeData.ownerId === user.uid ? 'owner' : (treeData.collaborators?.[user.uid] as string) || 'viewer')
+    : 'viewer';
+
+  // Default to viewer (read-only) if loading or not authenticated
+  const isOwner = userRole === 'owner';
+  const isManager = userRole === 'manager';
+  const isEditor = userRole === 'editor';
+  const canEdit = isOwner || isManager || isEditor;
+  const readOnly = !canEdit;
+
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isLinkingMode, setIsLinkingMode] = useState(false);
   const [isNameSuggestorOpen, setIsNameSuggestorOpen] = useState(false);
@@ -121,6 +134,10 @@ export default function TreeEditorPage() {
 
   const handleAddPerson = async (newPersonDetails: Partial<Person>) => {
     if (!user) return;
+    if (readOnly) {
+      toast({ variant: "destructive", title: "View Only", description: "You don't have permission to edit." });
+      return;
+    }
     const newPersonId = doc(peopleColRef).id; // Generate a new ID from the collection ref
     const personWithDefaults: Person = {
       id: newPersonId,
@@ -170,6 +187,10 @@ export default function TreeEditorPage() {
   };
 
   const handleSavePerson = async (updatedPerson: Person) => {
+    if (readOnly) {
+      toast({ variant: "destructive", title: "View Only", description: "You don't have permission to edit." });
+      return;
+    }
     // Find current state before update (for undo)
     const beforePerson = people.find(p => p.id === updatedPerson.id);
 
@@ -237,6 +258,10 @@ export default function TreeEditorPage() {
 
   const handleConfirmDelete = async () => {
     if (!personToDelete) return;
+    if (readOnly) {
+      toast({ variant: "destructive", title: "View Only", description: "You don't have permission to delete." });
+      return;
+    }
 
     // Capture full person data for undo before deleting
     const personDataForUndo = { ...personToDelete };
@@ -278,6 +303,7 @@ export default function TreeEditorPage() {
   };
 
   const handleNodeMove = async (personId: string, newX: number, newY: number) => {
+    if (readOnly) return;
     // Optimistically update local state for smooth UX
     setPeople(prevPeople =>
       prevPeople.map(p =>
@@ -300,6 +326,11 @@ export default function TreeEditorPage() {
 
     if (!fromPerson || !toPerson) {
       toast({ variant: "destructive", title: "Error", description: "Could not find persons to link." });
+      return;
+    }
+
+    if (readOnly) {
+      toast({ variant: "destructive", title: "View Only", description: "You don't have permission to edit." });
       return;
     }
 
@@ -601,9 +632,11 @@ export default function TreeEditorPage() {
           <h1 className="text-xl font-headline text-foreground">{treeData?.title}</h1>
         </div>
         <div className="flex items-center space-x-2">
-          <Button variant="outline" size="sm" onClick={() => handleAddPerson({})}>
-            <UserPlus className="mr-2 h-4 w-4" /> Add Person
-          </Button>
+          {!readOnly && (
+            <Button variant="outline" size="sm" onClick={() => handleAddPerson({})}>
+              <UserPlus className="mr-2 h-4 w-4" /> Add Person
+            </Button>
+          )}
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -651,16 +684,18 @@ export default function TreeEditorPage() {
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        <AddPersonToolbox
-          onAddPerson={(details) => handleAddPerson(details || {})}
-          selectedPerson={selectedPerson}
-          onInitiateRelationship={handleToggleRelationshipMode}
-          onInitiatePhotoUpload={handleInitiatePhotoUpload}
-          isLinkingMode={isLinkingMode}
-          onInitiateRelationshipFinder={handleToggleRelationshipFinderMode}
-          isRelationshipFinderMode={isRelationshipFinderMode}
-          relationshipFinderPerson1={relationshipFinderPerson1}
-        />
+        {!readOnly && (
+          <AddPersonToolbox
+            onAddPerson={(details) => handleAddPerson(details || {})}
+            selectedPerson={selectedPerson}
+            onInitiateRelationship={handleToggleRelationshipMode}
+            onInitiatePhotoUpload={handleInitiatePhotoUpload}
+            isLinkingMode={isLinkingMode}
+            onInitiateRelationshipFinder={handleToggleRelationshipFinderMode}
+            isRelationshipFinderMode={isRelationshipFinderMode}
+            relationshipFinderPerson1={relationshipFinderPerson1}
+          />
+        )}
         <main className="flex-1 relative overflow-auto p-4 bg-background" ref={canvasContainerRef}>
           {people.length > 0 ? (
             <FamilyTreeCanvasPlaceholder
@@ -675,7 +710,9 @@ export default function TreeEditorPage() {
                   setSelectedPerson(person);
                 }
               }}
-              onNodeDoubleClick={handleEditPerson}
+              onNodeDoubleClick={(person) => {
+                if (!readOnly) handleEditPerson(person);
+              }}
               onNodeDeleteRequest={handleOpenDeleteDialog}
               onNodeMove={handleNodeMove}
               onCreateRelationship={handleCreateRelationship}
@@ -683,6 +720,7 @@ export default function TreeEditorPage() {
               selectedPersonId={selectedPerson?.id || null}
               isLinkingMode={isLinkingMode}
               onViewRelationships={handleOpenRelationships}
+              readOnly={readOnly}
             />
           ) : (
             <div className="flex flex-col items-center justify-center h-full border-2 border-dashed border-border rounded-lg">
