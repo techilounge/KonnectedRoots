@@ -30,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Viewer-Only Mode**: Viewers can browse trees but cannot make edits (enforced via security rules and UI).
 
 ### Changed
+- **Stripe Live Mode**: Switched from Stripe Test to Live mode for real payment processing.
+- **Hero Carousel Image**: Updated family tree demo image with enhanced version.
 - **Footer Reorganized**: 4-column layout with Quick Links, Legal (Privacy/Terms), and Connect With Us sections.
 - **Navigation Updated**: Added FAQ, How-To Guide, and legal pages to footer navigation.
 
