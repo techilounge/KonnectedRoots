@@ -25,6 +25,7 @@ export interface FamilyTree {
   id: string;
   ownerId: string;
   title: string;
+  slug: string; // SEO-friendly URL slug (e.g., "doe-family")
   description?: string;
   visibility: "private" | "link" | "public";
   collaborators: { [uid: string]: "viewer" | "editor" | "manager" };
@@ -52,7 +53,7 @@ export interface Person {
   y?: number;
   createdAt: any; // serverTimestamp
   updatedAt: any; // serverTimestamp
-  
+
   // These fields are from the old model and can be deprecated
   // Kept for reference during transition
   namePrefix?: string;

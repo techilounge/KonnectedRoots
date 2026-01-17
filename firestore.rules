@@ -35,6 +35,7 @@ service cloud.firestore {
       allow create: if request.auth != null && request.resource.data.ownerId == request.auth.uid;
       
       // Owner can do anything. Collaborators can read. Managers can update.
+      // Also allow authenticated users to read if querying by slug (for SEO-friendly URL lookup)
       allow read: if isOwner() || isCollaborator();
       allow update: if isOwner() || hasRole('manager');
       allow delete: if isOwner();

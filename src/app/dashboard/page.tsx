@@ -13,6 +13,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase/clients';
 import { collection, doc, addDoc, updateDoc, deleteDoc, query, where, serverTimestamp, onSnapshot, writeBatch } from 'firebase/firestore';
+import { generateUniqueSlug } from '@/lib/slug';
 
 
 export default function DashboardPage() {
@@ -63,9 +64,13 @@ export default function DashboardPage() {
     if (!user?.uid) return;
 
     try {
+      // Generate SEO-friendly slug from tree name (pass ownerId for security rule compliance)
+      const slug = await generateUniqueSlug(name, user.uid);
+
       const newTreeDoc = {
         ownerId: user.uid,
         title: name,
+        slug,
         visibility: "private",
         collaborators: {},
         memberCount: 0,
@@ -85,10 +90,14 @@ export default function DashboardPage() {
     if (!user?.uid) return;
 
     try {
+      // Generate SEO-friendly slug from tree name (pass ownerId for security rule compliance)
+      const slug = await generateUniqueSlug(treeName, user.uid);
+
       // Create the tree first
       const newTreeDoc = {
         ownerId: user.uid,
         title: treeName,
+        slug,
         visibility: "private",
         collaborators: {},
         memberCount: people.length,
