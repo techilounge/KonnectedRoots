@@ -18,6 +18,10 @@ admin.initializeApp();
 const auth = admin.auth();
 const db = admin.firestore();
 
+// Export Stripe functions
+export { stripeWebhook } from "./stripeWebhook";
+export { createCheckoutSession, createPortalSession, addAIPack } from "./stripeBilling";
+
 // Function to handle invitation acceptance securely
 export const acceptInvitation = onCall(async (request) => {
   if (!request.auth) {

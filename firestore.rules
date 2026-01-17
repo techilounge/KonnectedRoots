@@ -100,5 +100,44 @@ service cloud.firestore {
       // Any authenticated user can create notifications (for invites, etc.)
       allow create: if request.auth != null;
     }
+
+    // Families collection for Family plan workspaces
+    match /families/{familyId} {
+      // Helper: check if user is family owner
+      function isFamilyOwner() {
+        return request.auth != null && resource.data.ownerUid == request.auth.uid;
+      }
+      
+      // Helper: check if user is a family member
+      function isFamilyMember() {
+        return request.auth != null && 
+          exists(/databases/$(database)/documents/families/$(familyId)/seats/$(request.auth.uid));
+      }
+      
+      // Owner and members can read family data
+      allow read: if isFamilyOwner() || isFamilyMember();
+      
+      // Only owner can update family settings
+      allow update: if isFamilyOwner();
+      
+      // Families are created by Cloud Functions (checkout flow)
+      allow create: if false;
+      allow delete: if false;
+      
+      // Family seats subcollection
+      match /seats/{seatId} {
+        // Family owner can manage seats
+        allow read, write: if get(/databases/$(database)/documents/families/$(familyId)).data.ownerUid == request.auth.uid;
+        
+        // Users can read their own seat
+        allow read: if request.auth != null && request.auth.uid == seatId;
+      }
+    }
+
+    // Billing events collection (for audit trail, managed by Cloud Functions)
+    match /billing_events/{eventId} {
+      // No client access - only Cloud Functions write here
+      allow read, write: if false;
+    }
   }
 }
