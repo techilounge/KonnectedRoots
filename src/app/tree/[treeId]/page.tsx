@@ -242,7 +242,7 @@ export default function TreeEditorPage() {
     const beforePerson = people.find(p => p.id === updatedPerson.id);
 
     try {
-      const personDocRef = doc(peopleColRef, updatedPerson.id);
+      const personDocRef = doc(getPeopleColRef(), updatedPerson.id);
 
       const dataToSave: Partial<Person> & { updatedAt: any } = {
         ...updatedPerson,
@@ -320,8 +320,8 @@ export default function TreeEditorPage() {
       }
 
       const batch = writeBatch(db);
-      batch.delete(doc(peopleColRef, personToDelete.id));
-      batch.update(treeDocRef, { lastUpdated: serverTimestamp(), memberCount: increment(-1) });
+      batch.delete(doc(getPeopleColRef(), personToDelete.id));
+      batch.update(getTreeDocRef(), { lastUpdated: serverTimestamp(), memberCount: increment(-1) });
 
       // Close dialog BEFORE commit to prevent state conflicts
       handleCloseDeleteDialog();
@@ -403,8 +403,8 @@ export default function TreeEditorPage() {
 
     try {
       if (type === 'spouse') {
-        const fromRef = doc(peopleColRef, fromId);
-        const toRef = doc(peopleColRef, toId);
+        const fromRef = doc(getPeopleColRef(), fromId);
+        const toRef = doc(getPeopleColRef(), toId);
         const fromSpouses = fromPerson.spouseIds || [];
         const toSpouses = toPerson.spouseIds || [];
 
@@ -418,8 +418,8 @@ export default function TreeEditorPage() {
         const parent = type === 'parent' ? toPerson : fromPerson;
         const child = type === 'parent' ? fromPerson : toPerson;
 
-        const childRef = doc(peopleColRef, child.id);
-        const parentRef = doc(peopleColRef, parent.id);
+        const childRef = doc(getPeopleColRef(), child.id);
+        const parentRef = doc(getPeopleColRef(), parent.id);
 
         const parentChildren = parent.childrenIds || [];
         if (!child.parentId1) {
@@ -495,8 +495,8 @@ export default function TreeEditorPage() {
 
   const handleDeleteRelationship = async (personId: string, relatedPersonId: string, type: 'spouse' | 'parent' | 'child') => {
     const batch = writeBatch(db);
-    const personRef = doc(peopleColRef, personId);
-    const relatedRef = doc(peopleColRef, relatedPersonId);
+    const personRef = doc(getPeopleColRef(), personId);
+    const relatedRef = doc(getPeopleColRef(), relatedPersonId);
     const person = people.find(p => p.id === personId);
     const related = people.find(p => p.id === relatedPersonId);
 
