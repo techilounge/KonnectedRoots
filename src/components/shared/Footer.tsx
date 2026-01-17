@@ -21,7 +21,7 @@ export default function Footer() {
             <h4 className="font-headline text-lg font-semibold text-foreground mb-4">Quick Links</h4>
             <ul className="space-y-2 text-sm">
               <li><Link href="/#features" className="text-muted-foreground hover:text-primary transition-colors">Features</Link></li>
-              <li><Link href="/#pricing" className="text-muted-foreground hover:text-primary transition-colors">Pricing</Link></li>
+              <li><Link href="/pricing" className="text-muted-foreground hover:text-primary transition-colors">Pricing</Link></li>
               <li><Link href="/#about" className="text-muted-foreground hover:text-primary transition-colors">About Us</Link></li>
               <li><Link href="/contact" className="text-muted-foreground hover:text-primary transition-colors">Contact</Link></li> {/* Placeholder */}
             </ul>

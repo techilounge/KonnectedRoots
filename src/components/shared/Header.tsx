@@ -36,7 +36,7 @@ export default function Header() {
               <Link href="/#features">Features</Link>
             </Button>
             <Button variant="ghost" asChild>
-              <Link href="/#pricing">Pricing</Link>
+              <Link href="/pricing">Pricing</Link>
             </Button>
             <Button variant="ghost" asChild>
               <Link href="/#about">About Us</Link>
