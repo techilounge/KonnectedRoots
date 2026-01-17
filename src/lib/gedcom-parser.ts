@@ -356,13 +356,25 @@ export function convertToPeople(
     // Build a map of GEDCOM ID to Person
     const idMap = new Map<string, string>(); // gedcomId -> new firestore-style id
 
+    // Helper to remove undefined properties (Firestore doesn't accept undefined)
+    const removeUndefined = <T extends Record<string, unknown>>(obj: T): T => {
+        const result = {} as T;
+        for (const key in obj) {
+            if (obj[key] !== undefined) {
+                result[key] = obj[key];
+            }
+        }
+        return result;
+    };
+
     // First pass: create base person objects
     const people: Omit<Person, 'createdAt' | 'updatedAt'>[] = individuals.map((indi) => {
         // Generate a unique ID for Firestore
         const newId = `imported_${indi.id}_${Date.now()}`;
         idMap.set(indi.id, newId);
 
-        return {
+        // Build person object, filtering out undefined values
+        const person = removeUndefined({
             id: newId,
             ownerId,
             treeId,
@@ -383,9 +395,11 @@ export function convertToPeople(
             biography: indi.biography,
             parentId1: undefined,
             parentId2: undefined,
-            spouseIds: [],
-            childrenIds: [],
-        };
+            spouseIds: [] as string[],
+            childrenIds: [] as string[],
+        });
+
+        return person;
     });
 
     // Second pass: apply relationships from FAM records
