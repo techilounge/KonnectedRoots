@@ -1,6 +1,6 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Users, Share2, Search, Brain, Lock, Edit } from 'lucide-react';
+import { Users, Share2, Download, FileText, Lock, Edit } from 'lucide-react';
 
 const features = [
   {
@@ -22,16 +22,16 @@ const features = [
     id: 'collaboration'
   },
   {
-    icon: <Brain className="h-10 w-10 text-primary" />,
-    title: 'AI Name Suggestions',
-    description: 'Get intelligent name suggestions based on historical trends and cultural origins.',
-    id: 'ai-suggestions'
+    icon: <Download className="h-10 w-10 text-primary" />,
+    title: 'GEDCOM Import & Export',
+    description: 'Import existing family trees or export your data in industry-standard GEDCOM format.',
+    id: 'gedcom'
   },
   {
-    icon: <Search className="h-10 w-10 text-primary" />,
-    title: 'Historical Records Search',
-    description: 'Access a vast database of historical records to uncover new connections (Coming Soon).',
-    id: 'records-search'
+    icon: <FileText className="h-10 w-10 text-primary" />,
+    title: 'PDF & Image Exports',
+    description: 'Download beautiful printable versions of your family tree to share or preserve.',
+    id: 'exports'
   },
   {
     icon: <Lock className="h-10 w-10 text-primary" />,
@@ -47,10 +47,10 @@ export default function FeaturesSection() {
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-12">
           <h2 className="text-3xl sm:text-4xl font-headline font-bold text-foreground mb-4">
-            Everything You Need to Grow Your Roots
+            Everything You Need to Build Your Family History
           </h2>
           <p className="text-lg text-muted-foreground max-w-xl mx-auto">
-            Explore the powerful features that make KonnectedRoots the perfect place to discover your family history.
+            Powerful tools designed to help you discover, document, and share your ancestry with the people who matter most.
           </p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
