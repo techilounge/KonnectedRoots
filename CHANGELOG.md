@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **SEO-Friendly Tree URLs**: Tree URLs now use human-readable slugs (e.g., `/tree/doe-family`) instead of Firebase IDs. Backwards compatible with existing trees.
 - **GEDCOM Import**: Import family trees from Ancestry, MyHeritage, and other platforms via GEDCOM file upload with drag-and-drop support (Pro/Family only).
 - **FAQ Page**: Interactive FAQ page (`/faq`) with 6 categories, 20+ questions, search, and category filters.
 - **How-To Guide Page**: Interactive tutorials (`/guide`) with 7 step-by-step guides, progress tracking, and difficulty levels.

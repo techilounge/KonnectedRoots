@@ -17,16 +17,18 @@ export default function TreeList({ trees, onEditTree, onDeleteTree }: TreeListPr
   const router = useRouter();
 
   const handleOpenTree = (tree: FamilyTree) => {
-    router.push(`/tree/${tree.id}`);
+    // Use slug for SEO-friendly URLs, fallback to ID for older trees without slugs
+    const treeSlug = tree.slug || tree.id;
+    router.push(`/tree/${treeSlug}`);
   };
-  
+
   const getFormattedDate = (timestamp: any) => {
     if (!timestamp || !timestamp.toDate) {
       // Handle cases where timestamp is not a Firestore Timestamp
       // It might be a string from older data or null
       try {
         const date = new Date(timestamp);
-        if(isNaN(date.getTime())) return "a while ago";
+        if (isNaN(date.getTime())) return "a while ago";
         return formatDistanceToNow(date, { addSuffix: true });
       } catch (e) {
         return "a while ago";
@@ -38,8 +40,8 @@ export default function TreeList({ trees, onEditTree, onDeleteTree }: TreeListPr
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {trees.map((tree) => (
-        <Card 
-          key={tree.id} 
+        <Card
+          key={tree.id}
           className="flex flex-col shadow-md hover:shadow-xl hover:border-primary/50 transition-all duration-300"
         >
           <CardHeader className="pb-3 cursor-pointer" onClick={() => handleOpenTree(tree)}>
@@ -52,9 +54,9 @@ export default function TreeList({ trees, onEditTree, onDeleteTree }: TreeListPr
               </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     className="h-8 w-8 flex-shrink-0"
                     onClick={(e) => e.stopPropagation()} // Prevent card click when opening menu
                   >
@@ -78,13 +80,13 @@ export default function TreeList({ trees, onEditTree, onDeleteTree }: TreeListPr
             </div>
           </CardHeader>
           <CardContent className="flex-grow pt-0 pb-3 cursor-pointer" onClick={() => handleOpenTree(tree)}>
-             <p className="text-sm text-muted-foreground">{tree.description || "No description provided."}</p>
+            <p className="text-sm text-muted-foreground">{tree.description || "No description provided."}</p>
           </CardContent>
           <CardFooter className="flex items-center justify-between pt-3 pb-4 border-t mt-auto">
-             <div className="text-xs text-muted-foreground flex items-center">
-                <Clock className="mr-1 h-3 w-3" />
-                Updated {getFormattedDate(tree.lastUpdated)}
-              </div>
+            <div className="text-xs text-muted-foreground flex items-center">
+              <Clock className="mr-1 h-3 w-3" />
+              Updated {getFormattedDate(tree.lastUpdated)}
+            </div>
           </CardFooter>
         </Card>
       ))}

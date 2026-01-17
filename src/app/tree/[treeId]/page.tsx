@@ -27,10 +27,11 @@ import { Download } from 'lucide-react';
 
 export default function TreeEditorPage() {
   const params = useParams();
-  const treeId = params.treeId as string;
+  const routeParam = params.treeId as string; // Could be slug or ID
   const { toast } = useToast();
   const { user } = useAuth();
-  const { pushCommand, undo, redo, canUndo, canRedo, isProcessing: isUndoProcessing } = useUndoRedo(treeId);
+  const [resolvedTreeId, setResolvedTreeId] = useState<string | null>(null);
+  const { pushCommand, undo, redo, canUndo, canRedo, isProcessing: isUndoProcessing } = useUndoRedo(resolvedTreeId || '');
   const photoUploadInputRef = useRef<HTMLInputElement>(null);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
 
@@ -86,17 +87,62 @@ export default function TreeEditorPage() {
     }
   }, [isDeleteDialogOpen]);
 
-  // Firestore collection references
-  const treeDocRef = doc(db, 'trees', treeId);
-  const peopleColRef = collection(db, 'trees', treeId, 'people');
+  // Resolve slug to tree ID (or use direct ID for backwards compatibility)
+  useEffect(() => {
+    if (!routeParam || !user) return;
+
+    const resolveTreeId = async () => {
+      // Try to find by slug, but only for trees owned by current user (to comply with security rules)
+      // Shared trees will still use the document ID directly
+      const treesRef = collection(db, 'trees');
+      const slugQuery = query(
+        treesRef,
+        where('ownerId', '==', user.uid),
+        where('slug', '==', routeParam)
+      );
+
+      try {
+        const slugSnapshot = await getDocs(slugQuery);
+
+        if (!slugSnapshot.empty) {
+          // Found by slug
+          setResolvedTreeId(slugSnapshot.docs[0].id);
+        } else {
+          // Fallback: assume it's a direct document ID (for shared trees or old trees)
+          setResolvedTreeId(routeParam);
+        }
+      } catch (error) {
+        // Query failed (could be missing index), fall back to treating as ID
+        console.warn('Slug lookup failed, using as ID:', error);
+        setResolvedTreeId(routeParam);
+      }
+    };
+
+    resolveTreeId();
+  }, [routeParam, user]);
+
+  // Derived treeId for use in the component
+  const treeId = resolvedTreeId || '';
+
+  // Firestore collection references for use in handlers (outside useEffect)
+  const getTreeDocRef = () => doc(db, 'trees', treeId);
+  const getPeopleColRef = () => collection(db, 'trees', treeId, 'people');
 
   useEffect(() => {
     if (!user || !treeId) {
+      if (!treeId && resolvedTreeId === null) {
+        // Still resolving
+        return;
+      }
       setIsLoading(false);
       return;
     };
 
     setIsLoading(true);
+
+    // Create refs inside useEffect to avoid dependency issues
+    const treeDocRef = doc(db, 'trees', treeId);
+    const peopleColRef = collection(db, 'trees', treeId, 'people');
 
     // Subscribe to tree document changes
     const treeUnsubscribe = onSnapshot(treeDocRef, (docSnap) => {
@@ -130,7 +176,7 @@ export default function TreeEditorPage() {
       treeUnsubscribe();
       peopleUnsubscribe();
     };
-  }, [treeId, user, toast]);
+  }, [treeId, user, toast, resolvedTreeId]);
 
   const handleAddPerson = async (newPersonDetails: Partial<Person>) => {
     if (!user) return;
@@ -138,7 +184,8 @@ export default function TreeEditorPage() {
       toast({ variant: "destructive", title: "View Only", description: "You don't have permission to edit." });
       return;
     }
-    const newPersonId = doc(peopleColRef).id; // Generate a new ID from the collection ref
+    const peopleCol = getPeopleColRef();
+    const newPersonId = doc(peopleCol).id; // Generate a new ID from the collection ref
     const personWithDefaults: Person = {
       id: newPersonId,
       ownerId: user.uid,
@@ -154,7 +201,7 @@ export default function TreeEditorPage() {
     };
 
     try {
-      const personDocRef = doc(peopleColRef, newPersonId);
+      const personDocRef = doc(peopleCol, newPersonId);
       // The real-time listener will handle updating the local state (setPeople)
       await setDoc(personDocRef, personWithDefaults);
 
@@ -170,7 +217,7 @@ export default function TreeEditorPage() {
       // This prevents duplicate undo commands (add + save)
       toast({ title: "Person Added", description: "Double-click to edit details." });
       // Also update the parent tree's lastUpdated timestamp to trigger UI refreshes elsewhere if needed
-      await updateDoc(treeDocRef, { lastUpdated: serverTimestamp(), memberCount: increment(1) });
+      await updateDoc(getTreeDocRef(), { lastUpdated: serverTimestamp(), memberCount: increment(1) });
     } catch (error) {
       console.error("Error adding person to Firestore:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to save new person." });
@@ -210,7 +257,7 @@ export default function TreeEditorPage() {
 
       const batch = writeBatch(db);
       batch.set(personDocRef, dataToSave, { merge: true });
-      batch.update(treeDocRef, { lastUpdated: serverTimestamp() });
+      batch.update(getTreeDocRef(), { lastUpdated: serverTimestamp() });
       await batch.commit();
 
       // Push undo command with before/after state
@@ -311,7 +358,7 @@ export default function TreeEditorPage() {
       )
     );
     try {
-      const personDocRef = doc(peopleColRef, personId);
+      const personDocRef = doc(getPeopleColRef(), personId);
       await updateDoc(personDocRef, { x: newX, y: newY, updatedAt: serverTimestamp() });
       // Note: Not adding undo for move because it fires per-pixel during drag
       // Would need onNodeMoveEnd callback to properly support undo
