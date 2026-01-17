@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Check, Loader2, Sparkles, Users, Crown, Zap } from 'lucide-react';
 import { PRICING } from '@/lib/billing/constants';
 import Link from 'next/link';
+import PricingComparison from '@/components/billing/PricingComparison';
 
 const features = {
     free: [
@@ -53,7 +54,7 @@ export default function PricingPage() {
     const { user } = useAuth();
     const { plan: currentPlan, loading: entitlementLoading } = useEntitlements();
     const router = useRouter();
-    const [isYearly, setIsYearly] = useState(true);
+    const [isYearly, setIsYearly] = useState(false);
     const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
 
     const handleSubscribe = async (plan: 'pro' | 'family', withAIPack = false) => {
@@ -78,6 +79,33 @@ export default function PricingPage() {
         } catch (error) {
             console.error('Checkout error:', error);
             // Could show toast here
+        } finally {
+            setLoadingPlan(null);
+        }
+    };
+
+    const handleAddAIPack = async () => {
+        if (!user) {
+            router.push('/signup?redirect=/pricing');
+            return;
+        }
+
+        setLoadingPlan('aipack');
+
+        try {
+            const addAIPack = httpsCallable(functions, 'addAIPack');
+            const result = await addAIPack({}) as { data: { success?: boolean; error?: string } };
+
+            if (result.data.success) {
+                // Refresh the page to show updated subscription
+                window.location.reload();
+            } else if (result.data.error) {
+                console.error('Add AI Pack error:', result.data.error);
+                alert(result.data.error);
+            }
+        } catch (error) {
+            console.error('Add AI Pack error:', error);
+            alert('Failed to add AI Pack. Please try again.');
         } finally {
             setLoadingPlan(null);
         }
@@ -271,7 +299,7 @@ export default function PricingPage() {
                             </div>
                         </CardHeader>
                         <CardContent>
-                            <ul className="flex flex-wrap gap-4">
+                            <ul className="flex flex-wrap gap-4 mb-4">
                                 {features.aiPack.map((feature, i) => (
                                     <li key={i} className="flex items-center gap-2">
                                         <Check className="h-4 w-4 text-violet-500" />
@@ -279,9 +307,25 @@ export default function PricingPage() {
                                     </li>
                                 ))}
                             </ul>
+                            {(currentPlan === 'pro' || currentPlan === 'family') && (
+                                <Button
+                                    onClick={handleAddAIPack}
+                                    disabled={loadingPlan === 'aipack'}
+                                    className="bg-violet-600 hover:bg-violet-700 text-white"
+                                >
+                                    {loadingPlan === 'aipack' ? (
+                                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Adding...</>
+                                    ) : (
+                                        <>Add to Your Plan</>
+                                    )}
+                                </Button>
+                            )}
                         </CardContent>
                     </Card>
                 </div>
+
+                {/* Comparison Table */}
+                <PricingComparison />
 
                 {/* FAQ Link */}
                 <div className="text-center mt-12">

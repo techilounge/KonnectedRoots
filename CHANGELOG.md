@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **GEDCOM Import**: Import family trees from Ancestry, MyHeritage, and other platforms via GEDCOM file upload with drag-and-drop support (Pro/Family only).
+- **FAQ Page**: Interactive FAQ page (`/faq`) with 6 categories, 20+ questions, search, and category filters.
+- **How-To Guide Page**: Interactive tutorials (`/guide`) with 7 step-by-step guides, progress tracking, and difficulty levels.
+- **Privacy Policy Page**: Comprehensive privacy policy (`/privacy`) covering data collection, security, and user rights.
+- **Terms of Service Page**: Complete terms of service (`/terms`) with subscription terms, content policies, and legal disclaimers.
+- **Pricing Comparison Table**: Animated comparison table on `/pricing` showing KonnectedRoots vs Ancestry, MyHeritage, and other platforms.
+- **Add AI Pack Button**: Pro/Family subscribers can now add the AI Pack add-on directly from the pricing page.
+- **How-To Link in Navbar**: Added How-To guide link to main navigation menu.
 - **Tree Export**: Export family trees as PNG images, PDF documents, and GEDCOM files for backup/sharing.
 - **Initials Avatars**: Persons without profile photos now display colored avatars with first+last name initials.
 - **Image Hover Preview**: Hover over profile pictures to see enlarged 120x120 preview with name.
@@ -20,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Public Invite Page**: Guests can view invitation details before logging in to accept.
 - **Collaborator Profiles**: Share dialog now displays real collaborator emails fetched from Firestore.
 - **Viewer-Only Mode**: Viewers can browse trees but cannot make edits (enforced via security rules and UI).
+
+### Changed
+- **Footer Reorganized**: 4-column layout with Quick Links, Legal (Privacy/Terms), and Connect With Us sections.
+- **Navigation Updated**: Added FAQ, How-To Guide, and legal pages to footer navigation.
 
 ### Fixed
 - **Export Styling**: Fixed missing borders, text, and image styling in PNG/PDF exports by inlining computed CSS styles.

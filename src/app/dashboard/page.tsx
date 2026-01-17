@@ -3,15 +3,16 @@
 import { useState, useEffect } from 'react';
 import TreeList from '@/components/dashboard/TreeList';
 import CreateTreeDialog from '@/components/dashboard/CreateTreeDialog';
-import EditTreeDialog from '@/components/dashboard/EditTreeDialog'; 
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'; 
+import EditTreeDialog from '@/components/dashboard/EditTreeDialog';
+import ImportGedcomDialog from '@/components/dashboard/ImportGedcomDialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import type { FamilyTree } from '@/types';
-import { PlusCircle, Loader2 } from 'lucide-react';
+import type { FamilyTree, Person } from '@/types';
+import { PlusCircle, Loader2, Upload } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { useToast } from '@/hooks/use-toast'; 
+import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase/clients';
-import { collection, doc, addDoc, updateDoc, deleteDoc, query, where, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { collection, doc, addDoc, updateDoc, deleteDoc, query, where, serverTimestamp, onSnapshot, writeBatch } from 'firebase/firestore';
 
 
 export default function DashboardPage() {
@@ -20,6 +21,7 @@ export default function DashboardPage() {
   const [familyTrees, setFamilyTrees] = useState<FamilyTree[]>([]);
   const [isLoadingTrees, setIsLoadingTrees] = useState(true);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingTree, setEditingTree] = useState<FamilyTree | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -32,29 +34,29 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!user) {
-        setIsLoadingTrees(false);
-        setFamilyTrees([]);
-        return;
+      setIsLoadingTrees(false);
+      setFamilyTrees([]);
+      return;
     }
 
     setIsLoadingTrees(true);
-    
+
     const q = query(treesColRef, where("ownerId", "==", user.uid));
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
-        const treesData = querySnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        } as FamilyTree));
-        setFamilyTrees(treesData);
-        setIsLoadingTrees(false);
+      const treesData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as FamilyTree));
+      setFamilyTrees(treesData);
+      setIsLoadingTrees(false);
     }, (error) => {
-        console.error("Error fetching trees with real-time listener:", error);
-        toast({ variant: "destructive", title: "Error", description: "Could not load your family trees." });
-        setIsLoadingTrees(false);
+      console.error("Error fetching trees with real-time listener:", error);
+      toast({ variant: "destructive", title: "Error", description: "Could not load your family trees." });
+      setIsLoadingTrees(false);
     });
 
     return () => unsubscribe();
-    
+
   }, [user, toast]);
 
   const handleCreateTree = async (name: string) => {
@@ -72,13 +74,59 @@ export default function DashboardPage() {
       };
       await addDoc(treesColRef, newTreeDoc);
       toast({ title: "Tree Created!", description: `"${name}" has been successfully created.` });
-      
+
     } catch (error) {
       console.error("Error creating tree:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to create new tree." });
     }
   };
-  
+
+  const handleImportGedcom = async (treeName: string, people: Omit<Person, 'createdAt' | 'updatedAt'>[]) => {
+    if (!user?.uid) return;
+
+    try {
+      // Create the tree first
+      const newTreeDoc = {
+        ownerId: user.uid,
+        title: treeName,
+        visibility: "private",
+        collaborators: {},
+        memberCount: people.length,
+        createdAt: serverTimestamp(),
+        lastUpdated: serverTimestamp(),
+      };
+      const treeRef = await addDoc(treesColRef, newTreeDoc);
+      const treeId = treeRef.id;
+
+      // Batch write all people
+      const batch = writeBatch(db);
+      const peopleColRef = collection(db, 'trees', treeId, 'people');
+
+      for (const person of people) {
+        const personRef = doc(peopleColRef);
+        batch.set(personRef, {
+          ...person,
+          id: personRef.id,
+          ownerId: user.uid,
+          treeId: treeId,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      await batch.commit();
+
+      toast({
+        title: "Import Successful!",
+        description: `Imported ${people.length} people into "${treeName}".`
+      });
+    } catch (error) {
+      console.error("Error importing GEDCOM:", error);
+      toast({ variant: "destructive", title: "Import Failed", description: "Failed to import GEDCOM file." });
+      throw error; // Re-throw so dialog can show error
+    }
+  };
+
   const handleOpenEditDialog = (tree: FamilyTree) => {
     setEditingTree(tree);
     setIsEditDialogOpen(true);
@@ -97,13 +145,13 @@ export default function DashboardPage() {
       await updateDoc(treeDocRef, updatedData);
       toast({ title: "Tree Updated!", description: `Tree renamed to "${newName}".` });
     } catch (error) {
-       console.error("Error updating tree:", error);
-       toast({ variant: "destructive", title: "Error", description: "Failed to update tree name." });
+      console.error("Error updating tree:", error);
+      toast({ variant: "destructive", title: "Error", description: "Failed to update tree name." });
     } finally {
       handleCloseEditDialog();
     }
   };
-  
+
   const handleOpenDeleteDialog = (treeId: string) => {
     setDeletingTreeId(treeId);
     setIsDeleteDialogOpen(true);
@@ -117,17 +165,17 @@ export default function DashboardPage() {
   const handleConfirmDeleteTree = async () => {
     if (!deletingTreeId) return;
     setIsDeleting(true);
-    
+
     const treeToDelete = familyTrees.find(t => t.id === deletingTreeId);
-    
+
     try {
       const treeDocRef = doc(db, 'trees', deletingTreeId);
       await deleteDoc(treeDocRef);
-      
+
       toast({ variant: "destructive", title: "Tree Deleted!", description: `"${treeToDelete?.title}" and all its members have been deleted.` });
     } catch (error) {
-       console.error("Error deleting tree:", error);
-       toast({ variant: "destructive", title: "Error", description: "Failed to delete the tree." });
+      console.error("Error deleting tree:", error);
+      toast({ variant: "destructive", title: "Error", description: "Failed to delete the tree." });
     } finally {
       setIsDeleting(false);
       handleCloseDeleteDialog();
@@ -146,21 +194,24 @@ export default function DashboardPage() {
           Welcome, <span className="text-primary">{user.displayName || 'User'}</span>!
         </h1>
         <div className="flex space-x-2">
-            <Button onClick={() => setIsCreateDialogOpen(true)} className="bg-primary hover:bg-primary/90">
-              <PlusCircle className="mr-2 h-5 w-5" /> Create New Tree
-            </Button>
+          <Button onClick={() => setIsImportDialogOpen(true)} variant="outline">
+            <Upload className="mr-2 h-5 w-5" /> Import GEDCOM
+          </Button>
+          <Button onClick={() => setIsCreateDialogOpen(true)} className="bg-primary hover:bg-primary/90">
+            <PlusCircle className="mr-2 h-5 w-5" /> Create New Tree
+          </Button>
         </div>
       </div>
-      
+
       <div className="bg-card p-6 rounded-lg shadow-md">
         <h2 className="text-2xl font-headline text-foreground mb-4">Your Family Trees</h2>
         {isLoadingTrees ? (
-           <div className="flex justify-center items-center py-10">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-           </div>
+          <div className="flex justify-center items-center py-10">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
         ) : familyTrees.length > 0 ? (
-          <TreeList 
-            trees={familyTrees} 
+          <TreeList
+            trees={familyTrees}
             onEditTree={handleOpenEditDialog}
             onDeleteTree={handleOpenDeleteDialog}
           />
@@ -178,6 +229,12 @@ export default function DashboardPage() {
         isOpen={isCreateDialogOpen}
         onClose={() => setIsCreateDialogOpen(false)}
         onCreateTree={handleCreateTree}
+      />
+
+      <ImportGedcomDialog
+        isOpen={isImportDialogOpen}
+        onClose={() => setIsImportDialogOpen(false)}
+        onImport={handleImportGedcom}
       />
 
       {editingTree && (
@@ -200,8 +257,8 @@ export default function DashboardPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={handleCloseDeleteDialog} disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleConfirmDeleteTree} 
+            <AlertDialogAction
+              onClick={handleConfirmDeleteTree}
               disabled={isDeleting}
               className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
             >
