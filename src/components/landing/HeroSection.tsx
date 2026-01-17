@@ -19,7 +19,7 @@ interface Shape {
   vRotation: number;
 }
 
-const carouselImages = ['/4-Gen.png', '/3-Gen.png'];
+const carouselImages = ['/4-Gen.png', '/3-Gen.png', '/family-tree-demo.png'];
 
 export default function HeroSection() {
   const [shapes, setShapes] = useState<Shape[]>([]);
@@ -62,7 +62,7 @@ export default function HeroSection() {
         boundsRef.current = { width: rect.width, height: rect.height };
       }
     };
-    
+
     // Run this effect only on the client
     updateBounds();
 
@@ -116,18 +116,18 @@ export default function HeroSection() {
     };
 
     if (initialShapes.length > 0) {
-        animationFrameId = requestAnimationFrame(animate);
+      animationFrameId = requestAnimationFrame(animate);
     }
-    
+
 
     const handleResize = () => {
       updateBounds();
       // Adjust shape positions if they are out of new bounds
       if (boundsRef.current.width > 0 && boundsRef.current.height > 0) {
         setShapes(prevShapes => prevShapes.map(shape => ({
-            ...shape,
-            x: Math.max(0, Math.min(shape.x, boundsRef.current.width - shape.size)),
-            y: Math.max(0, Math.min(shape.y, boundsRef.current.height - shape.size)),
+          ...shape,
+          x: Math.max(0, Math.min(shape.x, boundsRef.current.width - shape.size)),
+          y: Math.max(0, Math.min(shape.y, boundsRef.current.height - shape.size)),
         })));
       } else {
         setShapes([]); // Clear shapes if container has no dimensions
@@ -149,23 +149,23 @@ export default function HeroSection() {
         <svg width="100%" height="100%" aria-hidden="true">
           {shapes.map(shape => (
             shape.type === 'circle' ?
-              <circle 
-                key={shape.id} 
-                cx={shape.x + shape.size/2} 
-                cy={shape.y + shape.size/2} 
-                r={shape.size/2} 
-                fill={shape.color} 
+              <circle
+                key={shape.id}
+                cx={shape.x + shape.size / 2}
+                cy={shape.y + shape.size / 2}
+                r={shape.size / 2}
+                fill={shape.color}
                 opacity="0.5"
               /> :
-              <rect 
-                key={shape.id} 
-                x={shape.x} 
-                y={shape.y} 
-                width={shape.size} 
-                height={shape.size} 
-                fill={shape.color} 
+              <rect
+                key={shape.id}
+                x={shape.x}
+                y={shape.y}
+                width={shape.size}
+                height={shape.size}
+                fill={shape.color}
                 opacity="0.5"
-                transform={`rotate(${shape.rotation} ${shape.x + shape.size/2} ${shape.y + shape.size/2})`}
+                transform={`rotate(${shape.rotation} ${shape.x + shape.size / 2} ${shape.y + shape.size / 2})`}
               />
           ))}
         </svg>
@@ -173,10 +173,10 @@ export default function HeroSection() {
 
       <div className="relative z-10 container mx-auto px-4 sm:px-6 lg:px-8 text-center">
         <h1 className="text-4xl sm:text-5xl md:text-6xl font-headline font-bold text-foreground mb-6 leading-tight">
-          Uncover Your Roots, Weave Your Story
+          Build Your Family Tree Online — Free Forever
         </h1>
         <p className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto mb-10">
-          KonnectedRoots helps you explore your ancestry, build your family tree, and connect with your heritage like never before.
+          Don&apos;t let your family&apos;s stories disappear. Create beautiful, interactive family trees, collaborate with relatives worldwide, and preserve your heritage for generations to come.
         </p>
         <div className="flex justify-center space-x-4 mb-16">
           <Button size="lg" asChild className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg transform hover:scale-105 transition-transform">
@@ -186,28 +186,27 @@ export default function HeroSection() {
             <Link href="#features">Learn More</Link>
           </Button>
         </div>
-        <div 
+        <div
           className="relative max-w-4xl mx-auto aspect-video rounded-lg shadow-2xl overflow-hidden group"
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
           {carouselImages.map((src, index) => (
-            <Image 
+            <Image
               key={src}
-              src={src} 
-              alt={`Family tree illustration ${index + 1}`} 
+              src={src}
+              alt={`Family tree illustration ${index + 1}`}
               fill
               sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
               priority={index === 0}
               quality={75}
               style={{ objectFit: 'cover' }}
-              className={`transform group-hover:scale-105 transition-all duration-1000 ease-in-out ${
-                index === currentIndex ? 'opacity-100' : 'opacity-0'
-              }`}
+              className={`transform group-hover:scale-105 transition-all duration-1000 ease-in-out ${index === currentIndex ? 'opacity-100' : 'opacity-0'
+                }`}
             />
           ))}
           <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent"></div>
-           <div className="absolute bottom-6 left-6 text-left">
+          <div className="absolute bottom-6 left-6 text-left">
             <h3 className="text-white text-2xl font-headline">Visualize Your Lineage</h3>
             <p className="text-gray-200 text-sm">Interactive and beautifully designed family trees.</p>
           </div>

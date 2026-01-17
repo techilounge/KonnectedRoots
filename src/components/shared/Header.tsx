@@ -33,7 +33,7 @@ export default function Header() {
           </div>
           <nav className="hidden md:flex items-center space-x-4">
             <Button variant="ghost" asChild>
-              <Link href="/#features">Features</Link>
+              <Link href="/features">Features</Link>
             </Button>
             <Button variant="ghost" asChild>
               <Link href="/pricing">Pricing</Link>
