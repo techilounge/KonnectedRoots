@@ -368,9 +368,10 @@ export function convertToPeople(
     };
 
     // First pass: create base person objects
-    const people: Omit<Person, 'createdAt' | 'updatedAt'>[] = individuals.map((indi) => {
-        // Generate a unique ID for Firestore
-        const newId = `imported_${indi.id}_${Date.now()}`;
+    const timestamp = Date.now();
+    const people: Omit<Person, 'createdAt' | 'updatedAt'>[] = individuals.map((indi, index) => {
+        // Generate a unique ID for Firestore using timestamp + index to guarantee uniqueness
+        const newId = `imported_${indi.id}_${timestamp}_${index}`;
         idMap.set(indi.id, newId);
 
         // Build person object, filtering out undefined values
