@@ -9,11 +9,15 @@ import ShareDialog from '@/components/tree/ShareDialog';
 import RelationshipsDialog from '@/components/tree/RelationshipsDialog';
 import type { Person, FamilyTree, RelationshipType } from '@/types';
 import { Button } from '@/components/ui/button';
-import { Users, Share2, ZoomIn, ZoomOut, UserPlus, ChevronLeft, Loader2, Undo2, Redo2 } from 'lucide-react';
+import { Users, Share2, ZoomIn, ZoomOut, UserPlus, ChevronLeft, Loader2, Undo2, Redo2, ShieldCheck, Copy } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import NameSuggestor from '@/components/tree/NameSuggestor';
 import ExportDialog from '@/components/tree/ExportDialog';
 import { getOrphanedReferenceFixes } from '@/lib/gedcom-generator';
+import { validateTree, type ValidationResult } from '@/lib/tree-validator';
+import { detectDuplicates, type DuplicateDetectionResult } from '@/lib/duplicate-detector';
+import ValidationPanel from '@/components/tree/ValidationPanel';
+import DuplicateDetectionDialog from '@/components/tree/DuplicateDetectionDialog';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -70,6 +74,10 @@ export default function TreeEditorPage() {
   const [isRelationshipResultOpen, setIsRelationshipResultOpen] = useState(false);
   const [isCalculatingRelationship, setIsCalculatingRelationship] = useState(false);
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+  const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
+  const [showValidationPanel, setShowValidationPanel] = useState(false);
+  const [duplicateResult, setDuplicateResult] = useState<DuplicateDetectionResult | null>(null);
+  const [isDuplicateDialogOpen, setIsDuplicateDialogOpen] = useState(false);
   const isLinkingModeRef = useRef(isLinkingMode);
 
   useEffect(() => {
@@ -409,6 +417,151 @@ export default function TreeEditorPage() {
     const genderForSuggestor = personDetails?.gender === 'female' ? 'female' : 'male';
     setPersonForSuggestion({ ...personDetails, gender: genderForSuggestor });
     setIsNameSuggestorOpen(true);
+  };
+
+  // Validate the entire tree
+  const handleValidateTree = useCallback(() => {
+    const result = validateTree(people);
+    setValidationResult(result);
+    setShowValidationPanel(true);
+
+    if (!result.hasErrors && !result.hasWarnings) {
+      toast({
+        title: "Tree Validated",
+        description: "No issues found in your family tree!",
+      });
+    } else {
+      const errorCount = result.issues.filter(i => i.severity === 'error').length;
+      const warningCount = result.issues.filter(i => i.severity === 'warning').length;
+      toast({
+        variant: errorCount > 0 ? "destructive" : "default",
+        title: "Validation Complete",
+        description: `Found ${errorCount} errors and ${warningCount} warnings.`,
+      });
+    }
+  }, [people, toast]);
+
+  // Detect duplicates in the tree
+  const handleDetectDuplicates = useCallback(() => {
+    const result = detectDuplicates(people);
+    setDuplicateResult(result);
+    setIsDuplicateDialogOpen(true);
+
+    if (!result.hasDuplicates) {
+      toast({
+        title: "No Duplicates Found",
+        description: "Your family tree looks clean!",
+      });
+    } else {
+      toast({
+        title: "Duplicates Detected",
+        description: `Found ${result.matches.length} potential duplicate${result.matches.length > 1 ? 's' : ''}.`,
+      });
+    }
+  }, [people, toast]);
+
+  // Handle merge duplicates
+  const handleMergeDuplicates = async (keepId: string, removeId: string) => {
+    if (readOnly) return;
+
+    const keepPerson = people.find(p => p.id === keepId);
+    const removePerson = people.find(p => p.id === removeId);
+
+    if (!keepPerson || !removePerson) return;
+
+    try {
+      const batch = writeBatch(db);
+
+      // Transfer relationships from removed person to kept person
+      const updatedSpouseIds = [...new Set([...(keepPerson.spouseIds || []), ...(removePerson.spouseIds || [])])];
+      const updatedChildrenIds = [...new Set([...(keepPerson.childrenIds || []), ...(removePerson.childrenIds || [])])];
+
+      // Update kept person with merged data
+      const keepRef = doc(getPeopleColRef(), keepId);
+      batch.update(keepRef, {
+        spouseIds: updatedSpouseIds.filter(id => id !== keepId && id !== removeId),
+        childrenIds: updatedChildrenIds.filter(id => id !== keepId && id !== removeId),
+        updatedAt: serverTimestamp()
+      });
+
+      // Update all people who reference the removed person
+      for (const person of people) {
+        if (person.id === keepId || person.id === removeId) continue;
+
+        const updates: Record<string, unknown> = {};
+        let needsUpdate = false;
+
+        if (person.parentId1 === removeId) {
+          updates.parentId1 = keepId;
+          needsUpdate = true;
+        }
+        if (person.parentId2 === removeId) {
+          updates.parentId2 = keepId;
+          needsUpdate = true;
+        }
+        if (person.spouseIds?.includes(removeId)) {
+          updates.spouseIds = person.spouseIds.map(id => id === removeId ? keepId : id);
+          needsUpdate = true;
+        }
+        if (person.childrenIds?.includes(removeId)) {
+          updates.childrenIds = person.childrenIds.map(id => id === removeId ? keepId : id);
+          needsUpdate = true;
+        }
+
+        if (needsUpdate) {
+          const personRef = doc(getPeopleColRef(), person.id);
+          batch.update(personRef, { ...updates, updatedAt: serverTimestamp() });
+        }
+      }
+
+      // Delete the removed person
+      const removeRef = doc(getPeopleColRef(), removeId);
+      batch.delete(removeRef);
+
+      // Update member count
+      batch.update(getTreeDocRef(), {
+        memberCount: increment(-1),
+        lastUpdated: serverTimestamp()
+      });
+
+      await batch.commit();
+
+      toast({
+        title: "Merged Successfully",
+        description: `"${removePerson.firstName} ${removePerson.lastName}" merged into "${keepPerson.firstName} ${keepPerson.lastName}".`,
+      });
+
+      // Refresh duplicate detection
+      const newResult = detectDuplicates(people.filter(p => p.id !== removeId));
+      setDuplicateResult(newResult);
+
+    } catch (error) {
+      console.error("Error merging duplicates:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to merge duplicates.",
+      });
+    }
+  };
+
+  // Handle dismiss duplicate (mark as not duplicate - for future: persist this)
+  const handleDismissDuplicate = (person1Id: string, person2Id: string) => {
+    // For now, just remove from the current result
+    // Future: Store dismissed pairs in Firestore to persist across sessions
+    toast({
+      title: "Dismissed",
+      description: "These entries won't be flagged as duplicates in this session.",
+    });
+  };
+
+  // Edit person from validation panel
+  const handleEditPersonFromValidation = (personId: string) => {
+    const person = people.find(p => p.id === personId);
+    if (person) {
+      setSelectedPerson(person);
+      setIsEditorOpen(true);
+    }
   };
 
   const handleNodeMove = async (personId: string, newX: number, newY: number) => {
@@ -778,6 +931,26 @@ export default function TreeEditorPage() {
           </TooltipProvider>
           <Button variant="outline" size="sm" onClick={() => handleZoom('in')}><ZoomIn className="h-4 w-4" /></Button>
           <Button variant="outline" size="sm" onClick={() => handleZoom('out')}><ZoomOut className="h-4 w-4" /></Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="sm" onClick={handleValidateTree}>
+                  <ShieldCheck className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Validate Tree</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="sm" onClick={handleDetectDuplicates}>
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Find Duplicates</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <Button variant="outline" size="sm" onClick={() => setIsExportDialogOpen(true)}><Download className="mr-2 h-4 w-4" />Export</Button>
           <Button variant="outline" size="sm" onClick={() => setIsShareDialogOpen(true)}><Share2 className="mr-2 h-4 w-4" /> Share</Button>
           <Button variant="outline" size="sm">
@@ -992,6 +1165,24 @@ export default function TreeEditorPage() {
             });
           }
         }}
+      />
+
+      {/* Validation Panel */}
+      {showValidationPanel && (
+        <ValidationPanel
+          validationResult={validationResult}
+          onEditPerson={handleEditPersonFromValidation}
+          onClose={() => setShowValidationPanel(false)}
+        />
+      )}
+
+      {/* Duplicate Detection Dialog */}
+      <DuplicateDetectionDialog
+        isOpen={isDuplicateDialogOpen}
+        onClose={() => setIsDuplicateDialogOpen(false)}
+        result={duplicateResult}
+        onMerge={handleMergeDuplicates}
+        onDismiss={handleDismissDuplicate}
       />
     </div>
   );
