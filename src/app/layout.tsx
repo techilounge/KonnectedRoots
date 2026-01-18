@@ -9,7 +9,11 @@ export const metadata: Metadata = {
   title: 'KonnectedRoots - Build & Share Your Family Tree Online',
   description: 'Build, explore, and share your family tree with KonnectedRoots. Discover your heritage with our intuitive tools and AI-powered suggestions.',
   icons: {
-    icon: '/KonnectedRoots_Favicon.svg',
+    icon: [
+      { url: '/favicon.png', type: 'image/png' },
+      { url: '/KonnectedRoots_Favicon.svg', type: 'image/svg+xml' },
+    ],
+    apple: '/apple-touch-icon.png',
   },
   metadataBase: new URL('https://www.konnectedroots.app'),
   openGraph: {
