@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Pre-Export Validation**: GEDCOM export now validates tree data before exporting, warning about issues like invalid gender, missing names, parent-child age conflicts, and orphaned relationships.
+- **Auto-Fix Orphaned References**: One-click "Fix All" button to automatically clean up orphaned spouse/parent/child references pointing to deleted people.
 - **SEO-Friendly Tree URLs**: Tree URLs now use human-readable slugs (e.g., `/tree/doe-family`) instead of Firebase IDs. Backwards compatible with existing trees.
 - **GEDCOM Import**: Import family trees from Ancestry, MyHeritage, and other platforms via GEDCOM file upload with drag-and-drop support (Pro/Family only).
 - **FAQ Page**: Interactive FAQ page (`/faq`) with 6 categories, 20+ questions, search, and category filters.
@@ -31,16 +33,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Viewer-Only Mode**: Viewers can browse trees but cannot make edits (enforced via security rules and UI).
 
 ### Changed
+- **Gender Required**: Gender field is now required when adding/editing a person. Default changed from "unknown" to "male".
 - **Stripe Live Mode**: Switched from Stripe Test to Live mode for real payment processing.
 - **Hero Carousel Image**: Updated family tree demo image with enhanced version.
 - **Footer Reorganized**: 4-column layout with Quick Links, Legal (Privacy/Terms), and Connect With Us sections.
 - **Navigation Updated**: Added FAQ, How-To Guide, and legal pages to footer navigation.
 
 ### Fixed
+- **GEDCOM Export Gender Handling**: Fixed incorrect HUSB/WIFE assignment when one parent has "unknown" gender. Now correctly infers roles from the other parent.
+- **GEDCOM Import ID Extraction**: Fixed `extractId` function to properly remove the "I" prefix from GEDCOM individual IDs, ensuring correct relationship matching on import.
+- **Clean Delete for People**: Deleting a person now cleans up all orphaned references in related people's spouseIds, childrenIds, and parentId fields.
+- **Clean Delete for Trees**: Deleting a tree now deletes all people in the subcollection before deleting the tree document, preventing orphaned data.
 - **Export Styling**: Fixed missing borders, text, and image styling in PNG/PDF exports by inlining computed CSS styles.
 - **Export Border Clipping**: Expanded foreignObject dimensions to prevent right/bottom borders from being clipped.
 - **Firebase CORS**: Configured Firebase Storage CORS to allow cross-origin image loading for exports.
-- **App Freeze on Delete**: Fixed UI freeze after closing the delete confirmation dialog. Root cause was a timing conflict between Radix UI ContextMenu and AlertDialog components fighting over `pointer-events` body styles.
+- **App Freeze on Delete**: Fixed UI freeze after closing the delete confirmation dialog.
 
 ### Changed
 - **Placeholder Avatars**: Switched from `placehold.co` to `ui-avatars.com` for better styled initials avatars.

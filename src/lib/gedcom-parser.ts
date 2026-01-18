@@ -23,6 +23,9 @@ export interface ParsedIndividual {
     religion?: string;
     biography?: string;
     isDeceased: boolean;
+    x?: number;          // Canvas position (custom KonnectedRoots tag)
+    y?: number;          // Canvas position (custom KonnectedRoots tag)
+    photoUrl?: string;   // Profile photo URL (custom KonnectedRoots tag)
 }
 
 export interface ParsedFamily {
@@ -142,7 +145,8 @@ export function parseGedcom(content: string): GedcomParseResult {
 }
 
 function extractId(xref: string): string {
-    return xref.replace(/@/g, '');
+    // Remove @ signs and the I prefix (GEDCOM uses @I...@ for individual refs)
+    return xref.replace(/@/g, '').replace(/^I/, '');
 }
 
 function parseIndividualLine(
@@ -192,6 +196,18 @@ function parseIndividualLine(
                 break;
             case 'NOTE':
                 indi.biography = value;
+                break;
+            // Custom KonnectedRoots position tags
+            case '_XPOS':
+                indi.x = parseInt(value, 10);
+                console.log('[GEDCOM Parser] Parsed _XPOS:', value, '-> x:', indi.x, 'for', indi.firstName);
+                break;
+            case '_YPOS':
+                indi.y = parseInt(value, 10);
+                console.log('[GEDCOM Parser] Parsed _YPOS:', value, '-> y:', indi.y, 'for', indi.firstName);
+                break;
+            case '_PHOTO':
+                indi.photoUrl = value;
                 break;
         }
     } else if (level === 2) {
@@ -245,9 +261,11 @@ function parseFamilyLine(
     if (level === 1) {
         switch (tag) {
             case 'HUSB':
+                console.log(`[GEDCOM Parser] FAM ${fam.id}: Found HUSB tag, raw value="${value}", extracted="${extractId(value)}"`);
                 fam.husbandId = extractId(value);
                 break;
             case 'WIFE':
+                console.log(`[GEDCOM Parser] FAM ${fam.id}: Found WIFE tag, raw value="${value}", extracted="${extractId(value)}"`);
                 fam.wifeId = extractId(value);
                 break;
             case 'CHIL':
@@ -330,6 +348,9 @@ function finalizeIndividual(indi: Partial<ParsedIndividual>): ParsedIndividual {
         religion: indi.religion,
         biography: indi.biography,
         isDeceased: indi.isDeceased || false,
+        x: indi.x,
+        y: indi.y,
+        photoUrl: indi.photoUrl,
     };
 }
 
@@ -353,6 +374,15 @@ export function convertToPeople(
 ): Omit<Person, 'createdAt' | 'updatedAt'>[] {
     const { individuals, families } = parseResult;
 
+    // Debug logging for import
+    console.log('=== GEDCOM IMPORT START ===');
+    console.log(`[Import] Parsed ${individuals.length} individuals, ${families.length} families`);
+
+    // Log parsed families
+    families.forEach((fam, i) => {
+        console.log(`[Import] Family ${i + 1} (${fam.id}): HUSB=${fam.husbandId || 'none'}, WIFE=${fam.wifeId || 'none'}, Children=${fam.childrenIds.join(', ') || 'none'}`);
+    });
+
     // Build a map of GEDCOM ID to Person
     const idMap = new Map<string, string>(); // gedcomId -> new firestore-style id
 
@@ -367,12 +397,34 @@ export function convertToPeople(
         return result;
     };
 
+    // Normalize positions: find min x/y and shift all to positive coordinates
+    // This handles negative positions and centers the tree on canvas
+    const individualsWithPositions = individuals.filter(i => i.x !== undefined && i.y !== undefined);
+    let offsetX = 100;
+    let offsetY = 100;
+
+    if (individualsWithPositions.length > 0) {
+        const minX = Math.min(...individualsWithPositions.map(i => i.x!));
+        const minY = Math.min(...individualsWithPositions.map(i => i.y!));
+        // Calculate offset to shift all positions to start from (100, 100)
+        offsetX = 100 - minX;
+        offsetY = 100 - minY;
+        console.log('[GEDCOM Convert] Position normalization:', { minX, minY, offsetX, offsetY });
+    }
+
     // First pass: create base person objects
     const timestamp = Date.now();
     const people: Omit<Person, 'createdAt' | 'updatedAt'>[] = individuals.map((indi, index) => {
         // Generate a unique ID for Firestore using timestamp + index to guarantee uniqueness
         const newId = `imported_${indi.id}_${timestamp}_${index}`;
         idMap.set(indi.id, newId);
+
+        // Use parsed position with normalization offset, or fallback to grid layout
+        const col = index % 5;
+        const row = Math.floor(index / 5);
+        // If person has GEDCOM position, apply offset; otherwise use grid layout
+        const x = indi.x !== undefined ? (indi.x + offsetX) : (100 + col * 220);
+        const y = indi.y !== undefined ? (indi.y + offsetY) : (100 + row * 200);
 
         // Build person object, filtering out undefined values
         const person = removeUndefined({
@@ -398,20 +450,29 @@ export function convertToPeople(
             parentId2: undefined,
             spouseIds: [] as string[],
             childrenIds: [] as string[],
+            x,
+            y,
+            profilePictureUrl: indi.photoUrl,
+            photoURL: indi.photoUrl,
         });
 
         return person;
     });
 
+    // Build a map for fast person lookup by ID
+    const personMap = new Map<string, Omit<Person, 'createdAt' | 'updatedAt'>>();
+    people.forEach(p => personMap.set(p.id, p));
+
     // Second pass: apply relationships from FAM records
+    console.log('[GEDCOM Convert] Processing relationships from', families.length, 'families');
     for (const fam of families) {
         const husbandNewId = fam.husbandId ? idMap.get(fam.husbandId) : undefined;
         const wifeNewId = fam.wifeId ? idMap.get(fam.wifeId) : undefined;
 
         // Set spouse relationships
         if (husbandNewId && wifeNewId) {
-            const husband = people.find(p => p.id === husbandNewId);
-            const wife = people.find(p => p.id === wifeNewId);
+            const husband = personMap.get(husbandNewId);
+            const wife = personMap.get(wifeNewId);
             if (husband && wife) {
                 husband.spouseIds = [...(husband.spouseIds || []), wifeNewId];
                 wife.spouseIds = [...(wife.spouseIds || []), husbandNewId];
@@ -422,13 +483,11 @@ export function convertToPeople(
         for (const childGedcomId of fam.childrenIds) {
             const childNewId = idMap.get(childGedcomId);
             if (childNewId) {
-                const child = people.find(p => p.id === childNewId);
+                const child = personMap.get(childNewId);
                 if (child) {
-                    if (!child.parentId1) {
-                        child.parentId1 = husbandNewId || wifeNewId;
-                    } else if (!child.parentId2) {
-                        child.parentId2 = wifeNewId || husbandNewId;
-                    }
+                    // Assign parents: Husband -> parentId1, Wife -> parentId2
+                    if (husbandNewId) child.parentId1 = husbandNewId;
+                    if (wifeNewId) child.parentId2 = wifeNewId;
                 }
 
                 // Add to parents' childrenIds
@@ -447,6 +506,18 @@ export function convertToPeople(
             }
         }
     }
+
+    // Log final person relationships
+    console.log('[Import] Final person relationships:');
+    people.forEach((p, i) => {
+        console.log(`[Import] Person ${i + 1}: ${p.firstName} ${p.lastName}`);
+        console.log(`  - parentId1: ${p.parentId1 || 'none'}`);
+        console.log(`  - parentId2: ${p.parentId2 || 'none'}`);
+        console.log(`  - spouseIds: ${(p.spouseIds || []).join(', ') || 'none'}`);
+        console.log(`  - childrenIds: ${(p.childrenIds || []).join(', ') || 'none'}`);
+        console.log(`  - position: x=${p.x}, y=${p.y}`);
+    });
+    console.log('=== GEDCOM IMPORT END ===');
 
     return people;
 }

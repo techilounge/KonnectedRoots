@@ -76,6 +76,10 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
       toast({ variant: "destructive", title: "Validation Error", description: "First Name is required." });
       return;
     }
+    if (!formData.gender || (formData.gender !== 'male' && formData.gender !== 'female')) {
+      toast({ variant: "destructive", title: "Validation Error", description: "Gender is required. Please select Male or Female." });
+      return;
+    }
     onSave(formData as Person);
   };
 

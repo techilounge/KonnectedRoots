@@ -13,6 +13,7 @@ import { Users, Share2, ZoomIn, ZoomOut, UserPlus, ChevronLeft, Loader2, Undo2, 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import NameSuggestor from '@/components/tree/NameSuggestor';
 import ExportDialog from '@/components/tree/ExportDialog';
+import { getOrphanedReferenceFixes } from '@/lib/gedcom-generator';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -191,7 +192,7 @@ export default function TreeEditorPage() {
       ownerId: user.uid,
       treeId: treeId,
       firstName: 'New Person',
-      gender: 'unknown',
+      gender: 'male', // Default to male - gender is a required field
       living: true,
       x: Math.random() * 500 + 50,
       y: Math.random() * 300 + 50,
@@ -312,15 +313,76 @@ export default function TreeEditorPage() {
 
     // Capture full person data for undo before deleting
     const personDataForUndo = { ...personToDelete };
+    const deletedPersonId = personToDelete.id;
 
     try {
       // Clear selectedPerson if it's the person being deleted
-      if (selectedPerson?.id === personToDelete.id) {
+      if (selectedPerson?.id === deletedPersonId) {
         setSelectedPerson(null);
       }
 
       const batch = writeBatch(db);
-      batch.delete(doc(getPeopleColRef(), personToDelete.id));
+
+      // Delete the person document
+      batch.delete(doc(getPeopleColRef(), deletedPersonId));
+
+      // Clean up orphaned references in related people
+      // 1. Remove from spouses' spouseIds
+      const spouseIds = personDataForUndo.spouseIds || [];
+      for (const spouseId of spouseIds) {
+        const spouse = people.find(p => p.id === spouseId);
+        if (spouse) {
+          const updatedSpouseIds = (spouse.spouseIds || []).filter(id => id !== deletedPersonId);
+          batch.update(doc(getPeopleColRef(), spouseId), {
+            spouseIds: updatedSpouseIds,
+            updatedAt: serverTimestamp()
+          });
+        }
+      }
+
+      // 2. Remove from parents' childrenIds
+      const parentId1 = personDataForUndo.parentId1;
+      const parentId2 = personDataForUndo.parentId2;
+      if (parentId1) {
+        const parent1 = people.find(p => p.id === parentId1);
+        if (parent1) {
+          const updatedChildrenIds = (parent1.childrenIds || []).filter(id => id !== deletedPersonId);
+          batch.update(doc(getPeopleColRef(), parentId1), {
+            childrenIds: updatedChildrenIds,
+            updatedAt: serverTimestamp()
+          });
+        }
+      }
+      if (parentId2) {
+        const parent2 = people.find(p => p.id === parentId2);
+        if (parent2) {
+          const updatedChildrenIds = (parent2.childrenIds || []).filter(id => id !== deletedPersonId);
+          batch.update(doc(getPeopleColRef(), parentId2), {
+            childrenIds: updatedChildrenIds,
+            updatedAt: serverTimestamp()
+          });
+        }
+      }
+
+      // 3. Clear parentId references in children
+      const childrenIds = personDataForUndo.childrenIds || [];
+      for (const childId of childrenIds) {
+        const child = people.find(p => p.id === childId);
+        if (child) {
+          const updates: Record<string, unknown> = { updatedAt: serverTimestamp() };
+          if (child.parentId1 === deletedPersonId) {
+            updates.parentId1 = null;
+          }
+          if (child.parentId2 === deletedPersonId) {
+            updates.parentId2 = null;
+          }
+          if (Object.keys(updates).length > 1) { // More than just updatedAt
+            batch.update(doc(getPeopleColRef(), childId), updates);
+          }
+        }
+      }
+
+      // Update tree metadata
       batch.update(getTreeDocRef(), { lastUpdated: serverTimestamp(), memberCount: increment(-1) });
 
       // Close dialog BEFORE commit to prevent state conflicts
@@ -336,7 +398,7 @@ export default function TreeEditorPage() {
         data: personDataForUndo
       });
 
-      toast({ variant: "destructive", title: "Person Deleted", description: `"${personDataForUndo.firstName}" has been removed.` });
+      toast({ variant: "destructive", title: "Person Deleted", description: `"${personDataForUndo.firstName}" and all relationship references have been cleaned up.` });
     } catch (error) {
       console.error("Error deleting person:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to delete person." });
@@ -897,6 +959,39 @@ export default function TreeEditorPage() {
         canvasRef={canvasContainerRef}
         people={people}
         tree={treeData}
+        onEditPerson={(personId: string) => {
+          const person = people.find(p => p.id === personId);
+          if (person) {
+            handleEditPerson(person);
+          }
+        }}
+        onFixOrphanedReferences={async () => {
+          const fixes = getOrphanedReferenceFixes(people);
+          if (fixes.length === 0) return;
+
+          try {
+            const batch = writeBatch(db);
+            for (const fix of fixes) {
+              const personRef = doc(getPeopleColRef(), fix.personId);
+              batch.update(personRef, {
+                ...fix.updates,
+                updatedAt: serverTimestamp()
+              });
+            }
+            await batch.commit();
+            toast({
+              title: "Orphaned References Fixed",
+              description: `Cleaned up references for ${fixes.length} people.`
+            });
+          } catch (error) {
+            console.error('Error fixing orphaned references:', error);
+            toast({
+              variant: "destructive",
+              title: "Error",
+              description: "Failed to fix orphaned references."
+            });
+          }
+        }}
       />
     </div>
   );

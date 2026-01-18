@@ -11,9 +11,10 @@ import {
 import { FileImage, FileText, FileCode, Loader2, Download, CheckCircle2 } from 'lucide-react';
 import { useState } from 'react';
 import type { Person, FamilyTree } from '@/types';
-import { downloadGedcom } from '@/lib/gedcom-generator';
+import { downloadGedcom, validateTreeForExport, type ExportValidationResult } from '@/lib/gedcom-generator';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import ExportWarningsDialog from './ExportWarningsDialog';
 
 interface ExportDialogProps {
     isOpen: boolean;
@@ -21,6 +22,8 @@ interface ExportDialogProps {
     canvasRef: React.RefObject<HTMLDivElement>;
     people: Person[];
     tree: FamilyTree | null;
+    onEditPerson?: (personId: string) => void;
+    onFixOrphanedReferences?: () => Promise<void>;
 }
 
 type ExportType = 'png' | 'pdf' | 'gedcom';
@@ -32,12 +35,16 @@ export default function ExportDialog({
     canvasRef,
     people,
     tree,
+    onEditPerson,
+    onFixOrphanedReferences,
 }: ExportDialogProps) {
     const [exportStatus, setExportStatus] = useState<Record<ExportType, ExportStatus>>({
         png: 'idle',
         pdf: 'idle',
         gedcom: 'idle',
     });
+    const [validationResult, setValidationResult] = useState<ExportValidationResult | null>(null);
+    const [showWarningsDialog, setShowWarningsDialog] = useState(false);
 
     const treeName = tree?.title || 'Family_Tree';
 
@@ -381,16 +388,38 @@ export default function ExportDialog({
     };
 
     const handleExportGEDCOM = async () => {
+        // Run pre-export validation
+        const validation = validateTreeForExport(people);
+
+        if (validation.hasErrors || validation.hasWarnings) {
+            // Show warnings dialog
+            setValidationResult(validation);
+            setShowWarningsDialog(true);
+            return;
+        }
+
+        // No issues, proceed with export
+        performGedcomExport();
+    };
+
+    const performGedcomExport = () => {
         setExportStatus(prev => ({ ...prev, gedcom: 'loading' }));
 
         try {
             downloadGedcom(people, treeName);
             setExportStatus(prev => ({ ...prev, gedcom: 'success' }));
             setTimeout(() => setExportStatus(prev => ({ ...prev, gedcom: 'idle' })), 2000);
+            setShowWarningsDialog(false);
         } catch (error) {
             console.error('GEDCOM export failed:', error);
             setExportStatus(prev => ({ ...prev, gedcom: 'error' }));
         }
+    };
+
+    const handleEditPersonFromWarnings = (personId: string) => {
+        setShowWarningsDialog(false);
+        onClose();
+        onEditPerson?.(personId);
     };
 
     const getButtonIcon = (type: ExportType) => {
@@ -425,53 +454,76 @@ export default function ExportDialog({
     ];
 
     return (
-        <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="sm:max-w-lg">
-                <DialogHeader>
-                    <DialogTitle className="flex items-center">
-                        <Download className="mr-2 h-5 w-5 text-primary" />
-                        Export Your Family Tree
-                    </DialogTitle>
-                    <DialogDescription>
-                        Choose a format to download your tree. ({people.length} family members)
-                    </DialogDescription>
-                </DialogHeader>
+        <>
+            <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+                <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center">
+                            <Download className="mr-2 h-5 w-5 text-primary" />
+                            Export Your Family Tree
+                        </DialogTitle>
+                        <DialogDescription>
+                            Choose a format to download your tree. ({people.length} family members)
+                        </DialogDescription>
+                    </DialogHeader>
 
-                <div className="space-y-3 py-4">
-                    {exportOptions.map((option) => (
-                        <div
-                            key={option.type}
-                            className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
-                        >
-                            <div className="flex items-center gap-4">
-                                <div className="p-2 bg-muted rounded-lg">
-                                    {option.icon}
-                                </div>
-                                <div>
-                                    <h4 className="font-medium">{option.title}</h4>
-                                    <p className="text-xs text-muted-foreground">{option.description}</p>
-                                </div>
-                            </div>
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={option.handler}
-                                disabled={exportStatus[option.type] === 'loading'}
+                    <div className="space-y-3 py-4">
+                        {exportOptions.map((option) => (
+                            <div
+                                key={option.type}
+                                className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
                             >
-                                {getButtonIcon(option.type)}
-                                <span className="ml-2">
-                                    {exportStatus[option.type] === 'loading' ? 'Exporting...' :
-                                        exportStatus[option.type] === 'success' ? 'Done!' : 'Export'}
-                                </span>
-                            </Button>
-                        </div>
-                    ))}
-                </div>
+                                <div className="flex items-center gap-4">
+                                    <div className="p-2 bg-muted rounded-lg">
+                                        {option.icon}
+                                    </div>
+                                    <div>
+                                        <h4 className="font-medium">{option.title}</h4>
+                                        <p className="text-xs text-muted-foreground">{option.description}</p>
+                                    </div>
+                                </div>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={option.handler}
+                                    disabled={exportStatus[option.type] === 'loading'}
+                                >
+                                    {getButtonIcon(option.type)}
+                                    <span className="ml-2">
+                                        {exportStatus[option.type] === 'loading' ? 'Exporting...' :
+                                            exportStatus[option.type] === 'success' ? 'Done!' : 'Export'}
+                                    </span>
+                                </Button>
+                            </div>
+                        ))}
+                    </div>
 
-                <div className="text-xs text-muted-foreground text-center">
-                    Tip: For large trees, PNG and PDF exports may take a few moments.
-                </div>
-            </DialogContent>
-        </Dialog>
+                    <div className="text-xs text-muted-foreground text-center">
+                        Tip: For large trees, PNG and PDF exports may take a few moments.
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Pre-export warnings dialog */}
+            {validationResult && (
+                <ExportWarningsDialog
+                    isOpen={showWarningsDialog}
+                    onClose={() => setShowWarningsDialog(false)}
+                    validationResult={validationResult}
+                    onExportAnyway={performGedcomExport}
+                    onEditPerson={handleEditPersonFromWarnings}
+                    onFixOrphanedReferences={onFixOrphanedReferences ? async () => {
+                        await onFixOrphanedReferences();
+                        // Re-run validation after fix
+                        const newValidation = validateTreeForExport(people);
+                        setValidationResult(newValidation);
+                        if (!newValidation.hasErrors && !newValidation.hasWarnings) {
+                            setShowWarningsDialog(false);
+                        }
+                    } : undefined}
+                    treeName={treeName}
+                />
+            )}
+        </>
     );
 }
