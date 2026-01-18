@@ -4,6 +4,7 @@
 import { suggestName as suggestNameFlow, type SuggestNameInput, type SuggestNameOutput } from '@/ai/flows/suggest-name';
 import { generateBiography as generateBiographyFlow, type GenerateBiographyInput, type GenerateBiographyOutput } from '@/ai/flows/generate-biography-flow';
 import { findRelationship as findRelationshipFlow, type FindRelationshipInput, type FindRelationshipOutput } from '@/ai/flows/find-relationship-flow';
+import { translateDocument as translateDocumentFlow, type TranslateDocumentInput, type TranslateDocumentOutput } from '@/ai/flows/translate-document';
 import { z } from 'zod';
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { app } from '@/lib/firebase/clients';
@@ -115,3 +116,27 @@ export async function saveFamilyTree(treeData: any) {
   return { success: true, message: "Family tree saved (simulated)." };
 }
 
+// Translation action
+const HandleTranslateDocumentInputSchema = z.object({
+  text: z.string().min(1, "Text is required"),
+  sourceLanguage: z.string().optional(),
+  targetLanguage: z.string().default('English'),
+});
+
+export async function handleTranslateDocument(input: TranslateDocumentInput): Promise<TranslateDocumentOutput | { error: string }> {
+  const parsedInput = HandleTranslateDocumentInputSchema.safeParse(input);
+
+  if (!parsedInput.success) {
+    console.error("Invalid input for translation:", parsedInput.error.format());
+    return { error: "Invalid input: " + parsedInput.error.format()._errors.join(', ') };
+  }
+
+  try {
+    const result = await translateDocumentFlow(parsedInput.data);
+    return result;
+  } catch (error) {
+    console.error("Error in handleTranslateDocument:", error);
+    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+    return { error: `Failed to translate: ${errorMessage}. Please try again.` };
+  }
+}
