@@ -40,9 +40,10 @@ interface NodeEditorDialogProps {
   onSave: (person: Person) => void;
   onDeleteRequest: (person: Person) => void;
   onOpenNameSuggestor: (personDetails: Partial<Person>) => void;
+  treeId?: string;
 }
 
-export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDeleteRequest, onOpenNameSuggestor }: NodeEditorDialogProps) {
+export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDeleteRequest, onOpenNameSuggestor, treeId: propTreeId }: NodeEditorDialogProps) {
   const [formData, setFormData] = useState<Partial<Person>>({});
   const [isGeneratingBio, setIsGeneratingBio] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -52,7 +53,7 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
   const { toast } = useToast();
   const profilePictureInputRef = useRef<HTMLInputElement>(null);
   const params = useParams();
-  const treeId = params.treeId as string;
+  const treeId = propTreeId || params.treeId as string;
 
 
   useEffect(() => {

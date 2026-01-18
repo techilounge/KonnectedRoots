@@ -2,20 +2,21 @@
 
 /**
  * @fileOverview AI-powered photo enhancement for old/damaged family photos.
- * Uses Gemini's vision capabilities to analyze and describe enhancement needs,
- * then uses image generation to create an enhanced version.
+ * Uses Gemini's vision capabilities to analyze the photo, then uses Sharp.js
+ * to apply actual pixel-level enhancements.
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
+import { enhanceImageWithSharp, type EnhancementOptions } from '@/lib/sharp-enhancer';
 
 const EnhancePhotoInputSchema = z.object({
     imageBase64: z.string().describe('Base64 encoded image data'),
     mimeType: z.string().describe('Image MIME type'),
     options: z.object({
         upscale: z.boolean().optional().describe('Increase resolution'),
-        restoreFaces: z.boolean().optional().describe('Restore/enhance faces'),
-        colorize: z.boolean().optional().describe('Convert B&W to color'),
+        restoreFaces: z.boolean().optional().describe('Restore/enhance faces (sharpening)'),
+        colorize: z.boolean().optional().describe('Normalize colors'),
         removeNoise: z.boolean().optional().describe('Remove noise and artifacts'),
     }).optional(),
 });
@@ -26,6 +27,14 @@ const EnhancePhotoOutputSchema = z.object({
     mimeType: z.string().describe('Output image MIME type'),
     enhancementsApplied: z.array(z.string()).describe('List of enhancements applied'),
     description: z.string().describe('Description of what was enhanced'),
+    originalSize: z.object({
+        width: z.number(),
+        height: z.number()
+    }).optional(),
+    newSize: z.object({
+        width: z.number(),
+        height: z.number()
+    }).optional(),
 });
 export type EnhancePhotoOutput = z.infer<typeof EnhancePhotoOutputSchema>;
 
@@ -89,72 +98,51 @@ const enhancePhotoFlow = ai.defineFlow(
             throw new Error('Failed to analyze the photo');
         }
 
-        // Build enhancement description based on analysis and user options
-        const enhancements: string[] = [];
-        const options = input.options || {};
+        // Build Sharp enhancement options based on analysis and user options
+        const userOptions = input.options || {};
 
-        if (options.colorize || analysis.isBlackAndWhite) {
-            enhancements.push('colorization');
-        }
-        if (options.restoreFaces || analysis.hasFaces) {
-            enhancements.push('face restoration');
-        }
-        if (options.removeNoise || analysis.quality === 'low') {
-            enhancements.push('noise reduction');
-        }
-        if (options.upscale) {
-            enhancements.push('resolution enhancement');
-        }
-        if (analysis.hasDamage) {
-            enhancements.push('damage repair');
-        }
+        const sharpOptions: EnhancementOptions = {
+            // Sharpen if faces need restoration or quality is low/medium
+            sharpen: userOptions.restoreFaces || analysis.quality === 'low' || analysis.quality === 'medium',
 
-        // Generate enhancement description prompt
-        const enhancementPrompt = `
-You are an AI photo restoration expert. Create a detailed description of how this photo would look after professional restoration.
+            // Enhance contrast for low quality or damaged photos
+            enhanceContrast: analysis.quality === 'low' || analysis.hasDamage,
 
-Current photo analysis:
-- Black & White: ${analysis.isBlackAndWhite}
-- Has Damage: ${analysis.hasDamage}${analysis.damageDescription ? ` (${analysis.damageDescription})` : ''}
-- Contains ${analysis.faceCount || 0} face(s)
-- Quality: ${analysis.quality}
-- Era: ${analysis.era || 'Unknown'}
+            // Reduce noise if requested or quality is low
+            reduceNoise: userOptions.removeNoise || analysis.quality === 'low',
 
-Requested enhancements: ${enhancements.join(', ')}
+            // Normalize colors (colorize option repurposed)
+            normalizeColors: userOptions.colorize || true,
 
-Describe in detail how the restored version would look, including:
-1. Color palette if colorizing
-2. How faces would be clarified
-3. What damage would be repaired
-4. Overall improvement in clarity and quality`;
+            // Upscale if requested
+            upscale: userOptions.upscale ? 1.5 : undefined,
+        };
 
-        const { output: descriptionOutput } = await ai.generate({
-            model: 'googleai/gemini-2.0-flash',
-            prompt: enhancementPrompt,
-            output: {
-                schema: z.object({
-                    restorationDescription: z.string().describe('Detailed description of the restoration'),
-                    colorPalette: z.string().optional().describe('Color palette for colorization'),
-                })
-            },
-        });
+        // Apply enhancements using Sharp
+        const result = await enhanceImageWithSharp(
+            input.imageBase64,
+            input.mimeType,
+            sharpOptions
+        );
 
-        // For now, we return the original image with analysis
-        // In a production implementation, you would:
-        // 1. Use Replicate's GFPGAN for face restoration
-        // 2. Use Real-ESRGAN for upscaling
-        // 3. Use a colorization model for B&W photos
+        // Build description
+        const descriptionParts = [
+            `Photo analyzed: ${analysis.quality} quality`,
+            analysis.isBlackAndWhite ? 'black & white' : 'color',
+            analysis.hasFaces ? `${analysis.faceCount || 'unknown number of'} face(s) detected` : 'no faces detected',
+            analysis.era ? `estimated era: ${analysis.era}` : '',
+        ].filter(Boolean);
 
-        // This is a placeholder that demonstrates the flow
-        // The actual image enhancement would require integration with image processing APIs
+        const description = `${descriptionParts.join(', ')}. Applied: ${result.enhancementsApplied.join(', ')}.`;
 
         return {
-            enhancedImageBase64: input.imageBase64, // In production, this would be the enhanced image
-            mimeType: input.mimeType,
-            enhancementsApplied: enhancements.length > 0 ? enhancements : ['analysis only'],
-            description: descriptionOutput?.restorationDescription ||
-                `Photo analyzed. Suggested enhancements: ${analysis.suggestedEnhancements.join(', ')}. ` +
-                `To apply actual enhancements, a photo restoration API integration is required.`,
+            enhancedImageBase64: result.enhancedImageBase64,
+            mimeType: result.mimeType,
+            enhancementsApplied: result.enhancementsApplied,
+            description,
+            originalSize: result.originalSize,
+            newSize: result.newSize,
         };
     }
 );
+

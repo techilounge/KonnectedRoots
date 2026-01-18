@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Wand2, Loader2, Sparkles, Image as ImageIcon, ScanEye, ArrowRight, Save } from 'lucide-react';
+import { Wand2, Loader2, Sparkles, Image as ImageIcon, ScanEye, Save, Upload, ArrowLeftRight } from 'lucide-react';
 import { handleEnhancePhoto } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import Image from 'next/image';
@@ -27,20 +27,24 @@ export default function PhotoEnhanceDialog({
 }: PhotoEnhanceDialogProps) {
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState<string | null>(currentPhotoUrl || null);
+    const [showEnhanced, setShowEnhanced] = useState(false);
 
     // Enhancement options
     const [options, setOptions] = useState({
         upscale: false,
         restoreFaces: true,
-        colorize: false,
+        colorize: true,
         removeNoise: true,
     });
 
     const [isLoading, setIsLoading] = useState(false);
     const [result, setResult] = useState<{
         enhancedImageBase64: string;
+        mimeType: string;
         enhancementsApplied: string[];
         description: string;
+        originalSize?: { width: number; height: number };
+        newSize?: { width: number; height: number };
     } | null>(null);
 
     const { toast } = useToast();
@@ -52,6 +56,7 @@ export default function PhotoEnhanceDialog({
             setImagePreview(currentPhotoUrl || null);
             setResult(null);
             setImageFile(null);
+            setShowEnhanced(false);
         }
     }, [isOpen, currentPhotoUrl]);
 
@@ -69,6 +74,7 @@ export default function PhotoEnhanceDialog({
 
             setImageFile(file);
             setResult(null);
+            setShowEnhanced(false);
 
             const reader = new FileReader();
             reader.onloadend = () => {
@@ -118,9 +124,10 @@ export default function PhotoEnhanceDialog({
                 });
             } else {
                 setResult(response);
+                setShowEnhanced(true); // Show enhanced by default after processing
                 toast({
-                    title: "Photo Analyzed",
-                    description: "AI analysis complete.",
+                    title: "Photo Enhanced!",
+                    description: `Applied: ${response.enhancementsApplied.join(', ')}`,
                 });
             }
         } catch (error) {
@@ -137,37 +144,39 @@ export default function PhotoEnhanceDialog({
 
     const handleApply = () => {
         if (result && onPhotoEnhanced) {
-            // In a real implementation with valid base64 output, we'd pass that
-            // For this demo, we'll just pass the original or a placeholder if available
-            // Since our mock implementation basically echoes the input, we use that
-            const dataUrl = `data:${imageFile?.type || 'image/jpeg'};base64,${result.enhancedImageBase64}`;
+            const dataUrl = `data:${result.mimeType};base64,${result.enhancedImageBase64}`;
             onPhotoEnhanced(dataUrl);
             onClose();
         }
     };
 
+    // Get the current display image URL
+    const displayImageUrl = result && showEnhanced
+        ? `data:${result.mimeType};base64,${result.enhancedImageBase64}`
+        : imagePreview;
+
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="sm:max-w-3xl max-h-[90vh] flex flex-col">
+            <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <Sparkles className="h-5 w-5 text-primary" />
                         AI Photo Enhancer
                     </DialogTitle>
                     <DialogDescription>
-                        Restore, colorize, and enhance old family photos using AI.
+                        Sharpen, enhance contrast, reduce noise, and upscale old family photos.
                     </DialogDescription>
                 </DialogHeader>
 
                 <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-6 py-4 overflow-hidden">
-                    {/* Left Column: Image & Controls */}
+                    {/* Left Column: Image Preview */}
                     <div className="md:col-span-2 flex flex-col gap-4 overflow-y-auto pr-2">
                         {/* Image Preview Area */}
-                        <div className="relative aspect-video bg-muted rounded-lg overflow-hidden border flex items-center justify-center">
-                            {imagePreview ? (
+                        <div className="relative aspect-video bg-muted rounded-lg overflow-hidden border flex items-center justify-center min-h-[300px]">
+                            {displayImageUrl ? (
                                 <Image
-                                    src={imagePreview}
-                                    alt="Preview"
+                                    src={displayImageUrl}
+                                    alt={showEnhanced ? "Enhanced Preview" : "Original Preview"}
                                     fill
                                     className="object-contain"
                                 />
@@ -177,15 +186,45 @@ export default function PhotoEnhanceDialog({
                                     onClick={() => fileInputRef.current?.click()}
                                 >
                                     <ImageIcon className="h-12 w-12 mx-auto mb-2 text-muted-foreground" />
-                                    <p className="font-medium text-muted-foreground">Select a photo</p>
+                                    <p className="font-medium text-muted-foreground">Click to select a photo</p>
                                 </div>
                             )}
 
-                            {/* Comparison Badge if Result Exists */}
+                            {/* Before/After Toggle Badge */}
                             {result && (
-                                <div className="absolute top-4 right-4 flex gap-2">
-                                    <Badge variant="secondary" className="bg-background/80 backdrop-blur">Original</Badge>
+                                <div className="absolute top-4 left-4">
+                                    <Badge
+                                        variant={showEnhanced ? "default" : "secondary"}
+                                        className="cursor-pointer select-none"
+                                        onClick={() => setShowEnhanced(!showEnhanced)}
+                                    >
+                                        {showEnhanced ? "✨ Enhanced" : "Original"}
+                                    </Badge>
                                 </div>
+                            )}
+                        </div>
+
+                        {/* Control Bar */}
+                        <div className="flex justify-between items-center gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => fileInputRef.current?.click()}
+                            >
+                                <Upload className="h-4 w-4 mr-2" />
+                                {imagePreview ? 'Change Photo' : 'Upload Photo'}
+                            </Button>
+
+                            {/* Before/After Toggle Button */}
+                            {result && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setShowEnhanced(!showEnhanced)}
+                                >
+                                    <ArrowLeftRight className="h-4 w-4 mr-2" />
+                                    {showEnhanced ? 'Show Original' : 'Show Enhanced'}
+                                </Button>
                             )}
                         </div>
 
@@ -197,18 +236,6 @@ export default function PhotoEnhanceDialog({
                             ref={fileInputRef}
                             className="hidden"
                         />
-
-                        {/* Control Bar */}
-                        <div className="flex justify-between items-center">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => fileInputRef.current?.click()}
-                            >
-                                <Upload className="h-4 w-4 mr-2" />
-                                {imagePreview ? 'Change Photo' : 'Upload Photo'}
-                            </Button>
-                        </div>
                     </div>
 
                     {/* Right Column: Options & Results */}
@@ -227,7 +254,7 @@ export default function PhotoEnhanceDialog({
                                         checked={options.restoreFaces}
                                         onCheckedChange={(c) => setOptions(prev => ({ ...prev, restoreFaces: !!c }))}
                                     />
-                                    <Label htmlFor="restore">Restore Faces</Label>
+                                    <Label htmlFor="restore">Sharpen & Clarify</Label>
                                 </div>
                                 <div className="flex items-center space-x-2">
                                     <Checkbox
@@ -235,7 +262,7 @@ export default function PhotoEnhanceDialog({
                                         checked={options.colorize}
                                         onCheckedChange={(c) => setOptions(prev => ({ ...prev, colorize: !!c }))}
                                     />
-                                    <Label htmlFor="colorize">Colorize B&W</Label>
+                                    <Label htmlFor="colorize">Normalize Colors</Label>
                                 </div>
                                 <div className="flex items-center space-x-2">
                                     <Checkbox
@@ -243,7 +270,7 @@ export default function PhotoEnhanceDialog({
                                         checked={options.upscale}
                                         onCheckedChange={(c) => setOptions(prev => ({ ...prev, upscale: !!c }))}
                                     />
-                                    <Label htmlFor="upscale">Upscale (2x)</Label>
+                                    <Label htmlFor="upscale">Upscale (1.5x)</Label>
                                 </div>
                                 <div className="flex items-center space-x-2">
                                     <Checkbox
@@ -251,7 +278,7 @@ export default function PhotoEnhanceDialog({
                                         checked={options.removeNoise}
                                         onCheckedChange={(c) => setOptions(prev => ({ ...prev, removeNoise: !!c }))}
                                     />
-                                    <Label htmlFor="noise">Remove Noise</Label>
+                                    <Label htmlFor="noise">Reduce Noise</Label>
                                 </div>
                             </div>
 
@@ -263,34 +290,39 @@ export default function PhotoEnhanceDialog({
                                 {isLoading ? (
                                     <>
                                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                        Enhancing...
+                                        Processing...
                                     </>
                                 ) : (
                                     <>
                                         <Wand2 className="h-4 w-4 mr-2" />
-                                        Analyze & Enhance
+                                        Enhance Photo
                                     </>
                                 )}
                             </Button>
                         </div>
 
-                        {/* Analysis Results */}
+                        {/* Enhancement Results */}
                         {result && (
-                            <div className="space-y-3 border p-4 rounded-lg bg-primary/5">
-                                <h4 className="font-medium text-sm text-primary flex items-center">
+                            <div className="space-y-3 border p-4 rounded-lg bg-green-500/10 border-green-500/30">
+                                <h4 className="font-medium text-sm text-green-700 dark:text-green-400 flex items-center">
                                     <Sparkles className="h-4 w-4 mr-2" />
-                                    AI Analysis
+                                    Enhancement Complete
                                 </h4>
-                                <ScrollArea className="h-[150px] pr-2">
+                                <ScrollArea className="h-[120px] pr-2">
                                     <div className="space-y-2 text-sm">
-                                        <p className="text-muted-foreground whitespace-pre-wrap">
+                                        <p className="text-muted-foreground">
                                             {result.description}
                                         </p>
+                                        {result.originalSize && result.newSize && (
+                                            <p className="text-xs text-muted-foreground">
+                                                Size: {result.originalSize.width}×{result.originalSize.height} → {result.newSize.width}×{result.newSize.height}
+                                            </p>
+                                        )}
                                         <div className="pt-2">
                                             <span className="font-medium text-xs uppercase text-muted-foreground">Applied:</span>
                                             <div className="flex flex-wrap gap-1 mt-1">
                                                 {result.enhancementsApplied.map((tag, i) => (
-                                                    <Badge key={i} variant="outline" className="text-xs bg-background">
+                                                    <Badge key={i} variant="outline" className="text-xs bg-green-500/10 border-green-500/30 text-green-700 dark:text-green-400">
                                                         {tag}
                                                     </Badge>
                                                 ))}
@@ -298,9 +330,6 @@ export default function PhotoEnhanceDialog({
                                         </div>
                                     </div>
                                 </ScrollArea>
-                                <div className="pt-2 text-xs text-muted-foreground italic">
-                                    * Actual image processing requires enabling external APIs.
-                                </div>
                             </div>
                         )}
                     </div>
@@ -310,7 +339,7 @@ export default function PhotoEnhanceDialog({
                     <Button variant="ghost" onClick={onClose}>Cancel</Button>
                     <Button onClick={handleApply} disabled={!result} variant="default">
                         <Save className="h-4 w-4 mr-2" />
-                        Save Enhancement
+                        Use Enhanced Photo
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -318,5 +347,3 @@ export default function PhotoEnhanceDialog({
     );
 }
 
-// Missing import fix
-import { Upload } from 'lucide-react';

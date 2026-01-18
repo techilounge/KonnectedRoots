@@ -1026,6 +1026,7 @@ export default function TreeEditorPage() {
             setIsEditorOpen(false);
             handleOpenNameSuggestor(details);
           }}
+          treeId={resolvedTreeId || routeParam}
         />
       )}
 
