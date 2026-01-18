@@ -369,12 +369,12 @@ export default function TreeEditorPage() {
       for (const childId of childrenIds) {
         const child = people.find(p => p.id === childId);
         if (child) {
-          const updates: Record<string, unknown> = { updatedAt: serverTimestamp() };
+          const updates: Partial<Person> & { updatedAt: ReturnType<typeof serverTimestamp> } = { updatedAt: serverTimestamp() };
           if (child.parentId1 === deletedPersonId) {
-            updates.parentId1 = null;
+            updates.parentId1 = undefined;
           }
           if (child.parentId2 === deletedPersonId) {
-            updates.parentId2 = null;
+            updates.parentId2 = undefined;
           }
           if (Object.keys(updates).length > 1) { // More than just updatedAt
             batch.update(doc(getPeopleColRef(), childId), updates);
