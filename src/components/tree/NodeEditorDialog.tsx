@@ -22,9 +22,10 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import Image from 'next/image';
-import { UserCircle, Wand2, Save, Upload, CalendarIcon, Users, Briefcase, Loader2, Sparkles, Trash2, ChevronDown, Settings2, Languages } from 'lucide-react';
+import { UserCircle, Wand2, Save, Upload, CalendarIcon, Users, Briefcase, Loader2, Sparkles, Trash2, ChevronDown, Settings2, Languages, FileText } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import TranslationDialog from '@/components/tree/TranslationDialog';
+import DocumentOCRDialog from '@/components/tree/DocumentOCRDialog';
 import { handleGenerateBiography } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import { useParams } from 'next/navigation';
@@ -45,6 +46,7 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
   const [isGeneratingBio, setIsGeneratingBio] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isTranslationOpen, setIsTranslationOpen] = useState(false);
+  const [isOCROpen, setIsOCROpen] = useState(false);
   const { toast } = useToast();
   const profilePictureInputRef = useRef<HTMLInputElement>(null);
   const params = useParams();
@@ -406,7 +408,7 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
                     <div>
                       <Label htmlFor="biography" className="text-xs">Biography</Label>
                       <Textarea id="biography" name="biography" value={formData.biography || ''} onChange={handleChange} placeholder="Life summary..." rows={3} className="text-sm" />
-                      <div className="flex gap-1 mt-1">
+                      <div className="flex gap-1 mt-1 flex-wrap">
                         <Button variant="outline" size="sm" onClick={handleGenerateBioClick} disabled={isGeneratingBio} className="h-7 text-xs" type="button">
                           {isGeneratingBio ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Sparkles className="mr-1 h-3 w-3 text-accent" />}
                           Generate with AI
@@ -414,6 +416,10 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
                         <Button variant="outline" size="sm" onClick={() => setIsTranslationOpen(true)} className="h-7 text-xs" type="button">
                           <Languages className="mr-1 h-3 w-3" />
                           Translate
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => setIsOCROpen(true)} className="h-7 text-xs" type="button">
+                          <FileText className="mr-1 h-3 w-3" />
+                          Scan Doc
                         </Button>
                       </div>
                     </div>
@@ -499,6 +505,27 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
         onUseTranslation={(translatedText) => {
           setFormData(prev => ({ ...prev, biography: translatedText }));
           toast({ title: "Translation Applied", description: "Biography updated with translation." });
+        }}
+      />
+
+      {/* Document OCR Dialog */}
+      <DocumentOCRDialog
+        isOpen={isOCROpen}
+        onClose={() => setIsOCROpen(false)}
+        onDataExtracted={(data) => {
+          // Populate relevant fields from extracted data
+          if (data.text) {
+            setFormData(prev => ({
+              ...prev,
+              biography: prev.biography
+                ? `${prev.biography}\n\n--- Extracted from document ---\n${data.text}`
+                : data.text
+            }));
+          }
+          if (data.places && data.places.length > 0 && !formData.placeOfBirth) {
+            setFormData(prev => ({ ...prev, placeOfBirth: data.places![0] }));
+          }
+          toast({ title: "Data Extracted", description: "Document data added to biography." });
         }}
       />
     </>
