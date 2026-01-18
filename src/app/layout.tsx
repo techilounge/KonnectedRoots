@@ -6,22 +6,22 @@ import Footer from '@/components/shared/Footer';
 import { AuthProvider } from '@/hooks/useAuth'; // Using mocked AuthProvider
 
 export const metadata: Metadata = {
-  title: 'KonnectedRoots - Trace Your Ancestry',
+  title: 'KonnectedRoots - Build & Share Your Family Tree Online',
   description: 'Build, explore, and share your family tree with KonnectedRoots. Discover your heritage with our intuitive tools and AI-powered suggestions.',
   icons: {
     icon: '/KonnectedRoots_Favicon.svg',
   },
   metadataBase: new URL('https://www.konnectedroots.app'),
   openGraph: {
-    title: 'KonnectedRoots - Trace Your Ancestry',
+    title: 'KonnectedRoots - Build & Share Your Family Tree Online',
     description: 'Build, explore, and share your family tree with KonnectedRoots. Discover your heritage with our intuitive tools and AI-powered suggestions.',
     url: 'https://www.konnectedroots.app',
     siteName: 'KonnectedRoots',
     images: [
       {
         url: 'https://www.konnectedroots.app/og-image.png',
-        width: 1024,
-        height: 1024,
+        width: 1200,
+        height: 630,
         alt: 'KonnectedRoots - Build Your Family Tree, Connect Your Roots',
       },
     ],
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'KonnectedRoots - Trace Your Ancestry',
+    title: 'KonnectedRoots - Build & Share Your Family Tree Online',
     description: 'Build, explore, and share your family tree with KonnectedRoots. Discover your heritage with our intuitive tools and AI-powered suggestions.',
     images: ['https://www.konnectedroots.app/og-image.png'],
   },
