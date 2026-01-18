@@ -26,6 +26,7 @@ import { UserCircle, Wand2, Save, Upload, CalendarIcon, Users, Briefcase, Loader
 import { ScrollArea } from '@/components/ui/scroll-area';
 import TranslationDialog from '@/components/tree/TranslationDialog';
 import DocumentOCRDialog from '@/components/tree/DocumentOCRDialog';
+import PhotoEnhanceDialog from '@/components/tree/PhotoEnhanceDialog';
 import { handleGenerateBiography } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import { useParams } from 'next/navigation';
@@ -47,6 +48,7 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
   const [isUploading, setIsUploading] = useState(false);
   const [isTranslationOpen, setIsTranslationOpen] = useState(false);
   const [isOCROpen, setIsOCROpen] = useState(false);
+  const [isEnhanceOpen, setIsEnhanceOpen] = useState(false);
   const { toast } = useToast();
   const profilePictureInputRef = useRef<HTMLInputElement>(null);
   const params = useParams();
@@ -273,6 +275,16 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
                           type="button"
                         >
                           <Upload className="mr-1 h-3 w-3" /> Photo
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setIsEnhanceOpen(true)}
+                          disabled={!srcUrl && !formData.profilePictureUrl && !person?.profilePictureUrl}
+                          className="text-xs mt-1 h-6 px-2 w-full text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                          type="button"
+                        >
+                          <Sparkles className="mr-1 h-3 w-3" /> Enhance
                         </Button>
                       </div>
 
@@ -526,6 +538,19 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
             setFormData(prev => ({ ...prev, placeOfBirth: data.places![0] }));
           }
           toast({ title: "Data Extracted", description: "Document data added to biography." });
+        }}
+      />
+
+      {/* Photo Enhance Dialog */}
+      <PhotoEnhanceDialog
+        isOpen={isEnhanceOpen}
+        onClose={() => setIsEnhanceOpen(false)}
+        currentPhotoUrl={srcUrl}
+        onPhotoEnhanced={(newPhotoUrl) => {
+          // In a real app, this would be an uploaded file URL
+          // For this demo, we're just updating the preview state
+          setFormData(prev => ({ ...prev, profilePictureUrl: newPhotoUrl }));
+          toast({ title: "Photo Updated", description: "Enhanced photo applied to profile." });
         }}
       />
     </>

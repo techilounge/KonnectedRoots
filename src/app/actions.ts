@@ -6,6 +6,7 @@ import { generateBiography as generateBiographyFlow, type GenerateBiographyInput
 import { findRelationship as findRelationshipFlow, type FindRelationshipInput, type FindRelationshipOutput } from '@/ai/flows/find-relationship-flow';
 import { translateDocument as translateDocumentFlow, type TranslateDocumentInput, type TranslateDocumentOutput } from '@/ai/flows/translate-document';
 import { extractDocumentText as extractDocumentTextFlow, type ExtractDocumentTextInput, type ExtractDocumentTextOutput } from '@/ai/flows/extract-document-text';
+import { enhancePhoto as enhancePhotoFlow, analyzePhoto, type EnhancePhotoInput, type EnhancePhotoOutput } from '@/ai/flows/enhance-photo';
 import { z } from 'zod';
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { app } from '@/lib/firebase/clients';
@@ -164,5 +165,35 @@ export async function handleExtractDocumentText(input: ExtractDocumentTextInput)
     console.error("Error in handleExtractDocumentText:", error);
     const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
     return { error: `Failed to extract text: ${errorMessage}. Please try again.` };
+  }
+}
+
+// Photo Enhancement action
+const HandleEnhancePhotoInputSchema = z.object({
+  imageBase64: z.string().min(1, "Image data is required"),
+  mimeType: z.string().min(1, "MIME type is required"),
+  options: z.object({
+    upscale: z.boolean().optional(),
+    restoreFaces: z.boolean().optional(),
+    colorize: z.boolean().optional(),
+    removeNoise: z.boolean().optional(),
+  }).optional(),
+});
+
+export async function handleEnhancePhoto(input: EnhancePhotoInput): Promise<EnhancePhotoOutput | { error: string }> {
+  const parsedInput = HandleEnhancePhotoInputSchema.safeParse(input);
+
+  if (!parsedInput.success) {
+    console.error("Invalid input for enhancement:", parsedInput.error.format());
+    return { error: "Invalid input: " + parsedInput.error.format()._errors.join(', ') };
+  }
+
+  try {
+    const result = await enhancePhotoFlow(parsedInput.data);
+    return result;
+  } catch (error) {
+    console.error("Error in handleEnhancePhoto:", error);
+    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+    return { error: `Failed to enhance photo: ${errorMessage}. Please try again.` };
   }
 }
