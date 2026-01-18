@@ -157,11 +157,19 @@ const faqCategories: FAQCategory[] = [
         questions: [
             {
                 question: 'What are AI actions?',
-                answer: 'AI actions are uses of our AI-powered features like name suggestions based on cultural origins, relationship hints, and smart completions. Each plan includes a monthly allowance that resets every billing cycle.',
+                answer: 'AI actions are uses of our AI-powered features like name suggestions, document translation, and photo enhancement. Each plan includes a monthly allowance that resets every billing cycle.',
+            },
+            {
+                question: 'How much do AI features cost?',
+                answer: 'Different actions use different amounts of credits: Enhancing a photo costs 15 credits. Translating a document costs 2 credits. Extracting text (OCR) costs 1 credit. Basic actions like name suggestions cost 1 credit.',
             },
             {
                 question: 'How many AI actions do I get?',
                 answer: 'Free: 10/month, Pro: 200/month, Family: 600/month (pooled). You can add 1,000 more with the AI Pack add-on ($3.99/mo).',
+            },
+            {
+                question: 'What if the AI enhancement fails?',
+                answer: 'If the AI fails to process your photo or you receive an error, your credits are automatically refunded. You only pay for successful enhancements.',
             },
             {
                 question: 'What happens if I run out of AI actions?',

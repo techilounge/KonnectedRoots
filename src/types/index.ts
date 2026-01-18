@@ -17,6 +17,13 @@ export interface UserProfile {
     aiCreditsMonthly: number;
     exports: { pdf: boolean; png: boolean; gedcom: boolean };
   };
+  usage?: {
+    monthKey: string;
+    exportsUsed: number;
+    aiActionsUsed: number;
+    aiActionsAllowance: number;
+    storageUsedBytes: number;
+  };
   createdAt: any; // serverTimestamp
   updatedAt: any; // serverTimestamp
 }

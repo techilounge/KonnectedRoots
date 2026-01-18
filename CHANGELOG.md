@@ -7,7 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-01-18
+
 ### Added
+- **AI Document Translation**: Optimize genealogy documents translation with genealogy-specific term preservation and side-by-side view.
+- **AI Handwriting OCR**: Extract text from handwritten historical documents using Gemini Vision.
+- **AI Photo Enhancement**: Restore, sharpen, and colorize old photos using Gemini 2.5 Flash Image.
+- **AI Credit System**: Implemented consolidated usage tracking, cost labels (e.g., 15 credits for enhancement), and real-time balance updates.
+- **User Profile Usage Card**: Visual credit monitoring card in User Profile.
 - **Pre-Export Validation**: GEDCOM export now validates tree data before exporting, warning about issues like invalid gender, missing names, parent-child age conflicts, and orphaned relationships.
 - **Auto-Fix Orphaned References**: One-click "Fix All" button to automatically clean up orphaned spouse/parent/child references pointing to deleted people.
 - **SEO-Friendly Tree URLs**: Tree URLs now use human-readable slugs (e.g., `/tree/doe-family`) instead of Firebase IDs. Backwards compatible with existing trees.
@@ -40,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Navigation Updated**: Added FAQ, How-To Guide, and legal pages to footer navigation.
 
 ### Fixed
+- **AI Credit Balance**: Fixed issue where credit balance would not update immediately after consuming credits (moved consumption to client-side).
 - **GEDCOM Export Gender Handling**: Fixed incorrect HUSB/WIFE assignment when one parent has "unknown" gender. Now correctly infers roles from the other parent.
 - **GEDCOM Import ID Extraction**: Fixed `extractId` function to properly remove the "I" prefix from GEDCOM individual IDs, ensuring correct relationship matching on import.
 - **Clean Delete for People**: Deleting a person now cleans up all orphaned references in related people's spouseIds, childrenIds, and parentId fields.

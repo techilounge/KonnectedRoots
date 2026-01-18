@@ -8,6 +8,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
+import sharp from 'sharp';
 
 const EnhancePhotoInputSchema = z.object({
     imageBase64: z.string().describe('Base64 encoded image data'),
@@ -151,7 +152,7 @@ Generate a restored version of this photo.`;
 
         // Use Gemini 2.5 Flash Image for the actual enhancement
         const { media } = await ai.generate({
-            model: 'googleai/gemini-2.5-flash-preview-05-20',
+            model: 'googleai/gemini-2.5-flash-image',
             prompt: [
                 { text: restorationPrompt },
                 {
@@ -177,8 +178,19 @@ Generate a restored version of this photo.`;
             throw new Error('Invalid image data received from the model.');
         }
 
-        const outputMimeType = dataUrlMatch[1];
-        const outputBase64 = dataUrlMatch[2];
+        const rawBase64 = dataUrlMatch[2];
+
+        // Compress and convert to WebP using Sharp.js
+        const rawBuffer = Buffer.from(rawBase64, 'base64');
+        const compressedBuffer = await sharp(rawBuffer)
+            .webp({ quality: 80, effort: 6 })  // Good balance of quality vs size
+            .resize({ width: 1200, height: 1200, fit: 'inside', withoutEnlargement: true })  // Cap max dimensions
+            .toBuffer();
+
+        const compressedBase64 = compressedBuffer.toString('base64');
+        const outputMimeType = 'image/webp';
+
+        console.log(`Image compressed: ${rawBuffer.length} -> ${compressedBuffer.length} bytes (${Math.round(compressedBuffer.length / rawBuffer.length * 100)}%)`);
 
         // Build description
         const descriptionParts = [
@@ -188,12 +200,12 @@ Generate a restored version of this photo.`;
             analysis.hasDamage ? 'damage repaired' : null,
         ].filter(Boolean);
 
-        const description = `${descriptionParts.join(', ')}. AI-powered restoration complete.`;
+        const description = `${descriptionParts.join(', ')}. AI-powered restoration complete. Compressed to WebP.`;
 
         return {
-            enhancedImageBase64: outputBase64,
+            enhancedImageBase64: compressedBase64,
             mimeType: outputMimeType,
-            enhancementsApplied,
+            enhancementsApplied: [...enhancementsApplied, 'WebP compression'],
             description,
         };
     }
