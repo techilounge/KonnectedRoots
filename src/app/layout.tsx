@@ -11,15 +11,15 @@ export const metadata: Metadata = {
   icons: {
     icon: '/KonnectedRoots_Favicon.svg',
   },
-  metadataBase: new URL('https://konnectedroots.com'),
+  metadataBase: new URL('https://www.konnectedroots.app'),
   openGraph: {
     title: 'KonnectedRoots - Trace Your Ancestry',
     description: 'Build, explore, and share your family tree with KonnectedRoots. Discover your heritage with our intuitive tools and AI-powered suggestions.',
-    url: 'https://konnectedroots.com',
+    url: 'https://www.konnectedroots.app',
     siteName: 'KonnectedRoots',
     images: [
       {
-        url: '/og-image.png',
+        url: 'https://www.konnectedroots.app/og-image.png',
         width: 1024,
         height: 1024,
         alt: 'KonnectedRoots - Build Your Family Tree, Connect Your Roots',
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'KonnectedRoots - Trace Your Ancestry',
     description: 'Build, explore, and share your family tree with KonnectedRoots. Discover your heritage with our intuitive tools and AI-powered suggestions.',
-    images: ['/og-image.png'],
+    images: ['https://www.konnectedroots.app/og-image.png'],
   },
 };
 
