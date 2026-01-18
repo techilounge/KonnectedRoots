@@ -138,6 +138,18 @@ export function needsMonthlyReset(storedMonthKey: string): boolean {
 }
 
 /**
+ * AI Action Weights (how many "credits" each action consumes)
+ */
+export const AI_ACTION_WEIGHTS = {
+    'suggest_name': 1,
+    'generate_biography': 1,
+    'find_relationship': 1,
+    'translate_document': 2,
+    'ocr_document': 1,
+    'enhance_photo': 5,
+};
+
+/**
  * Helper: Get AI allowance for a plan (including AI Pack if applicable)
  */
 export function getAIAllowance(plan: Plan, hasAIPack: boolean): number {
