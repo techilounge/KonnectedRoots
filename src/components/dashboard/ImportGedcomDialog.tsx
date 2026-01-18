@@ -110,8 +110,21 @@ export default function ImportGedcomDialog({ isOpen, onClose, onImport }: Import
         setError('');
 
         try {
+            // Debug: log parsed positions
+            console.log('[GEDCOM Parse] Parsed individuals with positions:');
+            parseResult.individuals.slice(0, 5).forEach(indi => {
+                console.log(`  ${indi.firstName} ${indi.lastName}: x=${indi.x}, y=${indi.y}`);
+            });
+
             // Convert to people - ownerId and treeId will be filled in by parent component
             const people = convertToPeople(parseResult, '', '');
+
+            // Debug: log converted people with positions
+            console.log('[GEDCOM Convert] Converted people with positions:');
+            people.slice(0, 5).forEach(p => {
+                console.log(`  ${p.firstName} ${p.lastName}: x=${p.x}, y=${p.y}`);
+            });
+
             await onImport(treeName, people);
             handleClose();
         } catch (err) {

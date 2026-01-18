@@ -12,7 +12,7 @@ import { PlusCircle, Loader2, Upload } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase/clients';
-import { collection, doc, addDoc, updateDoc, deleteDoc, query, where, serverTimestamp, onSnapshot, writeBatch } from 'firebase/firestore';
+import { collection, doc, addDoc, updateDoc, deleteDoc, query, where, serverTimestamp, onSnapshot, writeBatch, getDocs } from 'firebase/firestore';
 import { generateUniqueSlug } from '@/lib/slug';
 
 
@@ -89,6 +89,9 @@ export default function DashboardPage() {
   const handleImportGedcom = async (treeName: string, people: Omit<Person, 'createdAt' | 'updatedAt'>[]) => {
     if (!user?.uid) return;
 
+    console.log('[GEDCOM Import] Received people array:', people.length, 'people');
+    console.log('[GEDCOM Import] First few people IDs:', people.slice(0, 5).map(p => p.id));
+
     try {
       // Generate SEO-friendly slug from tree name (pass ownerId for security rule compliance)
       const slug = await generateUniqueSlug(treeName, user.uid);
@@ -107,23 +110,63 @@ export default function DashboardPage() {
       const treeRef = await addDoc(treesColRef, newTreeDoc);
       const treeId = treeRef.id;
 
-      // Batch write all people
-      const batch = writeBatch(db);
+      console.log('[GEDCOM Import] Tree created with ID:', treeId);
+
+      // First pass: create mapping from imported IDs to new Firestore doc IDs
       const peopleColRef = collection(db, 'trees', treeId, 'people');
+      const idMapping = new Map<string, string>(); // oldId -> newFirestoreId
 
       for (const person of people) {
         const personRef = doc(peopleColRef);
-        batch.set(personRef, {
-          ...person,
-          id: personRef.id,
-          ownerId: user.uid,
-          treeId: treeId,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
+        idMapping.set(person.id, personRef.id);
+        console.log('[GEDCOM Import] ID mapping:', person.id, '->', personRef.id);
       }
 
+      // Helper to remap an ID (or return original if not found)
+      const remapId = (oldId: string | undefined): string | undefined => {
+        if (!oldId) return undefined;
+        return idMapping.get(oldId) || oldId;
+      };
+
+      // Second pass: remap relationship IDs and write to Firestore
+      const batch = writeBatch(db);
+      let batchCount = 0;
+
+      for (const person of people) {
+        const newId = idMapping.get(person.id)!;
+        const personRef = doc(peopleColRef, newId);
+
+        // Remap all relationship references
+        const remappedPerson = {
+          ...person,
+          id: newId,
+          ownerId: user.uid,
+          treeId: treeId,
+          parentId1: remapId(person.parentId1),
+          parentId2: remapId(person.parentId2),
+          spouseIds: (person.spouseIds || []).map(id => remapId(id)).filter(Boolean) as string[],
+          childrenIds: (person.childrenIds || []).map(id => remapId(id)).filter(Boolean) as string[],
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        };
+
+        // Remove undefined values (Firestore doesn't accept them)
+        const cleanPerson: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(remappedPerson)) {
+          if (value !== undefined) {
+            cleanPerson[key] = value;
+          }
+        }
+
+        console.log('[GEDCOM Import] Adding person:', person.firstName, person.lastName,
+          'parentId1:', cleanPerson.parentId1, 'spouseIds:', cleanPerson.spouseIds);
+        batch.set(personRef, cleanPerson);
+        batchCount++;
+      }
+
+      console.log('[GEDCOM Import] Committing batch with', batchCount, 'operations');
       await batch.commit();
+      console.log('[GEDCOM Import] Batch committed successfully');
 
       toast({
         title: "Import Successful!",
@@ -178,10 +221,30 @@ export default function DashboardPage() {
     const treeToDelete = familyTrees.find(t => t.id === deletingTreeId);
 
     try {
-      const treeDocRef = doc(db, 'trees', deletingTreeId);
-      await deleteDoc(treeDocRef);
+      const batch = writeBatch(db);
 
-      toast({ variant: "destructive", title: "Tree Deleted!", description: `"${treeToDelete?.title}" and all its members have been deleted.` });
+      // First, delete all people in the tree's subcollection
+      const peopleRef = collection(db, 'trees', deletingTreeId, 'people');
+      const peopleSnapshot = await getDocs(peopleRef);
+
+      console.log(`[Clean Delete] Deleting ${peopleSnapshot.docs.length} people from tree "${treeToDelete?.title}"`);
+
+      peopleSnapshot.docs.forEach(personDoc => {
+        batch.delete(personDoc.ref);
+      });
+
+      // Then delete the tree document itself
+      const treeDocRef = doc(db, 'trees', deletingTreeId);
+      batch.delete(treeDocRef);
+
+      // Commit all deletions in a single batch
+      await batch.commit();
+
+      toast({
+        variant: "destructive",
+        title: "Tree Deleted!",
+        description: `"${treeToDelete?.title}" and all ${peopleSnapshot.docs.length} members have been permanently deleted.`
+      });
     } catch (error) {
       console.error("Error deleting tree:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to delete the tree." });
