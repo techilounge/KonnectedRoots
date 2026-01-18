@@ -18,6 +18,7 @@ import {
     ArrowRight,
     Play,
     ChevronRight,
+    Sparkles,
 } from 'lucide-react';
 
 interface GuideStep {
@@ -256,6 +257,35 @@ const guides: GuideSection[] = [
             },
         ],
     },
+    {
+        id: 'ai-features',
+        title: 'Using AI Features',
+        description: 'Learn how to use AI to translate documents, extract text, and enhance photos.',
+        icon: <Sparkles className="h-6 w-6" />,
+        difficulty: 'Beginner',
+        timeEstimate: '4 min',
+        steps: [
+            {
+                title: 'Enhance Old Photos',
+                description: 'Open a person\'s profile, click their photo (or placeholder), and select "Enhance Photo". Our AI will sharpen, colorize, and repair the image.',
+                tip: 'Enhancing a photo costs 15 credits. You can preview the result before saving.',
+            },
+            {
+                title: 'Translate Documents',
+                description: 'In the Biography section, verify or add a document image. Click the "Translate" button to convert foreign text to your language.',
+                tip: 'Translation costs 2 credits per page.',
+            },
+            {
+                title: 'Extract Text (OCR)',
+                description: 'Have a handwritten letter? Use the "Scan Doc" feature in the Biography section to convert handwriting into digital text.',
+                tip: 'OCR costs 1 credit per page.',
+            },
+            {
+                title: 'Monitor Your Credits',
+                description: 'Check your available AI credits in your Profile. Your allowance resets every month based on your plan.',
+            },
+        ],
+    },
 ];
 
 const difficultyColors = {
@@ -433,10 +463,10 @@ export default function GuidePage() {
                                         key={idx}
                                         onClick={() => setCurrentStep(idx)}
                                         className={`h-2 w-2 rounded-full transition-all ${idx === currentStep
-                                                ? 'bg-primary w-6'
-                                                : idx < currentStep
-                                                    ? 'bg-primary/50'
-                                                    : 'bg-secondary'
+                                            ? 'bg-primary w-6'
+                                            : idx < currentStep
+                                                ? 'bg-primary/50'
+                                                : 'bg-secondary'
                                             }`}
                                     />
                                 ))}

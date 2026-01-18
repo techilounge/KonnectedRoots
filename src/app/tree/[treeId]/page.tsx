@@ -1015,7 +1015,7 @@ export default function TreeEditorPage() {
         </main>
       </div>
 
-      {isEditorOpen && selectedPerson && (
+      {isEditorOpen && selectedPerson && (treeData?.id || treeId) && (
         <NodeEditorDialog
           isOpen={isEditorOpen}
           onClose={() => { setIsEditorOpen(false); setSelectedPerson(null); }}
@@ -1026,7 +1026,7 @@ export default function TreeEditorPage() {
             setIsEditorOpen(false);
             handleOpenNameSuggestor(details);
           }}
-          treeId={resolvedTreeId || routeParam}
+          treeId={treeData?.id || treeId}
         />
       )}
 

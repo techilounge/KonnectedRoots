@@ -146,7 +146,7 @@ export const AI_ACTION_WEIGHTS = {
     'find_relationship': 1,
     'translate_document': 2,
     'ocr_document': 1,
-    'enhance_photo': 5,
+    'enhance_photo': 15,
 };
 
 /**

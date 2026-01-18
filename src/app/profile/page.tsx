@@ -12,9 +12,10 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, UserCircle, Mail, Edit2, KeyRound, Trash2, ImageUp, Eye, EyeOff, Save, XCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { AICreditUsageCard } from '@/components/billing/AICreditUsageCard';
 
 export default function ProfilePage() {
-  const { user, loading, logout, updateUserProfile, reauthenticate, updateUserPassword, deleteUserAccount } = useAuth();
+  const { user, userProfile, loading, logout, updateUserProfile, reauthenticate, updateUserPassword, deleteUserAccount } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -25,7 +26,7 @@ export default function ProfilePage() {
 
   const [isChangePasswordDialogOpen, setIsChangePasswordDialogOpen] = useState(false);
   const [isDeleteAccountDialogOpen, setIsDeleteAccountDialogOpen] = useState(false);
-  
+
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
@@ -52,8 +53,8 @@ export default function ProfilePage() {
       };
       reader.readAsDataURL(file);
     }
-     if (event.target) {
-        event.target.value = '';
+    if (event.target) {
+      event.target.value = '';
     }
   };
 
@@ -61,21 +62,21 @@ export default function ProfilePage() {
     if (!user) return;
     setIsUpdating(true);
     try {
-        await updateUserProfile(displayName, avatarFile);
-        toast({ title: "Profile Updated", description: "Your changes have been saved." });
-        setAvatarFile(null); // Reset file after upload
+      await updateUserProfile(displayName, avatarFile);
+      toast({ title: "Profile Updated", description: "Your changes have been saved." });
+      setAvatarFile(null); // Reset file after upload
     } catch (error: any) {
-        toast({ variant: "destructive", title: "Update Failed", description: error.message });
+      toast({ variant: "destructive", title: "Update Failed", description: error.message });
     } finally {
-        setIsUpdating(false);
+      setIsUpdating(false);
     }
   };
 
   const handleCancelChanges = () => {
     if (user) {
-        setDisplayName(user.displayName || '');
-        setAvatarPreview(user.photoURL || null);
-        setAvatarFile(null);
+      setDisplayName(user.displayName || '');
+      setAvatarPreview(user.photoURL || null);
+      setAvatarFile(null);
     }
     router.push('/dashboard');
   };
@@ -93,27 +94,27 @@ export default function ProfilePage() {
 
     setIsUpdating(true);
     try {
-        await reauthenticate(oldPassword);
-        await updateUserPassword(newPassword);
-        toast({ title: "Password Changed", description: "Your password has been updated." });
-        setIsChangePasswordDialogOpen(false);
-        setOldPassword(''); setNewPassword(''); setConfirmNewPassword('');
+      await reauthenticate(oldPassword);
+      await updateUserPassword(newPassword);
+      toast({ title: "Password Changed", description: "Your password has been updated." });
+      setIsChangePasswordDialogOpen(false);
+      setOldPassword(''); setNewPassword(''); setConfirmNewPassword('');
     } catch (error: any) {
-        toast({ variant: "destructive", title: "Error", description: error.message });
+      toast({ variant: "destructive", title: "Error", description: error.message });
     } finally {
-        setIsUpdating(false);
+      setIsUpdating(false);
     }
   };
 
   const handleDeleteAccountConfirm = async () => {
-     try {
-        await deleteUserAccount();
-        toast({ variant: "destructive", title: "Account Deleted", description: "Your account has been permanently deleted." });
-        // The useAuth hook will redirect on auth state change
-     } catch (error: any) {
-        toast({ variant: "destructive", title: "Error", description: `Failed to delete account: ${error.message}` });
-        setIsDeleteAccountDialogOpen(false);
-     }
+    try {
+      await deleteUserAccount();
+      toast({ variant: "destructive", title: "Account Deleted", description: "Your account has been permanently deleted." });
+      // The useAuth hook will redirect on auth state change
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: `Failed to delete account: ${error.message}` });
+      setIsDeleteAccountDialogOpen(false);
+    }
   };
 
   if (loading) {
@@ -124,7 +125,7 @@ export default function ProfilePage() {
     router.push('/login');
     return null;
   }
-  
+
   const hasChanges = (user.displayName !== displayName) || (avatarFile !== null);
 
   return (
@@ -149,16 +150,16 @@ export default function ProfilePage() {
               className="hidden"
               aria-hidden="true"
             />
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => fileInputRef.current?.click()}
               aria-label="Change profile picture"
             >
               <ImageUp className="mr-2 h-4 w-4" /> Change Picture
             </Button>
           </div>
-          
+
           <div className="space-y-4">
             <div>
               <Label htmlFor="name">Full Name</Label>
@@ -175,6 +176,8 @@ export default function ProfilePage() {
               </div>
             </div>
           </div>
+
+          <AICreditUsageCard usage={userProfile?.usage} className="bg-muted/10 border-primary/20" />
 
           <div className="border-t pt-6 space-y-4">
             <h3 className="text-lg font-headline">Account Settings</h3>
@@ -201,15 +204,15 @@ export default function ProfilePage() {
                   </div>
                   <div className="relative">
                     <Label htmlFor="newPassword">New Password (min. 6 characters)</Label>
-                    <Input id="newPassword" type={showNewPassword ? "text" : "password"} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={6}/>
-                     <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-6 h-7 w-7" onClick={() => setShowNewPassword(!showNewPassword)} aria-label={showNewPassword ? "Hide new password" : "Show new password"}>
+                    <Input id="newPassword" type={showNewPassword ? "text" : "password"} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={6} />
+                    <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-6 h-7 w-7" onClick={() => setShowNewPassword(!showNewPassword)} aria-label={showNewPassword ? "Hide new password" : "Show new password"}>
                       {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
                   <div className="relative">
                     <Label htmlFor="confirmNewPassword">Confirm New Password</Label>
-                    <Input id="confirmNewPassword" type={showConfirmNewPassword ? "text" : "password"} value={confirmNewPassword} onChange={(e) => setConfirmNewPassword(e.target.value)} required minLength={6}/>
-                     <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-6 h-7 w-7" onClick={() => setShowConfirmNewPassword(!showConfirmNewPassword)} aria-label={showConfirmNewPassword ? "Hide confirm new password" : "Show confirm new password"}>
+                    <Input id="confirmNewPassword" type={showConfirmNewPassword ? "text" : "password"} value={confirmNewPassword} onChange={(e) => setConfirmNewPassword(e.target.value)} required minLength={6} />
+                    <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-6 h-7 w-7" onClick={() => setShowConfirmNewPassword(!showConfirmNewPassword)} aria-label={showConfirmNewPassword ? "Hide confirm new password" : "Show confirm new password"}>
                       {showConfirmNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
@@ -225,7 +228,7 @@ export default function ProfilePage() {
                 </form>
               </DialogContent>
             </Dialog>
-             <AlertDialog open={isDeleteAccountDialogOpen} onOpenChange={setIsDeleteAccountDialogOpen}>
+            <AlertDialog open={isDeleteAccountDialogOpen} onOpenChange={setIsDeleteAccountDialogOpen}>
               <AlertDialogTrigger asChild>
                 <Button variant="destructive" className="w-full justify-start">
                   <Trash2 className="mr-2 h-4 w-4" /> Delete Account
@@ -250,17 +253,16 @@ export default function ProfilePage() {
           </div>
         </CardContent>
         <CardFooter className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2 pt-6 border-t">
-            <Button variant="outline" onClick={handleCancelChanges} disabled={isUpdating}>
-              <XCircle className="mr-2 h-4 w-4" /> Cancel
-            </Button>
-            <Button onClick={handleApplyChanges} className="bg-primary hover:bg-primary/90" disabled={!hasChanges || isUpdating}>
-              {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-              Apply Changes
-            </Button>
+          <Button variant="outline" onClick={handleCancelChanges} disabled={isUpdating}>
+            <XCircle className="mr-2 h-4 w-4" /> Cancel
+          </Button>
+          <Button onClick={handleApplyChanges} className="bg-primary hover:bg-primary/90" disabled={!hasChanges || isUpdating}>
+            {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+            Apply Changes
+          </Button>
         </CardFooter>
       </Card>
     </div>
   );
 }
 
-    

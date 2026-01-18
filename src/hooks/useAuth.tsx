@@ -2,20 +2,20 @@
 "use client";
 import React, { useState, useEffect, useContext, createContext, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { 
-    getAuth, 
-    onAuthStateChanged, 
-    User as FirebaseUser,
-    createUserWithEmailAndPassword,
-    signInWithEmailAndPassword,
-    signOut,
-    updateProfile,
-    reauthenticateWithCredential,
-    EmailAuthProvider,
-    updatePassword,
-    deleteUser,
-    GoogleAuthProvider,
-    signInWithPopup
+import {
+  getAuth,
+  onAuthStateChanged,
+  User as FirebaseUser,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  updateProfile,
+  reauthenticateWithCredential,
+  EmailAuthProvider,
+  updatePassword,
+  deleteUser,
+  GoogleAuthProvider,
+  signInWithPopup
 } from 'firebase/auth';
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, setDoc, serverTimestamp, getDoc } from "firebase/firestore";
@@ -34,6 +34,7 @@ type AuthContextType = {
   reauthenticate: (password: string) => Promise<void>;
   updateUserPassword: (password: string) => Promise<void>;
   deleteUserAccount: () => Promise<void>;
+  refreshUserProfile: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -42,37 +43,37 @@ const storage = getStorage(app);
 
 // Helper to create the user profile document
 const createUserProfileDocument = async (user: FirebaseUser, displayNameOverride?: string) => {
-    const userRef = doc(db, `users/${user.uid}`);
-    const snapshot = await getDoc(userRef);
+  const userRef = doc(db, `users/${user.uid}`);
+  const snapshot = await getDoc(userRef);
 
-    if (!snapshot.exists()) {
-        const { email, photoURL, uid } = user;
-        const displayName = displayNameOverride || user.displayName;
-        const createdAt = serverTimestamp();
+  if (!snapshot.exists()) {
+    const { email, photoURL, uid } = user;
+    const displayName = displayNameOverride || user.displayName;
+    const createdAt = serverTimestamp();
 
-        const defaultEntitlements = {
-            maxTrees: 1,
-            maxPeoplePerTree: 50,
-            aiCreditsMonthly: 0,
-            exports: { pdf: false, png: false, gedcom: false }
-        };
+    const defaultEntitlements = {
+      maxTrees: 1,
+      maxPeoplePerTree: 50,
+      aiCreditsMonthly: 0,
+      exports: { pdf: false, png: false, gedcom: false }
+    };
 
-        try {
-            await setDoc(userRef, {
-                uid,
-                displayName: displayName ?? '',
-                email: email ?? '',
-                photoURL: photoURL ?? '',
-                plan: "free",
-                entitlements: defaultEntitlements,
-                createdAt: createdAt,
-                updatedAt: createdAt,
-            });
-        } catch (error) {
-            console.error("Error creating user profile document: ", error);
-        }
+    try {
+      await setDoc(userRef, {
+        uid,
+        displayName: displayName ?? '',
+        email: email ?? '',
+        photoURL: photoURL ?? '',
+        plan: "free",
+        entitlements: defaultEntitlements,
+        createdAt: createdAt,
+        updatedAt: createdAt,
+      });
+    } catch (error) {
+      console.error("Error creating user profile document: ", error);
     }
-    return getDoc(userRef);
+  }
+  return getDoc(userRef);
 };
 
 
@@ -89,13 +90,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // User is signed in, fetch profile before setting state
         const userProfileDoc = await getDoc(doc(db, `users/${user.uid}`));
         if (userProfileDoc.exists()) {
-            setUserProfile(userProfileDoc.data() as UserProfile);
-            setUser(user);
+          setUserProfile(userProfileDoc.data() as UserProfile);
+          setUser(user);
         } else {
-            // This case might happen if profile creation fails.
-            // For now, we'll treat them as not fully logged in.
-            setUser(null);
-            setUserProfile(null);
+          // This case might happen if profile creation fails.
+          // For now, we'll treat them as not fully logged in.
+          setUser(null);
+          setUserProfile(null);
         }
       } else {
         // User is signed out
@@ -126,12 +127,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await signOut(auth);
     router.push('/');
   };
-  
+
   const signInWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
     const userCredential = await signInWithPopup(auth, provider);
     if (userCredential.user) {
-        await createUserProfileDocument(userCredential.user);
+      await createUserProfileDocument(userCredential.user);
     }
     router.push('/dashboard');
   };
@@ -146,27 +147,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const snapshot = await uploadBytes(storageRef, photoFile);
       photoURL = await getDownloadURL(snapshot.ref);
     }
-    
+
     await updateProfile(auth.currentUser, { displayName, photoURL });
-    
+
     const userRef = doc(db, `users/${auth.currentUser.uid}`);
-    await setDoc(userRef, { 
-        displayName, 
-        photoURL,
-        updatedAt: serverTimestamp()
+    await setDoc(userRef, {
+      displayName,
+      photoURL,
+      updatedAt: serverTimestamp()
     }, { merge: true });
 
     // Force a reload of the user object and profile to reflect changes immediately
-    await auth.currentUser.reload(); 
+    await auth.currentUser.reload();
     const updatedUser = auth.currentUser;
     const userProfileDoc = await getDoc(userRef);
-    
+
     setUser(updatedUser);
     if (userProfileDoc.exists()) {
-        setUserProfile(userProfileDoc.data() as UserProfile);
+      setUserProfile(userProfileDoc.data() as UserProfile);
     }
   };
-  
+
   const reauthenticate = async (password: string) => {
     if (!auth.currentUser || !auth.currentUser.email) throw new Error("User not found.");
     const credential = EmailAuthProvider.credential(auth.currentUser.email, password);
@@ -174,17 +175,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const updateUserPassword = async (password: string) => {
-     if (!auth.currentUser) throw new Error("Not authenticated");
-     await updatePassword(auth.currentUser, password);
+    if (!auth.currentUser) throw new Error("Not authenticated");
+    await updatePassword(auth.currentUser, password);
   };
 
   const deleteUserAccount = async () => {
-     if (!auth.currentUser) throw new Error("Not authenticated");
-     await deleteUser(auth.currentUser);
+    if (!auth.currentUser) throw new Error("Not authenticated");
+    await deleteUser(auth.currentUser);
   }
 
+  const refreshUserProfile = async () => {
+    if (!auth.currentUser) return;
+    const userRef = doc(db, `users/${auth.currentUser.uid}`);
+    const userProfileDoc = await getDoc(userRef);
+    if (userProfileDoc.exists()) {
+      setUserProfile(userProfileDoc.data() as UserProfile);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, userProfile, loading, login, signup, logout, signInWithGoogle, updateUserProfile, reauthenticate, updateUserPassword, deleteUserAccount }}>
+    <AuthContext.Provider value={{ user, userProfile, loading, login, signup, logout, signInWithGoogle, updateUserProfile, reauthenticate, updateUserPassword, deleteUserAccount, refreshUserProfile }}>
       {children}
     </AuthContext.Provider>
   );
