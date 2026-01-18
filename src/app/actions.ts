@@ -5,6 +5,7 @@ import { suggestName as suggestNameFlow, type SuggestNameInput, type SuggestName
 import { generateBiography as generateBiographyFlow, type GenerateBiographyInput, type GenerateBiographyOutput } from '@/ai/flows/generate-biography-flow';
 import { findRelationship as findRelationshipFlow, type FindRelationshipInput, type FindRelationshipOutput } from '@/ai/flows/find-relationship-flow';
 import { translateDocument as translateDocumentFlow, type TranslateDocumentInput, type TranslateDocumentOutput } from '@/ai/flows/translate-document';
+import { extractDocumentText as extractDocumentTextFlow, type ExtractDocumentTextInput, type ExtractDocumentTextOutput } from '@/ai/flows/extract-document-text';
 import { z } from 'zod';
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { app } from '@/lib/firebase/clients';
@@ -138,5 +139,30 @@ export async function handleTranslateDocument(input: TranslateDocumentInput): Pr
     console.error("Error in handleTranslateDocument:", error);
     const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
     return { error: `Failed to translate: ${errorMessage}. Please try again.` };
+  }
+}
+
+// OCR Document Text Extraction action
+const HandleExtractDocumentTextInputSchema = z.object({
+  imageBase64: z.string().min(1, "Image data is required"),
+  mimeType: z.string().min(1, "MIME type is required"),
+  documentType: z.enum(['letter', 'certificate', 'record', 'diary', 'other']).optional(),
+});
+
+export async function handleExtractDocumentText(input: ExtractDocumentTextInput): Promise<ExtractDocumentTextOutput | { error: string }> {
+  const parsedInput = HandleExtractDocumentTextInputSchema.safeParse(input);
+
+  if (!parsedInput.success) {
+    console.error("Invalid input for OCR:", parsedInput.error.format());
+    return { error: "Invalid input: " + parsedInput.error.format()._errors.join(', ') };
+  }
+
+  try {
+    const result = await extractDocumentTextFlow(parsedInput.data);
+    return result;
+  } catch (error) {
+    console.error("Error in handleExtractDocumentText:", error);
+    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+    return { error: `Failed to extract text: ${errorMessage}. Please try again.` };
   }
 }
