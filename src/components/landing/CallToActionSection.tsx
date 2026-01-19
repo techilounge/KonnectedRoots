@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 import { useState, useEffect, useRef } from 'react';
+import { useAuth } from '@/hooks/useAuth';
 
 const carouselImages = ['/Grandparents.png', '/Grandparents2.png', '/mixed-fam.png'];
 
@@ -11,6 +12,7 @@ export default function CallToActionSection() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const { user } = useAuth();
 
   useEffect(() => {
     const startCarousel = () => {
@@ -46,7 +48,7 @@ export default function CallToActionSection() {
               Join thousands of families who are documenting their heritage with KonnectedRoots. Get started free — no credit card required.
             </p>
             <Button size="lg" variant="secondary" asChild className="bg-card text-card-foreground hover:bg-card/90 shadow-md transform hover:scale-105 transition-transform">
-              <Link href="/signup">Create Your Family Tree Now</Link>
+              <Link href={user ? "/dashboard" : "/signup"}>Create Your Family Tree Now</Link>
             </Button>
           </div>
           <div className="md:w-1/3 flex justify-center md:justify-end">

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 import { useState, useEffect, useRef } from 'react';
+import { useAuth } from '@/hooks/useAuth';
 
 interface Shape {
   id: number;
@@ -28,6 +29,7 @@ export default function HeroSection() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const { user } = useAuth();
 
   useEffect(() => {
     const startCarousel = () => {
@@ -180,7 +182,7 @@ export default function HeroSection() {
         </p>
         <div className="flex justify-center space-x-4 mb-16">
           <Button size="lg" asChild className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg transform hover:scale-105 transition-transform">
-            <Link href="/signup">Get Started Free</Link>
+            <Link href={user ? "/dashboard" : "/signup"}>Get Started Free</Link>
           </Button>
           <Button size="lg" variant="outline" asChild className="shadow-lg transform hover:scale-105 transition-transform">
             <Link href="#features">Learn More</Link>
