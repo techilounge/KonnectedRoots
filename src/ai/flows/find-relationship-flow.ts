@@ -10,7 +10,7 @@ type PersonInfo = {
     id: string;
     firstName: string;
     lastName?: string;
-    gender: 'male' | 'female' | 'other' | 'unknown';
+    gender: 'male' | 'female' | 'other' | 'unknown' | null;
     parentId1?: string | null;
     parentId2?: string | null;
     spouseIds?: string[];
@@ -109,7 +109,7 @@ export async function findRelationship(input: FindRelationshipInput): Promise<Fi
     if (commonAncestor) {
         const ancestor = peopleMap.get(commonAncestor);
         const ancestorName = ancestor ? `${ancestor.firstName} ${ancestor.lastName || ''}`.trim() : 'common ancestor';
-        return getCousinRelationship(gen1, gen2, p1Name, p2Name, ancestorName, person2.gender);
+        return getCousinRelationship(gen1, gen2, p1Name, p2Name, ancestorName, person2.gender || 'unknown');
     }
 
     // Check for in-law relationships through spouses
@@ -137,7 +137,7 @@ export async function findRelationship(input: FindRelationshipInput): Promise<Fi
             if (ancestors2.has(ancestorId)) {
                 const g2 = ancestors2.get(ancestorId)!;
                 // person1's spouse is g1 gens from ancestor, person2 is g2 gens from ancestor
-                return getInLawCousinRelationship(g1, g2, p1Name, p2Name, person2.gender, spouse.firstName);
+                return getInLawCousinRelationship(g1, g2, p1Name, p2Name, person2.gender || 'unknown', spouse.firstName);
             }
         }
     }

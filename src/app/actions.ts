@@ -74,7 +74,7 @@ const PersonInfoSchema = z.object({
   id: z.string().min(1),
   firstName: z.string(),
   lastName: z.string().optional(),
-  gender: z.enum(['male', 'female', 'other', 'unknown']),
+  gender: z.enum(['male', 'female', 'other', 'unknown']).nullable(),
   parentId1: z.string().nullable().optional(),
   parentId2: z.string().nullable().optional(),
   spouseIds: z.array(z.string()).optional(),

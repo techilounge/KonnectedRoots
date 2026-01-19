@@ -314,7 +314,7 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
                         </div>
                         <div>
                           <Label htmlFor="gender" className="text-xs">Gender*</Label>
-                          <Select value={formData.gender} onValueChange={(value) => handleSelectChange('gender', value)}>
+                          <Select value={formData.gender || undefined} onValueChange={(value) => handleSelectChange('gender', value)}>
                             <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select" /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="male">Male</SelectItem>
