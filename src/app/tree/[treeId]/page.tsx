@@ -909,7 +909,8 @@ export default function TreeEditorPage() {
     };
 
     try {
-      const result = await handleFindRelationship(input);
+      // Explicit cast to satisfy type checker for strict null checks
+      const result = await handleFindRelationship(input as any);
       if ('error' in result) {
         toast({ variant: "destructive", title: "AI Error", description: result.error });
       } else {
