@@ -9,7 +9,7 @@ import ShareDialog from '@/components/tree/ShareDialog';
 import RelationshipsDialog from '@/components/tree/RelationshipsDialog';
 import type { Person, FamilyTree, RelationshipType } from '@/types';
 import { Button } from '@/components/ui/button';
-import { Users, Share2, ZoomIn, ZoomOut, UserPlus, ChevronLeft, Loader2, Undo2, Redo2, ShieldCheck, Copy } from 'lucide-react';
+import { Users, Share2, ZoomIn, ZoomOut, UserPlus, ChevronLeft, Loader2, Undo2, Redo2, ShieldCheck, Copy, Grid3x3, RefreshCcw, History } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import NameSuggestor from '@/components/tree/NameSuggestor';
 import ExportDialog from '@/components/tree/ExportDialog';
@@ -18,6 +18,7 @@ import { validateTree, type ValidationResult } from '@/lib/tree-validator';
 import { detectDuplicates, type DuplicateDetectionResult } from '@/lib/duplicate-detector';
 import ValidationPanel from '@/components/tree/ValidationPanel';
 import DuplicateDetectionDialog from '@/components/tree/DuplicateDetectionDialog';
+import LayoutHistoryDialog from '@/components/tree/LayoutHistoryDialog';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -27,6 +28,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUndoRedo } from '@/hooks/useUndoRedo';
 import { handleFindRelationship } from '@/app/actions';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { saveLayoutSnapshot } from '@/lib/layout-history';
 import { Download } from 'lucide-react';
 
 
@@ -78,6 +80,12 @@ export default function TreeEditorPage() {
   const [showValidationPanel, setShowValidationPanel] = useState(false);
   const [duplicateResult, setDuplicateResult] = useState<DuplicateDetectionResult | null>(null);
   const [isDuplicateDialogOpen, setIsDuplicateDialogOpen] = useState(false);
+  const [isLayoutHistoryOpen, setIsLayoutHistoryOpen] = useState(false);
+  const [isResetPositionsDialogOpen, setIsResetPositionsDialogOpen] = useState(false);
+
+  // Grid/Snap state
+  const [showGridLines, setShowGridLines] = useState(false);
+
   const isLinkingModeRef = useRef(isLinkingMode);
 
   useEffect(() => {
@@ -200,7 +208,7 @@ export default function TreeEditorPage() {
       ownerId: user.uid,
       treeId: treeId,
       firstName: 'New Person',
-      gender: 'male', // Default to male - gender is a required field
+      gender: null, // Default to null to force user selection
       living: true,
       x: Math.random() * 500 + 50,
       y: Math.random() * 300 + 50,
@@ -227,6 +235,20 @@ export default function TreeEditorPage() {
       toast({ title: "Person Added", description: "Double-click to edit details." });
       // Also update the parent tree's lastUpdated timestamp to trigger UI refreshes elsewhere if needed
       await updateDoc(getTreeDocRef(), { lastUpdated: serverTimestamp(), memberCount: increment(1) });
+
+      // Save layout snapshot to capture initial position
+      if (resolvedTreeId && user) {
+        // Use updated list including new person to ensure they are in the snapshot
+        await saveLayoutSnapshot(
+          resolvedTreeId,
+          [...people, personWithDefaults],
+          user.uid,
+          'auto',
+          { x: 0, y: 0 },
+          1,
+          'Added New Person'
+        );
+      }
     } catch (error) {
       console.error("Error adding person to Firestore:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to save new person." });
@@ -322,6 +344,11 @@ export default function TreeEditorPage() {
     // Capture full person data for undo before deleting
     const personDataForUndo = { ...personToDelete };
     const deletedPersonId = personToDelete.id;
+
+    // Save layout snapshot before deletion
+    if (resolvedTreeId && user) {
+      await saveLayoutSnapshot(resolvedTreeId, people, user.uid, 'pre_delete', { x: 0, y: 0 }, 1, `Before deleting ${personToDelete.firstName}`);
+    }
 
     try {
       // Clear selectedPerson if it's the person being deleted
@@ -429,6 +456,7 @@ export default function TreeEditorPage() {
       toast({
         title: "Tree Validated",
         description: "No issues found in your family tree!",
+        duration: 5000,
       });
     } else {
       const errorCount = result.issues.filter(i => i.severity === 'error').length;
@@ -470,6 +498,11 @@ export default function TreeEditorPage() {
     if (!keepPerson || !removePerson) return;
 
     try {
+      // Save layout snapshot before merge
+      if (resolvedTreeId && user) {
+        await saveLayoutSnapshot(resolvedTreeId, people, user.uid, 'pre_merge', { x: 0, y: 0 }, 1, `Before merging into ${keepPerson.firstName}`);
+      }
+
       const batch = writeBatch(db);
 
       // Transfer relationships from removed person to kept person
@@ -579,6 +612,72 @@ export default function TreeEditorPage() {
       // Would need onNodeMoveEnd callback to properly support undo
     } catch (error) {
       console.error("Error saving node position:", error);
+    }
+  };
+
+  // Debounced auto-save for layout history
+  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleDragEnd = useCallback(() => {
+    if (readOnly || !resolvedTreeId || !user) return;
+
+    // Clear existing timer
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+
+    // Set new timer (2 seconds debounce)
+    autoSaveTimerRef.current = setTimeout(async () => {
+      try {
+        await saveLayoutSnapshot(
+          resolvedTreeId,
+          people,
+          user.uid,
+          'auto',
+          // Note: using default viewOffset/zoom for auto-saves as we don't track them in state efficiently yet
+          { x: 0, y: 0 },
+          1
+        );
+        // Silent success - don't toast for auto-saves
+      } catch (error) {
+        console.error("Error auto-saving layout:", error);
+      }
+    }, 2000);
+  }, [readOnly, resolvedTreeId, user, people]);
+
+  // Reset all people positions to a visible grid layout
+  const handleResetPositions = async () => {
+    if (readOnly) {
+      toast({ variant: "destructive", title: "View Only", description: "You don't have permission to edit." });
+      return;
+    }
+    if (people.length === 0) return;
+
+    const batch = writeBatch(db);
+    const COLS = 5; // Cards per row
+    const SPACING_X = 220; // Horizontal spacing
+    const SPACING_Y = 120; // Vertical spacing
+    const START_X = 100;
+    const START_Y = 100;
+
+    people.forEach((person, index) => {
+      const row = Math.floor(index / COLS);
+      const col = index % COLS;
+      const newX = START_X + col * SPACING_X;
+      const newY = START_Y + row * SPACING_Y;
+
+      const personRef = doc(getPeopleColRef(), person.id);
+      batch.update(personRef, { x: newX, y: newY, updatedAt: serverTimestamp() });
+    });
+
+    try {
+      await batch.commit();
+      // Reset view offset and zoom
+      setZoomLevel(1);
+      toast({ title: "Positions Reset", description: `${people.length} people arranged in a grid.` });
+    } catch (error) {
+      console.error("Error resetting positions:", error);
+      toast({ variant: "destructive", title: "Error", description: "Failed to reset positions." });
     }
   };
 
@@ -934,6 +1033,32 @@ export default function TreeEditorPage() {
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
+                <Button
+                  variant={showGridLines ? "secondary" : "outline"}
+                  size="sm"
+                  onClick={() => setShowGridLines(!showGridLines)}
+                  aria-pressed={showGridLines}
+                >
+                  <Grid3x3 className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Toggle Grid Lines</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="sm" onClick={() => setIsResetPositionsDialogOpen(true)}>
+                  <RefreshCcw className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Reset Positions</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
                 <Button variant="outline" size="sm" onClick={handleValidateTree}>
                   <ShieldCheck className="h-4 w-4" />
                 </Button>
@@ -949,6 +1074,16 @@ export default function TreeEditorPage() {
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">Find Duplicates</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="sm" onClick={() => setIsLayoutHistoryOpen(true)}>
+                  <History className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Layout History</TooltipContent>
             </Tooltip>
           </TooltipProvider>
           <Button variant="outline" size="sm" onClick={() => setIsExportDialogOpen(true)}><Download className="mr-2 h-4 w-4" />Export</Button>
@@ -1003,6 +1138,9 @@ export default function TreeEditorPage() {
               isLinkingMode={isLinkingMode}
               onViewRelationships={handleOpenRelationships}
               readOnly={readOnly}
+              showGridLines={showGridLines}
+
+              onDragEnd={handleDragEnd}
             />
           ) : (
             <div className="flex flex-col items-center justify-center h-full border-2 border-dashed border-border rounded-lg">
@@ -1178,13 +1316,60 @@ export default function TreeEditorPage() {
       )}
 
       {/* Duplicate Detection Dialog */}
-      <DuplicateDetectionDialog
-        isOpen={isDuplicateDialogOpen}
-        onClose={() => setIsDuplicateDialogOpen(false)}
-        result={duplicateResult}
-        onMerge={handleMergeDuplicates}
-        onDismiss={handleDismissDuplicate}
+      {isDuplicateDialogOpen && (
+        <DuplicateDetectionDialog
+          isOpen={isDuplicateDialogOpen}
+          onClose={() => setIsDuplicateDialogOpen(false)}
+          result={duplicateResult}
+          onMerge={handleMergeDuplicates}
+          onDismiss={handleDismissDuplicate}
+        />
+      )}
+
+      {/* Layout History Dialog */}
+      <LayoutHistoryDialog
+        isOpen={isLayoutHistoryOpen}
+        onClose={() => setIsLayoutHistoryOpen(false)}
+        treeId={resolvedTreeId || ''}
+        people={people}
+        onRestore={() => {
+          // Optional: Force refresh or reset view state if needed
+          toast({ title: "Layout Restored", description: "Tree positions have been updated." });
+        }}
       />
+
+      {/* Reset Positions Confirmation Dialog */}
+      <AlertDialog open={isResetPositionsDialogOpen} onOpenChange={setIsResetPositionsDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset All Positions?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm text-muted-foreground">
+                <p>
+                  This will rearrange all {people.length} people into a simple grid layout,
+                  <strong className="text-foreground"> overwriting their current positions</strong>.
+                </p>
+                <p className="bg-muted p-2 rounded border">
+                  💡 <strong>Tip:</strong> You can use the <strong>Layout History</strong> (clock icon) to restore
+                  a previous layout if you change your mind.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setIsResetPositionsDialogOpen(false);
+                handleResetPositions();
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Reset Positions
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

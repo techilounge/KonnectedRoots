@@ -49,7 +49,7 @@ export interface Person {
   middleName?: string;
   lastName?: string;
   nickname?: string;
-  gender: 'male' | 'female' | 'other' | 'unknown';
+  gender: 'male' | 'female' | 'other' | 'unknown' | null;
   birthDate?: string;
   deathDate?: string;
   living?: boolean;
@@ -91,3 +91,19 @@ export interface NameSuggestion {
   name: string;
   reason: string;
 }
+
+// Layout History - for saving and restoring tree layouts
+export interface LayoutSnapshot {
+  id: string;
+  treeId: string;
+  createdAt: any; // Timestamp
+  createdBy: string; // userId
+  reason: 'auto' | 'manual' | 'pre_delete' | 'pre_merge' | 'pre_import';
+  label?: string; // User-provided name for manual saves
+  viewOffset: { x: number; y: number };
+  zoomLevel: number;
+  positions: {
+    [personId: string]: { x: number; y: number };
+  };
+}
+

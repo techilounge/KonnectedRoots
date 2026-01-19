@@ -59,6 +59,30 @@ export function validatePerson(person: Person, allPeople: Person[]): ValidationI
     const personName = getName(person);
     const personMap = new Map(allPeople.map(p => [p.id, p]));
 
+    // Rule 0a: Missing or invalid gender
+    if (!person.gender || person.gender === 'unknown' || person.gender === 'other') {
+        issues.push({
+            personId: person.id,
+            personName,
+            field: 'gender',
+            severity: 'error',
+            message: `Gender is "${person.gender || 'not set'}"`,
+            howToFix: 'Edit this person and select either Male or Female as their gender'
+        });
+    }
+
+    // Rule 0b: Missing or default first name
+    if (!person.firstName || person.firstName.trim() === '' || person.firstName === 'New Person') {
+        issues.push({
+            personId: person.id,
+            personName,
+            field: 'firstName',
+            severity: 'warning',
+            message: 'Missing or default first name',
+            howToFix: 'Edit this person and enter their first name'
+        });
+    }
+
     // Rule 1: Birth before death
     const birthDate = parseDate(person.birthDate);
     const deathDate = parseDate(person.deathDate);
@@ -257,6 +281,27 @@ export function validatePerson(person: Person, allPeople: Person[]): ValidationI
             severity: 'error',
             message: 'Person is listed as their own parent',
             howToFix: 'Remove self-reference from parent fields'
+        });
+    }
+
+    // Rule 9: Orphaned person (no connections to the tree)
+    const hasParent = !!(person.parentId1 || person.parentId2);
+    const hasSpouse = (person.spouseIds?.length ?? 0) > 0;
+    const hasChildren = (person.childrenIds?.length ?? 0) > 0;
+
+    // Also check if anyone else references this person as their parent
+    const isReferencedAsParent = allPeople.some(p =>
+        p.id !== person.id && (p.parentId1 === person.id || p.parentId2 === person.id)
+    );
+
+    if (!hasParent && !hasSpouse && !hasChildren && !isReferencedAsParent) {
+        issues.push({
+            personId: person.id,
+            personName,
+            field: 'relationships',
+            severity: 'warning',
+            message: 'This person has no connections to anyone in the tree',
+            howToFix: 'Add parent, spouse, or child relationships to connect this person to the family tree'
         });
     }
 

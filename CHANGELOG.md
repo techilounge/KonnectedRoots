@@ -20,6 +20,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Header Accessibility**: Added ARIA labels to user menu dropdown.
 
+## [0.2.1] - 2026-01-19
+
+### Added
+- **Validation Enhancements**: "Validate Tree" now checks for missing gender (Error) and default "New Person" names (Warning), matching Pre-Export validation stringency.
+- **Orphan Detection**: Added checks for orphaned persons (no relationships) in both Validate Tree and Pre-Export checks.
+- **Reset Positions Dialog**: Added confirmation dialog with warning and Layout History tip before resetting canvas positions.
+- **Toast Auto-Dismiss**: "No issues found" validation toast now auto-dismisses after 5 seconds instead of sticking.
+- **Improved Icons**: Changed "Reset Positions" icon to `RefreshCcw` to avoid confusion with the "Toggle Grid" icon.
+
+### Changed
+- **Default Gender**: Changed default gender for new persons from "Male" to `null` to enforce explicit user selection.
+- **Privacy Documentation**: Documented Firestore/Storage rule decisions for public read access (invitations, photos) with helper functions for future hardening.
+
+### Security
+- **Input Validation**: Added Zod schema validation to server actions (`handleFindRelationship`) to prevent injection/malformed data.
+- **Dependency Updates**: Fixed high-severity npm vulnerabilities in `@modelcontextprotocol/sdk`, `node-forge`, and `hono`.
+- **Code Cleanup**: Removed unused and unsafe `saveFamilyTree` server action that accepted `any` type.
+
 ## [0.2.0] - 2026-01-18
 
 ### Added
