@@ -376,6 +376,26 @@ export function validateTreeForExport(people: Person[]): ExportValidationResult 
                 });
             }
         }
+
+        // Check 6: Orphaned person (no connections to the tree)
+        const hasParent = !!(person.parentId1 || person.parentId2);
+        const hasSpouse = (person.spouseIds?.length ?? 0) > 0;
+        const hasChildren = (person.childrenIds?.length ?? 0) > 0;
+
+        // Also check if anyone else references this person as their parent
+        const isReferencedAsParent = people.some(p =>
+            p.id !== person.id && (p.parentId1 === person.id || p.parentId2 === person.id)
+        );
+
+        if (!hasParent && !hasSpouse && !hasChildren && !isReferencedAsParent) {
+            issues.push({
+                severity: 'warning',
+                personId: person.id,
+                personName,
+                issue: 'This person is not connected to anyone in the tree',
+                howToFix: 'Add parent, spouse, or child relationships to connect this person to the family tree.'
+            });
+        }
     }
 
     // Deduplicate issues (same person + same issue type)

@@ -23,12 +23,17 @@ interface FamilyTreeCanvasPlaceholderProps {
   isLinkingMode: boolean;
   onViewRelationships?: (person: Person) => void;
   readOnly?: boolean;
+  showGridLines?: boolean;
+
+  onDragEnd?: () => void; // Called when a card drag is completed
 }
 
 const NODE_WIDTH = 180;
 const NODE_HEIGHT = 70;
 const CLICK_THRESHOLD = 5;
 const CANVAS_PADDING = 500; // Extra space around the outermost nodes
+const GRID_SIZE = 20; // Snap grid cell size
+const MAJOR_GRID_SIZE = 100; // Major grid lines every 5 cells
 
 type LinkingState = {
   fromId: string;
@@ -55,7 +60,11 @@ export default function FamilyTreeCanvasPlaceholder({
   selectedPersonId,
   isLinkingMode,
   onViewRelationships,
-  readOnly
+
+  readOnly,
+  showGridLines = false,
+
+  onDragEnd
 }: FamilyTreeCanvasPlaceholderProps) {
   const [draggingState, setDraggingState] = useState<{ personId: string; offsetX: number; offsetY: number; clickStartX: number; clickStartY: number; moved: boolean } | null>(null);
   const [linkingState, setLinkingState] = useState<LinkingState | null>(null);
@@ -195,8 +204,11 @@ export default function FamilyTreeCanvasPlaceholder({
         setDraggingState(prev => prev ? { ...prev, moved: true } : null);
       }
 
-      const newX = point.x - draggingState.offsetX;
-      const newY = point.y - draggingState.offsetY;
+      let newX = point.x - draggingState.offsetX;
+      let newY = point.y - draggingState.offsetY;
+
+
+
       onNodeMove(draggingState.personId, newX, newY);
     } else if (linkingState) {
       // Adjust for the inner canvas translation (the line is rendered inside the translated panning surface group)
@@ -236,6 +248,9 @@ export default function FamilyTreeCanvasPlaceholder({
         }
         lastClickTimeRef.current = now;
       }
+    } else if (draggingState && draggingState.moved) {
+      // If we finished a drag operation, trigger callback
+      onDragEnd?.();
     }
 
     setDraggingState(null);
@@ -426,10 +441,33 @@ export default function FamilyTreeCanvasPlaceholder({
             minHeight: `${canvasDimensions.height}px`,
           }}
         >
+          {/* Grid pattern definitions */}
+          {showGridLines && (
+            <defs>
+              <pattern id="minorGrid" width={GRID_SIZE} height={GRID_SIZE} patternUnits="userSpaceOnUse">
+                <path d={`M ${GRID_SIZE} 0 L 0 0 0 ${GRID_SIZE}`} fill="none" stroke="hsl(var(--border))" strokeWidth="0.5" opacity="0.4" />
+              </pattern>
+              <pattern id="majorGrid" width={MAJOR_GRID_SIZE} height={MAJOR_GRID_SIZE} patternUnits="userSpaceOnUse">
+                <rect width={MAJOR_GRID_SIZE} height={MAJOR_GRID_SIZE} fill="url(#minorGrid)" />
+                <path d={`M ${MAJOR_GRID_SIZE} 0 L 0 0 0 ${MAJOR_GRID_SIZE}`} fill="none" stroke="hsl(var(--border))" strokeWidth="1" opacity="0.6" />
+              </pattern>
+            </defs>
+          )}
           <g
             ref={transformGroupRef}
             transform={`translate(${viewOffset.x}, ${viewOffset.y}) scale(${zoomLevel})`}
           >
+            {/* Grid background - inside transform group to follow pan/zoom */}
+            {showGridLines && (
+              <rect
+                x={-5000}
+                y={-5000}
+                width={10000}
+                height={10000}
+                fill="url(#majorGrid)"
+                pointerEvents="none"
+              />
+            )}
             <g data-panning-surface transform={`translate(${-canvasDimensions.minX + CANVAS_PADDING}, ${-canvasDimensions.minY + CANVAS_PADDING})`}>
               {renderLines()}
 
@@ -471,7 +509,7 @@ export default function FamilyTreeCanvasPlaceholder({
                           return (
                             <>
                               <div className={cn(
-                                "w-full h-full p-2 rounded-md shadow-md border-2 group-hover/node:shadow-lg transition-all duration-200 flex items-center space-x-2 overflow-hidden",
+                                "w-full h-full p-2 rounded-md shadow-md border-2 group-hover/node:shadow-lg flex items-center space-x-2 overflow-hidden",
                                 selectedPersonId === person.id && "border-accent ring-2 ring-accent",
                                 isLinkingMode && selectedPersonId !== person.id && "hover:border-green-500 hover:ring-2 hover:ring-green-500",
                                 // Orphan styling: orange/amber border for unlinked people

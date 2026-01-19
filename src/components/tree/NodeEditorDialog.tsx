@@ -60,7 +60,7 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
     if (person) {
       setFormData(person);
     } else {
-      setFormData({ gender: 'male', livingStatus: 'unknown', privacySetting: 'private' });
+      setFormData({ gender: undefined, livingStatus: 'unknown', privacySetting: 'private' });
     }
   }, [person, isOpen]);
 

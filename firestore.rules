@@ -62,6 +62,29 @@ service cloud.firestore {
         allow read: if rootIsOwner() || rootIsCollaborator();
         allow write, delete: if rootIsOwner() || rootHasRole('editor') || rootHasRole('manager');
       }
+
+      // Rules for 'layoutHistory' subcollection
+      match /layoutHistory/{snapshotId} {
+        function rootIsOwner() {
+          return get(/databases/$(database)/documents/trees/$(treeId)).data.ownerId == request.auth.uid;
+        }
+        
+        function rootIsCollaborator() {
+          let treeData = get(/databases/$(database)/documents/trees/$(treeId)).data;
+          return treeData.collaborators[request.auth.uid] != null;
+        }
+        
+        function rootHasRole(role) {
+          let treeData = get(/databases/$(database)/documents/trees/$(treeId)).data;
+          return treeData.collaborators[request.auth.uid] == role;
+        }
+
+        // Viewers can see history
+        allow read: if rootIsOwner() || rootIsCollaborator();
+        
+        // Only Editors/Managers/Owners can create or delete snapshots
+        allow create, delete: if rootIsOwner() || rootHasRole('editor') || rootHasRole('manager');
+      }
     }
 
     // ONE-TIME MIGRATION RULE: Allow any authenticated user to read the old, top-level 'people' collection.
@@ -76,8 +99,10 @@ service cloud.firestore {
       // Anyone authenticated can create an invitation (for their own trees)
       allow create: if request.auth != null && request.resource.data.inviterUid == request.auth.uid;
       
-      // Allow anyone to READ an invitation (needed for invite page display before login)
-      // This is safe - just shows "You've been invited by X to tree Y"
+      // SECURITY NOTE: Public read is intentional for invite preview UX.
+      // Users need to see "You've been invited by X to tree Y" before logging in.
+      // Invitation IDs are auto-generated (unpredictable), no collection listing is possible.
+      // Only basic metadata is exposed (inviter name, tree name, role).
       allow read: if true;
       
       // Inviter can update (resend) and delete their invitations

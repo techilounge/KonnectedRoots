@@ -26,9 +26,21 @@ service firebase.storage {
       );
     }
 
+    // Check if user can read (owner OR any collaborator role)
+    function canReadTree(treeId) {
+      let treeData = firestore.get(/databases/(default)/documents/trees/$(treeId)).data;
+      let uid = request.auth.uid;
+      return authed() && (
+        treeData.ownerId == uid || 
+        uid in treeData.collaborators
+      );
+    }
+
     // Profile photos & media for people inside trees
     match /trees/{treeId}/people/{personId}/{fileName} {
-      // You can make read public or restrict later as needed
+      // SECURITY NOTE: Currently public read for shared tree previews and exports.
+      // URLs are unpredictable (tree ID + person ID + filename).
+      // To require authentication, change to: allow read: if canReadTree(treeId);
       allow read: if true;
 
       // User must have edit rights to the tree

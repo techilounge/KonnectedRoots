@@ -69,9 +69,34 @@ export async function handleGenerateBiography(input: GenerateBiographyInput): Pr
   }
 }
 
+// Define the Zod schema for relationship finding input validation
+const PersonInfoSchema = z.object({
+  id: z.string().min(1),
+  firstName: z.string(),
+  lastName: z.string().optional(),
+  gender: z.enum(['male', 'female', 'other', 'unknown']),
+  parentId1: z.string().nullable().optional(),
+  parentId2: z.string().nullable().optional(),
+  spouseIds: z.array(z.string()).optional(),
+  childrenIds: z.array(z.string()).optional(),
+});
+
+const FindRelationshipInputSchema = z.object({
+  person1: PersonInfoSchema,
+  person2: PersonInfoSchema,
+  allPeople: z.array(PersonInfoSchema),
+});
+
 export async function handleFindRelationship(input: FindRelationshipInput): Promise<FindRelationshipOutput | { error: string }> {
+  const parsedInput = FindRelationshipInputSchema.safeParse(input);
+
+  if (!parsedInput.success) {
+    console.error("Invalid input for relationship finding:", parsedInput.error.format());
+    return { error: "Invalid input: " + parsedInput.error.format()._errors.join(', ') };
+  }
+
   try {
-    const result = await findRelationshipFlow(input);
+    const result = await findRelationshipFlow(parsedInput.data as FindRelationshipInput);
     return result;
   } catch (error) {
     console.error("Error in handleFindRelationship:", error);
@@ -108,15 +133,6 @@ export async function handleUploadProfilePicture(formData: FormData): Promise<{ 
   }
 }
 
-
-// Example of another action (not used in this scaffold but for structure)
-export async function saveFamilyTree(treeData: any) {
-  // In a real app, this would save to a database
-  console.log("Saving family tree:", treeData);
-  // Simulate async operation
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  return { success: true, message: "Family tree saved (simulated)." };
-}
 
 // Translation action
 const HandleTranslateDocumentInputSchema = z.object({
