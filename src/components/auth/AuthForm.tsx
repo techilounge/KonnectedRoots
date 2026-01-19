@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import { useState } from "react";
@@ -34,6 +35,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
     password: z.string().min(6, { message: "Password must be at least 6 characters." }),
     name: mode === "signup" ? z.string().min(2, { message: "Name must be at least 2 characters." }) : z.string().optional(),
     confirmPassword: mode === "signup" ? z.string() : z.string().optional(),
+    gdprConsent: mode === "signup" ? z.boolean().refine(val => val === true, { message: "You must agree to continue." }) : z.boolean().optional(),
   }).refine(data => {
     if (mode === 'signup') {
       return data.password === data.confirmPassword;
@@ -53,6 +55,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
       password: "",
       name: "",
       confirmPassword: "",
+      gdprConsent: false,
     },
   });
 
@@ -173,6 +176,32 @@ export default function AuthForm({ mode }: AuthFormProps) {
                       <Input type="password" placeholder="••••••••" {...field} />
                     </FormControl>
                     <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+            {mode === "signup" && (
+              <FormField
+                control={form.control}
+                name="gdprConsent"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        aria-required="true"
+                      />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel className="text-sm font-normal">
+                        I agree to the{' '}
+                        <Link href="/privacy" className="text-primary hover:underline" target="_blank">Privacy Policy</Link>
+                        {' '}and{' '}
+                        <Link href="/terms" className="text-primary hover:underline" target="_blank">Terms of Service</Link>
+                      </FormLabel>
+                      <FormMessage />
+                    </div>
                   </FormItem>
                 )}
               />

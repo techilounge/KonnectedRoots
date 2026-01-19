@@ -74,6 +74,15 @@ export default function PrivacyPolicyPage() {
                         <li>Prevent fraud and enforce our Terms of Service</li>
                     </ul>
 
+                    <h3>3.1 Legal Basis for Processing (GDPR)</h3>
+                    <p>If you are in the European Economic Area (EEA), we process your data based on:</p>
+                    <ul>
+                        <li><strong>Contract</strong>: To provide the KonnectedRoots service you signed up for</li>
+                        <li><strong>Consent</strong>: For optional features like marketing emails and analytics cookies</li>
+                        <li><strong>Legitimate Interest</strong>: To improve our service, prevent fraud, and ensure security</li>
+                        <li><strong>Legal Obligation</strong>: To comply with applicable laws and regulations</li>
+                    </ul>
+
                     <h2>4. Data Sharing and Disclosure</h2>
 
                     <h3>4.1 We Do NOT Sell Your Data</h3>
@@ -143,8 +152,13 @@ export default function PrivacyPolicyPage() {
 
                     <h2>10. International Data Transfers</h2>
                     <p>
-                        Your information may be transferred to and processed in countries other than your own. We ensure appropriate safeguards are in place for international transfers in compliance with applicable data protection laws.
+                        Your information may be transferred to and processed in countries other than your own, including the United States. We ensure appropriate safeguards are in place for international transfers, including:
                     </p>
+                    <ul>
+                        <li><strong>Standard Contractual Clauses (SCCs)</strong> approved by the European Commission</li>
+                        <li>Data processing agreements with all third-party providers</li>
+                        <li>Technical and organizational security measures</li>
+                    </ul>
 
                     <h2>11. Changes to This Policy</h2>
                     <p>
@@ -158,6 +172,24 @@ export default function PrivacyPolicyPage() {
                     <ul>
                         <li>Email: <a href="mailto:privacy@konnectedroots.com">privacy@konnectedroots.com</a></li>
                         <li>Contact Form: <Link href="/contact">konnectedroots.com/contact</Link></li>
+                    </ul>
+
+                    <h2>13. Your Right to Lodge a Complaint</h2>
+                    <p>
+                        If you are in the EEA and believe we have not adequately addressed your data protection concerns, you have the right to lodge a complaint with your local Data Protection Authority (DPA). A list of DPAs can be found at:
+                    </p>
+                    <p>
+                        <a href="https://edpb.europa.eu/about-edpb/about-edpb/members_en" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                            European Data Protection Board - Members
+                        </a>
+                    </p>
+
+                    <h2>14. Data Protection Contact</h2>
+                    <p>
+                        For data protection inquiries specifically related to GDPR, please contact our designated data protection representative:
+                    </p>
+                    <ul>
+                        <li>Email: <a href="mailto:dpo@konnectedroots.com">dpo@konnectedroots.com</a></li>
                     </ul>
 
                     <div className="mt-12 p-6 bg-secondary rounded-lg">

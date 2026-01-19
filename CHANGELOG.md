@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Cookie Consent Banner**: GDPR-compliant cookie consent with Accept All / Essential Only options.
+- **GDPR Signup Consent**: Required checkbox agreeing to Privacy Policy and Terms on signup.
+- **Privacy Policy Enhancements**: Added Legal Basis for Processing, Standard Contractual Clauses (SCCs), Right to Lodge Complaint, and Data Protection Contact (dpo@).
+- **Skip Navigation Link**: Keyboard-accessible "Skip to main content" link for screen readers (WCAG 2.4.1).
+- **Focus Indicators**: Consistent focus-visible styling on all interactive elements (WCAG 2.4.7).
+- **Data Export UI**: New "Your Data & Privacy" section in Profile with data export request button.
+- **AI Features Guide**: Added "Using AI Features" section to How-To guide with OCR, Translation, and Enhancement tutorials.
+- **AI FAQ Updates**: Added cost breakdown and refund policy to FAQ.
+
+### Changed
+- **Header Accessibility**: Added ARIA labels to user menu dropdown.
+
 ## [0.2.0] - 2026-01-18
 
 ### Added
