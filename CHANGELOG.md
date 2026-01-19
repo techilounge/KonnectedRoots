@@ -48,6 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **AI Credit Balance**: Fixed issue where credit balance would not update immediately after consuming credits (moved consumption to client-side).
+- **CTA Button Redirects**: Fixed "Get Started Free" and "Create Your Family Tree Now" buttons redirecting logged-in users to signup instead of dashboard.
 - **GEDCOM Export Gender Handling**: Fixed incorrect HUSB/WIFE assignment when one parent has "unknown" gender. Now correctly infers roles from the other parent.
 - **GEDCOM Import ID Extraction**: Fixed `extractId` function to properly remove the "I" prefix from GEDCOM individual IDs, ensuring correct relationship matching on import.
 - **Clean Delete for People**: Deleting a person now cleans up all orphaned references in related people's spouseIds, childrenIds, and parentId fields.
