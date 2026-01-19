@@ -53,7 +53,7 @@ export default function Header() {
                 <NotificationBell />
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+                    <Button variant="ghost" className="relative h-10 w-10 rounded-full" aria-label="Open user menu">
                       <Avatar className="h-9 w-9">
                         <AvatarImage src={user.photoURL || `https://placehold.co/40x40.png?text=${userInitial}`} alt={userName} data-ai-hint="user avatar" />
                         <AvatarFallback>{userInitial}</AvatarFallback>

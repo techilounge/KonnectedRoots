@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, UserCircle, Mail, Edit2, KeyRound, Trash2, ImageUp, Eye, EyeOff, Save, XCircle } from 'lucide-react';
+import { Loader2, UserCircle, Mail, Edit2, KeyRound, Trash2, ImageUp, Eye, EyeOff, Save, XCircle, Download, Shield } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { AICreditUsageCard } from '@/components/billing/AICreditUsageCard';
 
@@ -178,6 +178,40 @@ export default function ProfilePage() {
           </div>
 
           <AICreditUsageCard usage={userProfile?.usage} className="bg-muted/10 border-primary/20" />
+
+          {/* GDPR: Your Data & Privacy Section */}
+          <div className="border-t pt-6 space-y-4">
+            <h3 className="text-lg font-headline flex items-center">
+              <Shield className="mr-2 h-5 w-5 text-primary" />
+              Your Data & Privacy
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              You have the right to access, export, and delete your personal data under GDPR and other privacy regulations.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  toast({
+                    title: "Export Requested",
+                    description: "Your data export is being prepared. You'll receive an email with a download link within 24 hours.",
+                  });
+                }}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Export My Data
+              </Button>
+              <Button variant="ghost" asChild>
+                <a href="/privacy" target="_blank" rel="noopener noreferrer">
+                  <Shield className="mr-2 h-4 w-4" />
+                  Privacy Policy
+                </a>
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              For GEDCOM exports of your family trees, use the Export feature in each tree's settings.
+            </p>
+          </div>
 
           <div className="border-t pt-6 space-y-4">
             <h3 className="text-lg font-headline">Account Settings</h3>

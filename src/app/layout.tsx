@@ -3,6 +3,7 @@ import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import Header from '@/components/shared/Header';
 import Footer from '@/components/shared/Footer';
+import CookieConsentBanner from '@/components/shared/CookieConsentBanner';
 import { AuthProvider } from '@/hooks/useAuth'; // Using mocked AuthProvider
 
 export const metadata: Metadata = {
@@ -55,12 +56,19 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased flex flex-col min-h-screen">
         <AuthProvider>
+          <a
+            href="#main-content"
+            className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-md focus:outline-none"
+          >
+            Skip to main content
+          </a>
           <Header />
-          <main className="flex-grow">
+          <main id="main-content" className="flex-grow">
             {children}
           </main>
           <Footer />
           <Toaster />
+          <CookieConsentBanner />
         </AuthProvider>
       </body>
     </html>
