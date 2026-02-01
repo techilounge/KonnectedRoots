@@ -34,7 +34,7 @@ interface Invitation {
   inviterUid: string;
   inviterName: string;
   inviteeEmail: string;
-  inviteeUid?: string;
+  inviteeUid?: string | null;
   role: 'viewer' | 'editor' | 'manager';
   status: 'pending' | 'accepted' | 'declined';
   createdAt: any;
@@ -185,7 +185,7 @@ export default function ShareDialog({ isOpen, onClose, tree }: ShareDialogProps)
       const userQuery = query(usersRef, where('email', '==', inviteEmail.toLowerCase()));
       const userSnapshot = await getDocs(userQuery);
 
-      const inviteeUid = userSnapshot.empty ? undefined : userSnapshot.docs[0].id;
+      const inviteeUid = userSnapshot.empty ? null : userSnapshot.docs[0].id;
 
       // Create invitation
       const invitation: Omit<Invitation, 'id'> = {
