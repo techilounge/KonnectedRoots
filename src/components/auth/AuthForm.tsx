@@ -78,6 +78,9 @@ export default function AuthForm({ mode }: AuthFormProps) {
           case 'auth/wrong-password':
             setError('Invalid email or password. Please try again.');
             break;
+          case 'auth/invalid-credential':
+            setError('Invalid credentials. If you signed up with Google, please use the Google button below to log in.');
+            break;
           case 'auth/email-already-in-use':
             setError('An account with this email already exists.');
             break;

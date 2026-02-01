@@ -87,15 +87,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setLoading(true); // Start loading whenever auth state changes
       if (user) {
-        // User is signed in, fetch profile before setting state
-        const userProfileDoc = await getDoc(doc(db, `users/${user.uid}`));
-        if (userProfileDoc.exists()) {
-          setUserProfile(userProfileDoc.data() as UserProfile);
+        // User is signed in, fetch or create profile before setting state
+        try {
+          let userProfileDoc = await getDoc(doc(db, `users/${user.uid}`));
+
+          // If profile doesn't exist, create it (handles edge cases like failed initial creation)
+          if (!userProfileDoc.exists()) {
+            console.log('User profile not found, creating one...');
+            await createUserProfileDocument(user);
+            userProfileDoc = await getDoc(doc(db, `users/${user.uid}`));
+          }
+
+          if (userProfileDoc.exists()) {
+            setUserProfile(userProfileDoc.data() as UserProfile);
+            setUser(user);
+          } else {
+            // Profile still doesn't exist after creation attempt - log error but keep user signed in
+            console.error('Failed to create user profile document');
+            setUser(user);
+            setUserProfile(null);
+          }
+        } catch (error) {
+          console.error('Error fetching/creating user profile:', error);
+          // Keep the user signed in even if profile fetch fails
           setUser(user);
-        } else {
-          // This case might happen if profile creation fails.
-          // For now, we'll treat them as not fully logged in.
-          setUser(null);
           setUserProfile(null);
         }
       } else {
