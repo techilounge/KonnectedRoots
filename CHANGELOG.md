@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Email Notification System**: Comprehensive email notifications for key user actions:
+  - Welcome email on new user signup
+  - Invitation accepted email to tree owners
+  - Payment success/failure emails with Stripe integration
+  - Plan expiration reminders (7-day warning)
+  - Weekly activity digest (scheduled Mondays 9AM UTC)
+  - Inactivity reminders after 30 days
+- **Branded Email Templates**: Responsive HTML templates with KonnectedRoots branding, consistent styling, and mobile-friendly design.
+- **Email Preferences**: User settings to control notification preferences (tree activity, weekly digest, reminders).
 - **Cookie Consent Banner**: GDPR-compliant cookie consent with Accept All / Essential Only options.
 - **GDPR Signup Consent**: Required checkbox agreeing to Privacy Policy and Terms on signup.
 - **Privacy Policy Enhancements**: Added Legal Basis for Processing, Standard Contractual Clauses (SCCs), Right to Lodge Complaint, and Data Protection Contact (dpo@).
@@ -19,6 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Header Accessibility**: Added ARIA labels to user menu dropdown.
+- **Hosting Migration**: App frontend now hosted on Vercel (Firebase App Hosting deprecated).
+
+### Fixed
+- **Invitation Firestore Error**: Fixed "undefined field value" error when inviting users without existing accounts by using `null` instead of `undefined`.
+- **Cloud Functions Deployment Timeout**: Fixed deployment timeout by using lazy Firestore initialization in `scheduledTasks.ts` and `stripeWebhook.ts`.
 
 ## [0.2.1] - 2026-01-19
 
