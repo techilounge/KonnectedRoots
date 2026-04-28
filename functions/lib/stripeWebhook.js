@@ -47,11 +47,16 @@ const https_1 = require("firebase-functions/v2/https");
 const logger = __importStar(require("firebase-functions/logger"));
 const stripe_1 = __importDefault(require("stripe"));
 const admin = __importStar(require("firebase-admin"));
+const sendEmail_1 = require("./sendEmail");
+const emailTemplates_1 = require("./emailTemplates");
 // Ensure Firebase Admin is initialized
 if (!admin.apps.length) {
     admin.initializeApp();
 }
-const db = admin.firestore();
+// Lazy-initialize Firestore to avoid timeout during deployment
+function getDb() {
+    return admin.firestore();
+}
 // Initialize Stripe lazily (secrets not available at deploy time)
 let _stripe = null;
 function getStripe() {
@@ -108,7 +113,7 @@ function mapSubscriptionToPlan(sub) {
  * Update user billing in Firestore
  */
 async function upsertUserBilling(uid, billing) {
-    const userRef = db.collection("users").doc(uid);
+    const userRef = getDb().collection("users").doc(uid);
     await userRef.set({
         billing: {
             plan: billing.plan,
@@ -128,7 +133,7 @@ async function upsertUserBilling(uid, billing) {
  * Update family billing in Firestore
  */
 async function upsertFamilyBilling(familyId, billing) {
-    const famRef = db.collection("families").doc(familyId);
+    const famRef = getDb().collection("families").doc(familyId);
     await famRef.set({
         plan: {
             status: billing.status,
@@ -151,7 +156,7 @@ exports.stripeWebhook = (0, https_1.onRequest)({
     region: "us-central1",
     secrets: ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"],
 }, async (req, res) => {
-    var _a, _b, _c, _d;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
     // Only accept POST
     if (req.method !== "POST") {
         res.status(405).send("Method Not Allowed");
@@ -169,7 +174,7 @@ exports.stripeWebhook = (0, https_1.onRequest)({
         return;
     }
     // 2) Idempotency guard
-    const eventRef = db.collection("billing_events").doc(event.id);
+    const eventRef = getDb().collection("billing_events").doc(event.id);
     const existing = await eventRef.get();
     if (existing.exists) {
         logger.info(`Event ${event.id} already processed`);
@@ -248,11 +253,95 @@ exports.stripeWebhook = (0, https_1.onRequest)({
                 break;
             }
             case "invoice.payment_failed": {
-                logger.warn("Payment failed - subscription.updated will handle status");
+                const failedInvoice = event.data.object;
+                logger.warn("Payment failed for invoice:", failedInvoice.id);
+                // Send payment failed email
+                try {
+                    const customerId = failedInvoice.customer;
+                    const customer = await getStripe().customers.retrieve(customerId);
+                    const uid = (_e = customer.metadata) === null || _e === void 0 ? void 0 : _e.kr_uid;
+                    if (uid) {
+                        const userDoc = await getDb().collection("users").doc(uid).get();
+                        const userData = userDoc.data();
+                        if (userData === null || userData === void 0 ? void 0 : userData.email) {
+                            const amount = failedInvoice.amount_due
+                                ? `$${(failedInvoice.amount_due / 100).toFixed(2)}`
+                                : "your subscription";
+                            // Calculate retry date (typically 3-7 days)
+                            const retryDate = new Date();
+                            retryDate.setDate(retryDate.getDate() + 3);
+                            const formattedRetryDate = retryDate.toLocaleDateString("en-US", {
+                                month: "long",
+                                day: "numeric",
+                                year: "numeric"
+                            });
+                            // Get Stripe billing portal URL
+                            const portalSession = await getStripe().billingPortal.sessions.create({
+                                customer: customerId,
+                                return_url: "https://konnectedroots.app/settings"
+                            });
+                            const email = (0, emailTemplates_1.paymentFailedEmail)(userData.displayName || userData.email, amount, formattedRetryDate, portalSession.url);
+                            await (0, sendEmail_1.sendEmail)({
+                                to: userData.email,
+                                subject: email.subject,
+                                html: email.html
+                            });
+                            logger.info(`Payment failed email sent to ${userData.email}`);
+                        }
+                    }
+                }
+                catch (emailError) {
+                    logger.error("Error sending payment failed email:", emailError);
+                }
                 break;
             }
             case "invoice.paid": {
-                logger.info("Invoice paid - subscription.updated will ensure active status");
+                const paidInvoice = event.data.object;
+                logger.info("Invoice paid:", paidInvoice.id);
+                // Send payment success email
+                try {
+                    const customerId = paidInvoice.customer;
+                    const customer = await getStripe().customers.retrieve(customerId);
+                    const uid = (_f = customer.metadata) === null || _f === void 0 ? void 0 : _f.kr_uid;
+                    if (uid) {
+                        const userDoc = await getDb().collection("users").doc(uid).get();
+                        const userData = userDoc.data();
+                        if (userData === null || userData === void 0 ? void 0 : userData.email) {
+                            // Determine plan name from billing
+                            let planName = "Pro";
+                            if (((_g = userData.billing) === null || _g === void 0 ? void 0 : _g.plan) === "family") {
+                                planName = "Family";
+                            }
+                            if (((_h = userData.billing) === null || _h === void 0 ? void 0 : _h.interval) === "year") {
+                                planName += " (Annual)";
+                            }
+                            else {
+                                planName += " (Monthly)";
+                            }
+                            const amount = paidInvoice.amount_paid
+                                ? `$${(paidInvoice.amount_paid / 100).toFixed(2)}`
+                                : "Paid";
+                            // Calculate next billing date
+                            const nextBillingDate = ((_j = userData.billing) === null || _j === void 0 ? void 0 : _j.currentPeriodEnd)
+                                ? new Date(userData.billing.currentPeriodEnd).toLocaleDateString("en-US", {
+                                    month: "long",
+                                    day: "numeric",
+                                    year: "numeric"
+                                })
+                                : "Next billing cycle";
+                            const email = (0, emailTemplates_1.paymentSuccessEmail)(userData.displayName || userData.email, planName, amount, nextBillingDate, paidInvoice.hosted_invoice_url || undefined);
+                            await (0, sendEmail_1.sendEmail)({
+                                to: userData.email,
+                                subject: email.subject,
+                                html: email.html
+                            });
+                            logger.info(`Payment success email sent to ${userData.email}`);
+                        }
+                    }
+                }
+                catch (emailError) {
+                    logger.error("Error sending payment success email:", emailError);
+                }
                 break;
             }
             default:

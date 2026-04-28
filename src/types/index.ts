@@ -24,6 +24,14 @@ export interface UserProfile {
     aiActionsAllowance: number;
     storageUsedBytes: number;
   };
+  emailPreferences?: {
+    marketing: boolean;       // Activity digest, tips
+    transactional: boolean;   // Always true (payments, security)
+    treeActivity: boolean;    // Invitation accepted, tree changes
+    reminders: boolean;       // Inactivity, plan expiring
+  };
+  lastActivityAt?: any;       // serverTimestamp - for inactivity tracking
+  welcomeEmailSent?: boolean;
   createdAt: any; // serverTimestamp
   updatedAt: any; // serverTimestamp
 }

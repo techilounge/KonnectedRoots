@@ -5,6 +5,8 @@ import Header from '@/components/shared/Header';
 import Footer from '@/components/shared/Footer';
 import CookieConsentBanner from '@/components/shared/CookieConsentBanner';
 import { AuthProvider } from '@/hooks/useAuth'; // Using mocked AuthProvider
+import { Analytics } from "@vercel/analytics/next"
+
 
 export const metadata: Metadata = {
   title: 'KonnectedRoots - Build & Share Your Family Tree Online',
@@ -69,7 +71,9 @@ export default function RootLayout({
           <Footer />
           <Toaster />
           <CookieConsentBanner />
+          <Analytics />
         </AuthProvider>
+
       </body>
     </html>
   );

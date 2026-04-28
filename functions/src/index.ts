@@ -11,7 +11,12 @@ import * as logger from "firebase-functions/logger";
 import { onDocumentWritten, onDocumentCreated } from "firebase-functions/v2/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
-import { Resend } from "resend";
+import { sendEmail } from "./sendEmail";
+import {
+  welcomeEmail,
+  invitationAcceptedEmail,
+  treeInviteEmail
+} from "./emailTemplates";
 
 // Initialize the Admin SDK
 admin.initializeApp();
@@ -21,6 +26,9 @@ const db = admin.firestore();
 // Export Stripe functions
 export { stripeWebhook } from "./stripeWebhook";
 export { createCheckoutSession, createPortalSession, addAIPack } from "./stripeBilling";
+
+// Export scheduled tasks
+export { weeklyActivityDigest, inactivityReminder, planExpirationReminder } from "./scheduledTasks";
 
 // Function to handle invitation acceptance securely
 export const acceptInvitation = onCall(async (request) => {
@@ -94,6 +102,37 @@ export const acceptInvitation = onCall(async (request) => {
         createdAt: admin.firestore.FieldValue.serverTimestamp()
       });
     });
+
+    // Send email notification to inviter (outside transaction)
+    try {
+      const inviterDoc = await db.collection('users').doc(invitation.inviterUid).get();
+      const inviterData = inviterDoc.data();
+
+      if (inviterData?.email) {
+        // Check email preferences
+        const prefs = inviterData.emailPreferences || {};
+        if (prefs.treeActivity !== false) {
+          const email = invitationAcceptedEmail(
+            inviterData.displayName || inviterData.email,
+            user.token.name || user.token.email || 'A user',
+            invitation.treeName,
+            invitation.treeId,
+            invitation.role
+          );
+
+          await sendEmail({
+            to: inviterData.email,
+            subject: email.subject,
+            html: email.html
+          });
+
+          logger.info(`Invitation accepted email sent to ${inviterData.email}`);
+        }
+      }
+    } catch (emailError) {
+      // Don't fail the whole operation if email fails
+      logger.error("Error sending invitation accepted email:", emailError);
+    }
 
     return { success: true };
 
@@ -215,40 +254,27 @@ export const sendInvitationEmail = onDocumentWritten("invitations/{inviteId}", a
     const treeDoc = await db.collection('trees').doc(treeId).get();
     const treeTitle = treeDoc.exists ? treeDoc.data()?.title : 'a Family Tree';
 
-    const apiKey = process.env.RESEND_API_KEY;
-    if (!apiKey) {
-      logger.error("RESEND_API_KEY is not set.");
-      return;
-    }
-
-    const resend = new Resend(apiKey);
-
     // Use production URL for email links
-    const inviteUrl = `https://${process.env.GCLOUD_PROJECT || 'konnectedroots-u5xtb'}.web.app/invite/${event.params.inviteId}`;
+    const inviteUrl = `https://konnectedroots.app/invite/${event.params.inviteId}`;
 
-    const html = `
-            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2>You've been invited via KonnectedRoots!</h2>
-                <p><strong>${inviterName}</strong> invited you to collaborate on <strong>"${treeTitle}"</strong> as a <strong>${role}</strong>.</p>
-                <p>Click the button below to accept the invitation and start exploring your shared ancestry:</p>
-                <div style="margin: 24px 0;">
-                    <a href="${inviteUrl}" style="background-color: #2F855A; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Accept Invitation</a>
-                </div>
-                <p style="color: #666; font-size: 14px;">Or copy and paste this link into your browser:<br> <a href="${inviteUrl}">${inviteUrl}</a></p>
-                <hr style="margin-top: 40px; border: none; border-top: 1px solid #eee;">
-                <p style="color: #999; font-size: 12px;">KonnectedRoots - Collaborative Family Trees</p>
-            </div>
-        `;
+    // Generate branded email using template
+    const email = treeInviteEmail(
+      inviterName,
+      inviteeEmail,
+      treeTitle,
+      role,
+      inviteUrl
+    );
 
-    const { data, error } = await resend.emails.send({
-      from: 'KonnectedRoots <noreply@updates.konnectedroots.app>',
-      to: [inviteeEmail],
-      subject: `${inviterName} invited you to collaborate on ${treeTitle}`,
-      html: html,
+    // Send email using centralized utility
+    const result = await sendEmail({
+      to: inviteeEmail,
+      subject: email.subject,
+      html: email.html
     });
 
-    if (error) {
-      logger.error("Resend error:", error);
+    if (!result.success) {
+      logger.error("Error sending invitation email:", result.error);
       // We don't throw here to avoid infinite retries if the error is permanent (like invalid email)
       return;
     }
@@ -257,7 +283,7 @@ export const sendInvitationEmail = onDocumentWritten("invitations/{inviteId}", a
     // Update both emailSent and lastEmailSentAt
     await event.data.after.ref.update({
       emailSent: true,
-      emailId: data?.id,
+      emailId: result.emailId,
       lastEmailSentAt: admin.firestore.FieldValue.serverTimestamp()
     });
     logger.info(`Invitation email sent to ${inviteeEmail}`);
@@ -267,8 +293,9 @@ export const sendInvitationEmail = onDocumentWritten("invitations/{inviteId}", a
   }
 });
 
-
-export const checkPendingInvitations = onDocumentCreated("users/{userId}", async (event) => {
+// Triggered when a new user document is created
+// Handles: 1) Sending welcome email, 2) Linking pending invitations
+export const onUserCreated = onDocumentCreated("users/{userId}", async (event) => {
   const snapshot = event.data;
   if (!snapshot) return;
 
@@ -276,6 +303,32 @@ export const checkPendingInvitations = onDocumentCreated("users/{userId}", async
   const email = userData.email;
   if (!email) return;
 
+  // 1. Send Welcome Email
+  try {
+    const emailContent = welcomeEmail(userData.displayName || email);
+
+    const result = await sendEmail({
+      to: email,
+      subject: emailContent.subject,
+      html: emailContent.html
+    });
+
+    if (result.success) {
+      logger.info(`Welcome email sent to ${email}`);
+
+      // Mark welcome email as sent
+      await snapshot.ref.update({
+        welcomeEmailSent: true,
+        welcomeEmailSentAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+    } else {
+      logger.warn(`Failed to send welcome email to ${email}: ${result.error}`);
+    }
+  } catch (welcomeError) {
+    logger.error("Error sending welcome email:", welcomeError);
+  }
+
+  // 2. Link Pending Invitations
   try {
     const invitationsRef = db.collection('invitations');
     const q = invitationsRef.where('inviteeEmail', '==', email.toLowerCase()).where('status', '==', 'pending');

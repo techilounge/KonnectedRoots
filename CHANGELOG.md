@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Vercel Analytics**: Integrated Vercel Analytics for tracking page views and visitor insights.
 - **Email Notification System**: Comprehensive email notifications for key user actions:
   - Welcome email on new user signup
   - Invitation accepted email to tree owners

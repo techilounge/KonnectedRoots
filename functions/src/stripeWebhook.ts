@@ -9,13 +9,18 @@ import { onRequest } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import Stripe from "stripe";
 import * as admin from "firebase-admin";
+import { sendEmail } from "./sendEmail";
+import { paymentSuccessEmail, paymentFailedEmail } from "./emailTemplates";
 
 // Ensure Firebase Admin is initialized
 if (!admin.apps.length) {
     admin.initializeApp();
 }
 
-const db = admin.firestore();
+// Lazy-initialize Firestore to avoid timeout during deployment
+function getDb() {
+    return admin.firestore();
+}
 
 // Initialize Stripe lazily (secrets not available at deploy time)
 let _stripe: Stripe | null = null;
@@ -94,7 +99,7 @@ async function upsertUserBilling(
         cancelAtPeriodEnd: boolean;
     }
 ) {
-    const userRef = db.collection("users").doc(uid);
+    const userRef = getDb().collection("users").doc(uid);
     await userRef.set(
         {
             billing: {
@@ -129,7 +134,7 @@ async function upsertFamilyBilling(
         cancelAtPeriodEnd: boolean;
     }
 ) {
-    const famRef = db.collection("families").doc(familyId);
+    const famRef = getDb().collection("families").doc(familyId);
     await famRef.set(
         {
             plan: {
@@ -182,7 +187,7 @@ export const stripeWebhook = onRequest(
         }
 
         // 2) Idempotency guard
-        const eventRef = db.collection("billing_events").doc(event.id);
+        const eventRef = getDb().collection("billing_events").doc(event.id);
         const existing = await eventRef.get();
         if (existing.exists) {
             logger.info(`Event ${event.id} already processed`);
@@ -273,12 +278,120 @@ export const stripeWebhook = onRequest(
                 }
 
                 case "invoice.payment_failed": {
-                    logger.warn("Payment failed - subscription.updated will handle status");
+                    const failedInvoice = event.data.object as Stripe.Invoice;
+                    logger.warn("Payment failed for invoice:", failedInvoice.id);
+
+                    // Send payment failed email
+                    try {
+                        const customerId = failedInvoice.customer as string;
+                        const customer = await getStripe().customers.retrieve(customerId) as Stripe.Customer;
+                        const uid = customer.metadata?.kr_uid;
+
+                        if (uid) {
+                            const userDoc = await getDb().collection("users").doc(uid).get();
+                            const userData = userDoc.data();
+
+                            if (userData?.email) {
+                                const amount = failedInvoice.amount_due
+                                    ? `$${(failedInvoice.amount_due / 100).toFixed(2)}`
+                                    : "your subscription";
+
+                                // Calculate retry date (typically 3-7 days)
+                                const retryDate = new Date();
+                                retryDate.setDate(retryDate.getDate() + 3);
+                                const formattedRetryDate = retryDate.toLocaleDateString("en-US", {
+                                    month: "long",
+                                    day: "numeric",
+                                    year: "numeric"
+                                });
+
+                                // Get Stripe billing portal URL
+                                const portalSession = await getStripe().billingPortal.sessions.create({
+                                    customer: customerId,
+                                    return_url: "https://konnectedroots.app/settings"
+                                });
+
+                                const email = paymentFailedEmail(
+                                    userData.displayName || userData.email,
+                                    amount,
+                                    formattedRetryDate,
+                                    portalSession.url
+                                );
+
+                                await sendEmail({
+                                    to: userData.email,
+                                    subject: email.subject,
+                                    html: email.html
+                                });
+
+                                logger.info(`Payment failed email sent to ${userData.email}`);
+                            }
+                        }
+                    } catch (emailError) {
+                        logger.error("Error sending payment failed email:", emailError);
+                    }
                     break;
                 }
 
                 case "invoice.paid": {
-                    logger.info("Invoice paid - subscription.updated will ensure active status");
+                    const paidInvoice = event.data.object as Stripe.Invoice;
+                    logger.info("Invoice paid:", paidInvoice.id);
+
+                    // Send payment success email
+                    try {
+                        const customerId = paidInvoice.customer as string;
+                        const customer = await getStripe().customers.retrieve(customerId) as Stripe.Customer;
+                        const uid = customer.metadata?.kr_uid;
+
+                        if (uid) {
+                            const userDoc = await getDb().collection("users").doc(uid).get();
+                            const userData = userDoc.data();
+
+                            if (userData?.email) {
+                                // Determine plan name from billing
+                                let planName = "Pro";
+                                if (userData.billing?.plan === "family") {
+                                    planName = "Family";
+                                }
+                                if (userData.billing?.interval === "year") {
+                                    planName += " (Annual)";
+                                } else {
+                                    planName += " (Monthly)";
+                                }
+
+                                const amount = paidInvoice.amount_paid
+                                    ? `$${(paidInvoice.amount_paid / 100).toFixed(2)}`
+                                    : "Paid";
+
+                                // Calculate next billing date
+                                const nextBillingDate = userData.billing?.currentPeriodEnd
+                                    ? new Date(userData.billing.currentPeriodEnd).toLocaleDateString("en-US", {
+                                        month: "long",
+                                        day: "numeric",
+                                        year: "numeric"
+                                    })
+                                    : "Next billing cycle";
+
+                                const email = paymentSuccessEmail(
+                                    userData.displayName || userData.email,
+                                    planName,
+                                    amount,
+                                    nextBillingDate,
+                                    paidInvoice.hosted_invoice_url || undefined
+                                );
+
+                                await sendEmail({
+                                    to: userData.email,
+                                    subject: email.subject,
+                                    html: email.html
+                                });
+
+                                logger.info(`Payment success email sent to ${userData.email}`);
+                            }
+                        }
+                    } catch (emailError) {
+                        logger.error("Error sending payment success email:", emailError);
+                    }
                     break;
                 }
 
