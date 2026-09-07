@@ -35,6 +35,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Invitation Firestore Error**: Fixed "undefined field value" error when inviting users without existing accounts by using `null` instead of `undefined`.
 - **Cloud Functions Deployment Timeout**: Fixed deployment timeout by using lazy Firestore initialization in `scheduledTasks.ts` and `stripeWebhook.ts`.
 
+## [0.3.0] - 2026-09-07
+
+### Added
+- **Platform Admin Role & Subsystem**: Enterprise-grade role-based access control (RBAC) combining cryptographically signed Firebase Auth Custom Claims (`admin=true`, `role in ['admin', 'super_admin']`) and synchronized Firestore user documents.
+- **Privileged Server Actions Layer** (`src/app/admin/actions.ts`): Secure, server-side administrative mutations using `firebase-admin` with caller token verification and automatic logging into the `audit_logs` collection.
+- **Admin Bootstrapping CLI** (`scripts/set-admin.mjs`): Added `npm run set-admin <email> [role]` command to provision Platform Admins and Super Admins.
+- **Platform Admin Portal (`/admin`)**:
+  - **Executive Dashboard** (`/admin`): Real-time KPI telemetry cards and interactive Recharts visualizations (User Growth Area Chart, Subscription Donut, AI Usage Stacked Bar, Tree Velocity).
+  - **User & Account Governance** (`/admin/users`): Full user directory with detail inspector, plan upgrades, credit grants, role promotions, and account suspensions.
+  - **Trees & Content Governance** (`/admin/trees`): Global tree directory with node counters, collaborator stats, and direct tree inspection.
+  - **Revenue & Subscriptions Hub** (`/admin/billing`): MRR, ARR, active subscriber directory, plan economics, and Stripe telemetry.
+  - **AI Operations & Metering** (`/admin/ai-metering`): Feature-level Gemini compute monitoring, cost per call calculations, and top power users table.
+  - **Analytics & Reporting Center** (`/admin/reports`): Multi-domain datasets with instant CSV and JSON export downloads.
+  - **System Configuration & Feature Flags** (`/admin/configuration`): Global killswitches for GenAI, OCR, photo restoration, GEDCOM imports, and public registration.
+  - **Live System Broadcast Announcement Banner** (`SystemBroadcastBanner.tsx`): Configurable platform-wide banners (Info, Warning, Success, Promo) with real-time visual preview.
+  - **Audit Trail & Security Ledger** (`/admin/audit-logs`): Immutable administrative activity logs with structured JSON diff inspector.
+  - **Support Inquiries** (`/admin/messages`): Inbound contact form management with status workflows and admin notes.
+- **Interactive Admin Pagination System** (`AdminPagination.tsx`): Reusable pagination component with smart windowed page numbers, ellipsis, configurable page sizes (5, 10, 20, 25, 50, 100), range indicators, and boundary navigation across all 5 core admin views.
+- **Universal Real-Time Live Search**:
+  - Global debounced (280ms) search in `AdminHeader.tsx` with floating popover returning matching Admin Pages, Users, and Family Trees.
+  - Debounced real-time live search with URL query param sync (`?q=`) and clear buttons `(X)` across all admin search bars.
+- **Destructive Action Confirmation Modals**: Sign-Out confirmation dialog and `AlertDialog` confirmation modals for all administrative modifications (plan changes, credit grants, role updates, suspensions).
+- **2026 SEO Overhaul & Google Search Console Preparation**:
+  - Dynamic XML Sitemap generator (`src/app/sitemap.ts`) auto-generating `/sitemap.xml` with priority weighting, change frequencies, and dynamic public tree inclusion. Successfully verified in Google Search Console with 8 discovered pages.
+  - Crawler Directives (`src/app/robots.ts`) auto-generating `/robots.txt` allowing public routes and strictly disallowing private administrative/auth routes to preserve crawl budget.
+  - Schema.org Structured Data (`JsonLd.tsx`): Injected XSS-safe JSON-LD schemas for `Organization`, `WebSite` (with Sitelinks SearchBox), `SoftwareApplication`, `Product`/`Offers`, `FAQPage`, `HowTo`, `BreadcrumbList`, and `ContactPage`.
+  - High-Intent Metadata Layouts: Created dedicated layout files with metadata and canonical tags for `/pricing` and `/contact`.
+  - Dynamic Public Tree Indexing: Created `src/app/tree/[treeId]/layout.tsx` to dynamically index public trees while enforcing strict `noindex` on private trees.
+  - Canonical Domain Alignment: Normalized canonical domain to `https://konnectedroots.app` matching GSC domain property `sc-domain:konnectedroots.app`.
+
+### Changed
+- **Admin Sidebar & Header UX**: Relocated desktop sidebar collapse button outside the search input into `AdminHeader.tsx` (`ChevronLeft`/`ChevronRight`) with secondary footer toggle. Fixed SVG branding logo dimensions and enforced `overflow-hidden` on the sidebar header to prevent layout overflow.
+
+### Fixed
+- **Vercel Server Action 500s**: Added embedded base64 fallback service account credentials in `src/lib/firebase/admin.ts` to ensure seamless server action execution in Vercel serverless environments.
+- **Snapshot Permission Errors**: Deployed updated Firestore security rules granting public read access on `system/{configDoc}` for the broadcast banner.
+
 ## [0.2.1] - 2026-01-19
 
 ### Added
