@@ -3,20 +3,32 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
+    // Helper to check if caller is a Platform Admin
+    function isPlatformAdmin() {
+      return request.auth != null && (
+        request.auth.token.admin == true ||
+        request.auth.token.role in ['admin', 'super_admin'] ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super_admin'])
+      );
+    }
+
     // A user can read/write their own user profile document.
     // Any authenticated user can query users by email (for invitations)
     match /users/{userId} {
       // Anyone authenticated can read user profiles (needed for invitations and collaborator lists)
       allow read: if request.auth != null;
-      // Only the user can update their own profile, but CANNOT update billing, usage, or family plan fields
-      allow update: if request.auth != null && request.auth.uid == userId
-                    && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['billing', 'usage', 'family', 'entitlements', 'plan']);
+      // Platform admins can update any user profile; users can update their own non-privileged fields
+      allow update: if isPlatformAdmin() || (
+        request.auth != null && request.auth.uid == userId
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['billing', 'usage', 'family', 'entitlements', 'plan', 'role', 'isPlatformAdmin'])
+      );
       allow create: if request.auth != null && request.auth.uid == userId
                     && (!request.resource.data.keys().hasAny(['billing']) || request.resource.data.billing.plan == 'free')
-                    && (!request.resource.data.keys().hasAny(['plan']) || request.resource.data.plan == 'free');
+                    && (!request.resource.data.keys().hasAny(['plan']) || request.resource.data.plan == 'free')
+                    && (!request.resource.data.keys().hasAny(['role']) || request.resource.data.role == 'user');
     }
 
-    // Rules for the 'trees' collection and its 'people' subcollection.
     // Rules for the 'trees' collection and its 'people' subcollection.
     match /trees/{treeId} {
       // Helper function to check if user is owner
@@ -38,10 +50,10 @@ service cloud.firestore {
       allow create: if request.auth != null && request.resource.data.ownerId == request.auth.uid;
       
       // Owner can do anything. Collaborators can read. Managers can update.
-      // Also allow authenticated users to read if querying by slug (for SEO-friendly URL lookup)
-      allow read: if isOwner() || isCollaborator();
-      allow update: if isOwner() || hasRole('manager');
-      allow delete: if isOwner();
+      // Platform admins have full administrative oversight.
+      allow read: if isPlatformAdmin() || isOwner() || isCollaborator();
+      allow update: if isPlatformAdmin() || isOwner() || hasRole('manager');
+      allow delete: if isPlatformAdmin() || isOwner();
 
       // Rules for the 'people' subcollection within a tree.
       match /people/{personId} {
@@ -59,11 +71,11 @@ service cloud.firestore {
           return treeData.collaborators[request.auth.uid] != null;
         }
 
-        // Owner can do anything.
+        // Owner/Admin can do anything.
         // Viewers can read.
         // Editors and Managers can write.
-        allow read: if rootIsOwner() || rootIsCollaborator();
-        allow write, delete: if rootIsOwner() || rootHasRole('editor') || rootHasRole('manager');
+        allow read: if isPlatformAdmin() || rootIsOwner() || rootIsCollaborator();
+        allow write, delete: if isPlatformAdmin() || rootIsOwner() || rootHasRole('editor') || rootHasRole('manager');
       }
 
       // Rules for 'layoutHistory' subcollection
@@ -82,45 +94,27 @@ service cloud.firestore {
           return treeData.collaborators[request.auth.uid] == role;
         }
 
-        // Viewers can see history
-        allow read: if rootIsOwner() || rootIsCollaborator();
-        
-        // Only Editors/Managers/Owners can create or delete snapshots
-        allow create, delete: if rootIsOwner() || rootHasRole('editor') || rootHasRole('manager');
+        allow read: if isPlatformAdmin() || rootIsOwner() || rootIsCollaborator();
+        allow create, delete: if isPlatformAdmin() || rootIsOwner() || rootHasRole('editor') || rootHasRole('manager');
       }
     }
 
-    // ONE-TIME MIGRATION RULE: Allow any authenticated user to read the old, top-level 'people' collection.
-    // This is required for the "Fix Member Counts" button to find and move the orphaned data.
-    // This rule can be removed after the migration is complete for enhanced security.
-    // match /people/{personId} {
-    //   allow read, delete: if request.auth != null;
-    // }
-
     // Invitations collection for tree collaboration
     match /invitations/{invitationId} {
-      // Helper to check if inviter owns or manages the tree
       function canInviteToTree(targetTreeId) {
         let tree = get(/databases/$(database)/documents/trees/$(targetTreeId)).data;
-        return tree.ownerId == request.auth.uid || 
+        return isPlatformAdmin() || tree.ownerId == request.auth.uid || 
                (request.auth.uid in tree.collaborators && tree.collaborators[request.auth.uid] == 'manager');
       }
 
-      // Only the tree owner or a manager can create an invitation for their own tree
       allow create: if request.auth != null 
-                    && request.resource.data.inviterUid == request.auth.uid
+                    && (isPlatformAdmin() || request.resource.data.inviterUid == request.auth.uid)
                     && canInviteToTree(request.resource.data.treeId);
       
-      // SECURITY NOTE: Public read is intentional for invite preview UX.
-      // Users need to see "You've been invited by X to tree Y" before logging in.
-      // Invitation IDs are auto-generated (unpredictable), no collection listing is possible.
-      // Only basic metadata is exposed (inviter name, tree name, role).
       allow read: if true;
       
-      // Inviter can update (resend) and delete their invitations
-      allow update, delete: if request.auth != null && resource.data.inviterUid == request.auth.uid;
+      allow update, delete: if isPlatformAdmin() || (request.auth != null && resource.data.inviterUid == request.auth.uid);
       
-      // Invitee can update (accept/decline) or delete their invitations
       allow update: if request.auth != null && (
         request.auth.token.email == resource.data.inviteeEmail || 
         resource.data.inviteeUid == request.auth.uid
@@ -133,59 +127,62 @@ service cloud.firestore {
 
     // Notifications collection for in-app notifications
     match /notifications/{notificationId} {
-      // Only the recipient can read their notifications
-      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
-      
-      // Only the recipient can update (mark as read)
-      allow update: if request.auth != null && resource.data.userId == request.auth.uid;
-      
-      // Any authenticated user can create notifications (for invites, etc.)
+      allow read: if isPlatformAdmin() || (request.auth != null && resource.data.userId == request.auth.uid);
+      allow update: if isPlatformAdmin() || (request.auth != null && resource.data.userId == request.auth.uid);
       allow create: if request.auth != null;
+      allow delete: if isPlatformAdmin() || (request.auth != null && resource.data.userId == request.auth.uid);
     }
 
     // Families collection for Family plan workspaces
     match /families/{familyId} {
-      // Helper: check if user is family owner
       function isFamilyOwner() {
         return request.auth != null && resource.data.ownerUid == request.auth.uid;
       }
       
-      // Helper: check if user is a family member
       function isFamilyMember() {
         return request.auth != null && 
           exists(/databases/$(database)/documents/families/$(familyId)/seats/$(request.auth.uid));
       }
       
-      // Owner and members can read family data
-      allow read: if isFamilyOwner() || isFamilyMember();
+      allow read: if isPlatformAdmin() || isFamilyOwner() || isFamilyMember();
+      allow update: if isPlatformAdmin() || isFamilyOwner();
+      allow create, delete: if isPlatformAdmin();
       
-      // Only owner can update family settings
-      allow update: if isFamilyOwner();
-      
-      // Families are created by Cloud Functions (checkout flow)
-      allow create: if false;
-      allow delete: if false;
-      
-      // Family seats subcollection
       match /seats/{seatId} {
-        // Family owner can manage seats
-        allow read, write: if get(/databases/$(database)/documents/families/$(familyId)).data.ownerUid == request.auth.uid;
-        
-        // Users can read their own seat
+        allow read, write: if isPlatformAdmin() || get(/databases/$(database)/documents/families/$(familyId)).data.ownerUid == request.auth.uid;
         allow read: if request.auth != null && request.auth.uid == seatId;
       }
     }
 
-    // Contact messages collection (persisted via server action with adminDb)
+    // System configuration & global platform flags
+    match /system/{configDoc} {
+      // Authenticated users can read public configuration (broadcasts, maintenance mode)
+      allow read: if request.auth != null;
+      // Only platform admins can write to system configuration
+      allow write: if isPlatformAdmin();
+    }
+
+    // Platform audit logs collection
+    match /audit_logs/{logId} {
+      // Only platform admins can read audit logs
+      allow read: if isPlatformAdmin();
+      // Only platform admins or server adminDb can create audit entries
+      allow create: if isPlatformAdmin();
+      allow update, delete: if false; // Audit logs are immutable
+    }
+
+    // Contact messages collection
     match /contact_messages/{messageId} {
-      // Direct client read/write disabled to protect user submissions & prevent spam
-      allow read, write: if false;
+      // Platform admins can read and update status of inquiries
+      allow read, update: if isPlatformAdmin();
+      allow delete: if isPlatformAdmin();
+      allow create: if false; // Submissions are handled via server action with adminDb
     }
 
     // Billing events collection (for audit trail, managed by Cloud Functions)
     match /billing_events/{eventId} {
-      // No client access - only Cloud Functions write here
-      allow read, write: if false;
+      allow read: if isPlatformAdmin();
+      allow write: if false;
     }
   }
 }

@@ -5,12 +5,17 @@ export type Relationship = 'parent' | 'child' | 'spouse';
 export type RelationshipType = 'spouse' | 'parent' | 'child';
 
 
+export type PlatformRole = 'user' | 'admin' | 'super_admin';
+
 export interface UserProfile {
   uid: string;
   displayName: string;
   email: string;
   photoURL?: string;
-  plan: "free" | "pro" | "team";
+  plan: "free" | "pro" | "team" | "family";
+  role?: PlatformRole;
+  isPlatformAdmin?: boolean;
+  disabled?: boolean;
   entitlements: {
     maxTrees: number;
     maxPeoplePerTree: number;
@@ -29,6 +34,14 @@ export interface UserProfile {
     transactional: boolean;   // Always true (payments, security)
     treeActivity: boolean;    // Invitation accepted, tree changes
     reminders: boolean;       // Inactivity, plan expiring
+  };
+  billing?: {
+    stripeCustomerId?: string;
+    stripeSubscriptionId?: string;
+    status?: string;
+    plan?: string;
+    currentPeriodEnd?: any;
+    cancelAtPeriodEnd?: boolean;
   };
   lastActivityAt?: any;       // serverTimestamp - for inactivity tracking
   welcomeEmailSent?: boolean;
@@ -114,4 +127,131 @@ export interface LayoutSnapshot {
     [personId: string]: { x: number; y: number };
   };
 }
+
+// -----------------------------------------------------------------------------
+// Platform Admin Portal Types
+// -----------------------------------------------------------------------------
+
+export interface AdminActivityItem {
+  id: string;
+  type: 'signup' | 'upgrade' | 'downgrade' | 'tree_created' | 'gedcom_imported' | 'support_inquiry' | 'admin_action';
+  title: string;
+  description: string;
+  timestamp: any;
+  userEmail?: string;
+  userName?: string;
+  metadata?: Record<string, any>;
+}
+
+export interface AdminDashboardStats {
+  totalUsers: number;
+  freeUsers: number;
+  proUsers: number;
+  familyUsers: number;
+  totalTrees: number;
+  totalPeople: number;
+  totalAiActionsUsed: number;
+  estimatedMRR: number;
+  userGrowthSeries: { date: string; users: number; newUsers: number }[];
+  planDistribution: { name: string; value: number; color: string }[];
+  aiActionsSeries: { name: string; count: number; costEstimate: number }[];
+  treeCreationSeries: { date: string; count: number }[];
+  recentActivity: AdminActivityItem[];
+  systemStatus: {
+    status: 'operational' | 'degraded' | 'maintenance';
+    latencyMs: number;
+    lastChecked: string;
+  };
+}
+
+export interface AdminUserItem {
+  uid: string;
+  email: string;
+  displayName: string;
+  photoURL?: string;
+  plan: 'free' | 'pro' | 'team' | 'family';
+  role: PlatformRole;
+  isPlatformAdmin?: boolean;
+  disabled?: boolean;
+  createdAt: any;
+  lastActivityAt?: any;
+  treesCount?: number;
+  aiActionsUsed?: number;
+  aiActionsAllowance?: number;
+  exportsUsed?: number;
+  stripeCustomerId?: string;
+  subscriptionStatus?: string;
+  currentPeriodEnd?: any;
+}
+
+export interface AdminTreeItem {
+  id: string;
+  title: string;
+  slug: string;
+  ownerId: string;
+  ownerEmail?: string;
+  ownerName?: string;
+  memberCount: number;
+  visibility: 'private' | 'link' | 'public';
+  collaboratorCount: number;
+  collaborators?: Record<string, string>;
+  createdAt: any;
+  lastUpdated: any;
+}
+
+export interface SystemConfiguration {
+  maintenanceMode: {
+    enabled: boolean;
+    message: string;
+    allowedIps?: string[];
+  };
+  featureFlags: {
+    aiFeatures: boolean;
+    documentOcr: boolean;
+    photoEnhancement: boolean;
+    gedcomImports: boolean;
+    newRegistrations: 'open' | 'invite-only' | 'paused';
+  };
+  planLimits: {
+    free: { maxTrees: number; maxPeoplePerTree: number; aiCreditsMonthly: number; maxExportsPerMonth: number };
+    pro: { maxTrees: number; maxPeoplePerTree: number; aiCreditsMonthly: number; maxExportsPerMonth: number };
+    family: { maxTrees: number; maxPeoplePerTree: number; aiCreditsMonthly: number; maxSeats: number };
+  };
+  broadcastBanner?: {
+    enabled: boolean;
+    type: 'info' | 'warning' | 'success' | 'promo';
+    message: string;
+    linkUrl?: string;
+    linkText?: string;
+    dismissible?: boolean;
+  };
+  updatedAt?: any;
+  updatedBy?: string;
+}
+
+export interface AuditLogItem {
+  id: string;
+  timestamp: any;
+  adminUid: string;
+  adminEmail: string;
+  adminName?: string;
+  action: string;
+  category: 'user_management' | 'subscription' | 'tree_moderation' | 'configuration' | 'security';
+  targetId?: string;
+  targetType?: string;
+  details: string;
+  metadata?: Record<string, any>;
+}
+
+export interface ContactMessageItem {
+  id: string;
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+  status: 'new' | 'in_review' | 'resolved' | 'spam';
+  createdAt: any;
+  notes?: string;
+}
+
 

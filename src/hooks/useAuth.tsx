@@ -26,6 +26,8 @@ type AuthContextType = {
   user: FirebaseUser | null;
   userProfile: UserProfile | null;
   loading: boolean;
+  isAdmin: boolean;
+  isSuperAdmin: boolean;
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -81,6 +83,8 @@ const createUserProfileDocument = async (user: FirebaseUser, displayNameOverride
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [isAdminClaim, setIsAdminClaim] = useState(false);
+  const [isSuperAdminClaim, setIsSuperAdminClaim] = useState(false);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
@@ -88,6 +92,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setLoading(true); // Start loading whenever auth state changes
       if (user) {
+        // Inspect token claims for platform admin privileges
+        try {
+          const tokenResult = await user.getIdTokenResult();
+          const claims = tokenResult.claims || {};
+          setIsAdminClaim(Boolean(claims.admin || claims.role === 'admin' || claims.role === 'super_admin'));
+          setIsSuperAdminClaim(Boolean(claims.role === 'super_admin'));
+        } catch (claimErr) {
+          console.warn('Could not inspect token claims:', claimErr);
+        }
+
         // User is signed in, fetch or create profile before setting state
         try {
           const userDocRef = doc(db, `users/${user.uid}`);
@@ -129,6 +143,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // User is signed out
         setUser(null);
         setUserProfile(null);
+        setIsAdminClaim(false);
+        setIsSuperAdminClaim(false);
       }
       setLoading(false); // Stop loading after all async operations are done
     });
@@ -220,8 +236,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const isAdmin = Boolean(
+    isAdminClaim ||
+    userProfile?.role === 'admin' ||
+    userProfile?.role === 'super_admin' ||
+    userProfile?.isPlatformAdmin
+  );
+
+  const isSuperAdmin = Boolean(
+    isSuperAdminClaim ||
+    userProfile?.role === 'super_admin'
+  );
+
   return (
-    <AuthContext.Provider value={{ user, userProfile, loading, login, signup, logout, signInWithGoogle, updateUserProfile, reauthenticate, updateUserPassword, deleteUserAccount, refreshUserProfile }}>
+    <AuthContext.Provider value={{
+      user,
+      userProfile,
+      loading,
+      isAdmin,
+      isSuperAdmin,
+      login,
+      signup,
+      logout,
+      signInWithGoogle,
+      updateUserProfile,
+      reauthenticate,
+      updateUserPassword,
+      deleteUserAccount,
+      refreshUserProfile
+    }}>
       {children}
     </AuthContext.Provider>
   );

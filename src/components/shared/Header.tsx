@@ -23,12 +23,12 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useAuth } from '@/hooks/useAuth';
-import { Settings, LayoutDashboard, LogOut, UserCircle, CreditCard } from 'lucide-react';
+import { Settings, LayoutDashboard, LogOut, UserCircle, CreditCard, Shield } from 'lucide-react';
 import Logo from './Logo';
 import NotificationBell from '@/components/NotificationBell';
 
 export default function Header() {
-  const { user, logout, loading } = useAuth();
+  const { user, logout, loading, isAdmin } = useAuth();
   const [isSignOutDialogOpen, setIsSignOutDialogOpen] = useState(false);
   const userName = user?.displayName || user?.email || 'User';
   const userInitial = (user?.displayName?.[0] || user?.email?.[0] || 'U').toUpperCase();
@@ -100,6 +100,17 @@ export default function Header() {
                         Billing & Plans
                       </Link>
                     </DropdownMenuItem>
+                    {isAdmin && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem asChild>
+                          <Link href="/admin" className="text-primary font-medium focus:text-primary cursor-pointer">
+                            <Shield className="mr-2 h-4 w-4 text-primary" />
+                            Admin Portal
+                          </Link>
+                        </DropdownMenuItem>
+                      </>
+                    )}
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
                       onClick={() => setIsSignOutDialogOpen(true)}
@@ -110,6 +121,13 @@ export default function Header() {
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+                {isAdmin && (
+                  <Button variant="outline" size="sm" asChild className="border-primary/40 text-primary hover:bg-primary/10 hover:text-primary">
+                    <Link href="/admin">
+                      <Shield className="mr-1.5 h-4 w-4 text-primary" /> Admin
+                    </Link>
+                  </Button>
+                )}
                 <Button variant="outline" asChild>
                   <Link href="/dashboard">
                     <LayoutDashboard className="mr-2 h-4 w-4" /> Dashboard

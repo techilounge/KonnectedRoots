@@ -4,6 +4,7 @@ import { Toaster } from '@/components/ui/toaster';
 import Header from '@/components/shared/Header';
 import Footer from '@/components/shared/Footer';
 import CookieConsentBanner from '@/components/shared/CookieConsentBanner';
+import SystemBroadcastBanner from '@/components/shared/SystemBroadcastBanner';
 import { AuthProvider } from '@/hooks/useAuth'; // Using mocked AuthProvider
 import { Analytics } from "@vercel/analytics/next"
 
@@ -64,6 +65,7 @@ export default function RootLayout({
           >
             Skip to main content
           </a>
+          <SystemBroadcastBanner />
           <Header />
           <main id="main-content" className="flex-grow">
             {children}
