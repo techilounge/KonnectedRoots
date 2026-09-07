@@ -1151,3 +1151,108 @@ export async function getAdminReportData(
   };
 }
 
+// -----------------------------------------------------------------------------
+// 10. Live Global Search
+// -----------------------------------------------------------------------------
+
+export interface AdminGlobalSearchResult {
+  users: Array<{
+    uid: string;
+    email: string;
+    displayName: string;
+    plan: string;
+    role: string;
+    photoURL?: string;
+  }>;
+  trees: Array<{
+    id: string;
+    title: string;
+    ownerId: string;
+    memberCount: number;
+    visibility: string;
+  }>;
+  navigation: Array<{
+    title: string;
+    href: string;
+    category: string;
+    description: string;
+  }>;
+}
+
+export async function searchAdminGlobal(
+  idToken: string,
+  query: string
+): Promise<AdminGlobalSearchResult> {
+  await verifyAdminCaller(idToken);
+  const q = query.trim().toLowerCase();
+  if (!q) {
+    return { users: [], trees: [], navigation: [] };
+  }
+
+  // 1. Navigation search
+  const adminRoutes = [
+    { title: 'Platform Dashboard', href: '/admin', category: 'Overview', description: 'Real-time telemetry, growth curves & health' },
+    { title: 'Users & Accounts', href: '/admin/users', category: 'Management', description: 'User directory, plans, roles, AI allowances' },
+    { title: 'Trees & Content', href: '/admin/trees', category: 'Management', description: 'Family trees directory and tree inspection' },
+    { title: 'Subscriptions & Billing', href: '/admin/billing', category: 'Management', description: 'MRR, active subscribers, Stripe telemetry' },
+    { title: 'AI Operations & Metering', href: '/admin/ai-metering', category: 'Intelligence', description: 'GenAI token usage, cost breakdowns & quotas' },
+    { title: 'Reports & Exports', href: '/admin/reports', category: 'Intelligence', description: 'Dataset exports in CSV/JSON across domains' },
+    { title: 'System Configuration', href: '/admin/configuration', category: 'Platform Control', description: 'Feature killswitches, broadcasts & maintenance' },
+    { title: 'Audit Trail', href: '/admin/audit-logs', category: 'Platform Control', description: 'Immutable admin activity & security ledger' },
+    { title: 'Support Inquiries', href: '/admin/messages', category: 'Platform Control', description: 'Contact form messages & support workflow' },
+  ];
+
+  const matchedNav = adminRoutes.filter(r =>
+    r.title.toLowerCase().includes(q) ||
+    r.category.toLowerCase().includes(q) ||
+    r.description.toLowerCase().includes(q)
+  );
+
+  // 2. Users search (search up to 100 recent users)
+  const usersSnap = await adminDb.collection('users').limit(100).get();
+  const matchedUsers: AdminGlobalSearchResult['users'] = [];
+  usersSnap.forEach(doc => {
+    if (matchedUsers.length >= 5) return;
+    const data = doc.data();
+    const email = data.email || '';
+    const displayName = data.displayName || '';
+    const uid = doc.id;
+    if (email.toLowerCase().includes(q) || displayName.toLowerCase().includes(q) || uid.toLowerCase().includes(q)) {
+      matchedUsers.push({
+        uid,
+        email,
+        displayName: displayName || 'Unnamed User',
+        plan: data.plan || 'free',
+        role: data.role || 'user',
+        photoURL: data.photoURL || '',
+      });
+    }
+  });
+
+  // 3. Trees search (search up to 100 recent trees)
+  const treesSnap = await adminDb.collection('trees').limit(100).get();
+  const matchedTrees: AdminGlobalSearchResult['trees'] = [];
+  treesSnap.forEach(doc => {
+    if (matchedTrees.length >= 5) return;
+    const data = doc.data();
+    const title = data.title || 'Untitled Tree';
+    const ownerId = data.ownerId || '';
+    const id = doc.id;
+    if (title.toLowerCase().includes(q) || ownerId.toLowerCase().includes(q) || id.toLowerCase().includes(q)) {
+      matchedTrees.push({
+        id,
+        title,
+        ownerId,
+        memberCount: Number(data.memberCount) || 0,
+        visibility: data.visibility || 'private',
+      });
+    }
+  });
+
+  return {
+    users: matchedUsers,
+    trees: matchedTrees,
+    navigation: matchedNav,
+  };
+}
+

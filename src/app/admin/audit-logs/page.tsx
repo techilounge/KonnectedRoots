@@ -20,6 +20,7 @@ import {
   TreeDeciduous,
   KeyRound,
   ExternalLink,
+  X,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -159,11 +160,21 @@ export default function AdminAuditLogsPage() {
             <div className="relative w-full sm:w-80">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search admin, action, target ID, details..."
+                placeholder="Live search admin, action, target ID, details..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="pl-9 h-9 text-xs"
+                className="pl-9 pr-8 h-9 text-xs"
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground p-0.5 rounded"
+                  title="Clear search"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
 
             <div className="flex items-center gap-3 w-full sm:w-auto">

@@ -70,13 +70,13 @@ export default function AdminSidebar({ collapsed, onToggleCollapse }: AdminSideb
       )}
     >
       {/* Sidebar Top Branding */}
-      <div className="h-16 flex items-center justify-between px-4 border-b border-border">
+      <div className="h-16 flex items-center px-4 border-b border-border overflow-hidden">
         {!collapsed ? (
-          <div className="flex items-center space-x-2">
-            <Link href="/admin" className="flex items-center space-x-2">
-              <Logo className="h-8 w-auto" />
+          <div className="flex items-center gap-2 min-w-0">
+            <Link href="/admin" className="flex items-center gap-2 min-w-0">
+              <Logo className="h-6 w-auto max-w-[130px] shrink-0" />
             </Link>
-            <Badge variant="outline" className="text-[10px] font-semibold bg-primary/10 text-primary border-primary/30 uppercase tracking-wider px-1.5 py-0">
+            <Badge variant="outline" className="text-[10px] font-semibold bg-primary/10 text-primary border-primary/30 uppercase tracking-wider px-1.5 py-0 shrink-0">
               Admin
             </Badge>
           </div>
@@ -85,15 +85,6 @@ export default function AdminSidebar({ collapsed, onToggleCollapse }: AdminSideb
             <ShieldAlert className="h-7 w-7 text-primary" />
           </div>
         )}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onToggleCollapse}
-          className="h-8 w-8 text-muted-foreground hover:text-foreground hidden md:flex"
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-        </Button>
       </div>
 
       {/* Navigation Links */}
@@ -131,8 +122,28 @@ export default function AdminSidebar({ collapsed, onToggleCollapse }: AdminSideb
         ))}
       </div>
 
-      {/* Sidebar Footer: Return to Main App */}
-      <div className="p-3 border-t border-border mt-auto">
+      {/* Sidebar Footer: Collapse Toggle & Return to Main App */}
+      <div className="p-3 border-t border-border mt-auto space-y-1">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onToggleCollapse}
+          className={cn(
+            "w-full text-muted-foreground hover:text-foreground justify-start text-xs hidden md:flex",
+            collapsed && "justify-center px-0"
+          )}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {collapsed ? (
+            <ChevronRight className="h-4 w-4 shrink-0" />
+          ) : (
+            <>
+              <ChevronLeft className="h-4 w-4 shrink-0" />
+              <span className="ml-2 font-medium">Collapse Sidebar</span>
+            </>
+          )}
+        </Button>
+
         <Button
           variant="ghost"
           asChild

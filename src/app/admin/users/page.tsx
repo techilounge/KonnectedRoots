@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import {
   getAdminUsers,
@@ -29,6 +30,7 @@ import {
   Clock,
   CheckCircle2,
   Ban,
+  X,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -106,9 +108,23 @@ export default function AdminUsersPage() {
     }
   };
 
+  const searchParams = useSearchParams();
+
+  // Load ?q= query param if present
   useEffect(() => {
-    fetchUsers();
-  }, [user, planFilter, roleFilter]);
+    const q = searchParams.get('q');
+    if (q) {
+      setSearch(q);
+    }
+  }, [searchParams]);
+
+  // Live Search with 280ms debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchUsers();
+    }, 280);
+    return () => clearTimeout(timer);
+  }, [search, user, planFilter, roleFilter]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -234,11 +250,21 @@ export default function AdminUsersPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             type="text"
-            placeholder="Search by name, email, or UID..."
+            placeholder="Live search by name, email, or UID..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 h-10 text-xs bg-card"
+            className="pl-9 pr-9 h-10 text-xs bg-card"
           />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1 rounded"
+              title="Clear search"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </form>
 
         <div className="flex gap-2">

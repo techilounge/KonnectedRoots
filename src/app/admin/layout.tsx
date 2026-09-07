@@ -94,7 +94,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       {/* Main Administrative Viewport */}
       <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden">
-        <AdminHeader onToggleMobileMenu={() => setMobileOpen(!mobileOpen)} />
+        <AdminHeader
+          collapsed={collapsed}
+          onToggleSidebar={() => setCollapsed(!collapsed)}
+          onToggleMobileMenu={() => setMobileOpen(!mobileOpen)}
+        />
         <main className="flex-1 p-4 md:p-8 max-w-7xl w-full mx-auto animate-in fade-in duration-300">
           {children}
         </main>
