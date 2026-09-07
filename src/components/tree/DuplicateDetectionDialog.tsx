@@ -2,6 +2,16 @@
 
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
@@ -26,6 +36,7 @@ export default function DuplicateDetectionDialog({
     onDismiss
 }: DuplicateDetectionDialogProps) {
     const [dismissedPairs, setDismissedPairs] = useState<Set<string>>(new Set());
+    const [mergeCandidate, setMergeCandidate] = useState<{ keep: Person; remove: Person } | null>(null);
 
     if (!result) return null;
 
@@ -41,58 +52,92 @@ export default function DuplicateDetectionDialog({
     };
 
     return (
-        <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
-                <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                        <Users className="h-5 w-5 text-primary" />
-                        Duplicate Detection
-                    </DialogTitle>
-                    <DialogDescription>
-                        {visibleMatches.length > 0
-                            ? `Found ${visibleMatches.length} potential duplicate${visibleMatches.length > 1 ? 's' : ''} in your tree.`
-                            : 'No duplicates found in your tree.'}
-                    </DialogDescription>
-                </DialogHeader>
+        <>
+            <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+                <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Users className="h-5 w-5 text-primary" />
+                            Duplicate Detection
+                        </DialogTitle>
+                        <DialogDescription>
+                            {visibleMatches.length > 0
+                                ? `Found ${visibleMatches.length} potential duplicate${visibleMatches.length > 1 ? 's' : ''} in your tree.`
+                                : 'No duplicates found in your tree.'}
+                        </DialogDescription>
+                    </DialogHeader>
 
-                <ScrollArea className="flex-1 max-h-[500px] pr-4">
-                    {visibleMatches.length === 0 ? (
-                        <div className="py-8 text-center text-muted-foreground">
-                            <Check className="h-12 w-12 mx-auto mb-3 text-green-500" />
-                            <p className="font-medium">No duplicates detected!</p>
-                            <p className="text-sm">Your family tree looks clean.</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-4 py-2">
-                            {visibleMatches.map((match, idx) => (
-                                <DuplicateCard
-                                    key={idx}
-                                    match={match}
-                                    onMerge={onMerge}
-                                    onDismiss={() => handleDismiss(match)}
-                                />
-                            ))}
-                        </div>
-                    )}
-                </ScrollArea>
+                    <ScrollArea className="flex-1 max-h-[500px] pr-4">
+                        {visibleMatches.length === 0 ? (
+                            <div className="py-8 text-center text-muted-foreground">
+                                <Check className="h-12 w-12 mx-auto mb-3 text-green-500" />
+                                <p className="font-medium">No duplicates detected!</p>
+                                <p className="text-sm">Your family tree looks clean.</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-4 py-2">
+                                {visibleMatches.map((match, idx) => (
+                                    <DuplicateCard
+                                        key={idx}
+                                        match={match}
+                                        onRequestMerge={(keep, remove) => setMergeCandidate({ keep, remove })}
+                                        onDismiss={() => handleDismiss(match)}
+                                    />
+                                ))}
+                            </div>
+                        )}
+                    </ScrollArea>
 
-                <DialogFooter className="pt-4">
-                    <Button variant="outline" onClick={onClose}>
-                        Close
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+                    <DialogFooter className="pt-4">
+                        <Button variant="outline" onClick={onClose}>
+                            Close
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <AlertDialog open={!!mergeCandidate} onOpenChange={(open) => !open && setMergeCandidate(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Merge Duplicate Profiles?</AlertDialogTitle>
+                        <AlertDialogDescription asChild>
+                            <div className="space-y-3 text-sm text-muted-foreground">
+                                <p>
+                                    This will merge details from <strong className="text-foreground">{mergeCandidate?.remove.firstName} {mergeCandidate?.remove.lastName || ''}</strong> into <strong className="text-foreground">{mergeCandidate?.keep.firstName} {mergeCandidate?.keep.lastName || ''}</strong> and <strong className="text-destructive">permanently delete {mergeCandidate?.remove.firstName}</strong>.
+                                </p>
+                                <p>
+                                    All parental, spousal, and child connections will be transferred to <strong className="text-foreground">{mergeCandidate?.keep.firstName}</strong>.
+                                </p>
+                            </div>
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={() => {
+                                if (mergeCandidate) {
+                                    onMerge(mergeCandidate.keep.id, mergeCandidate.remove.id);
+                                    setMergeCandidate(null);
+                                }
+                            }}
+                            className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                        >
+                            Merge & Delete Duplicate
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </>
     );
 }
 
 function DuplicateCard({
     match,
-    onMerge,
+    onRequestMerge,
     onDismiss
 }: {
     match: DuplicateMatch;
-    onMerge: (keepId: string, removeId: string) => void;
+    onRequestMerge: (keep: Person, remove: Person) => void;
     onDismiss: () => void;
 }) {
     const { person1, person2, confidence, reasons } = match;
@@ -142,14 +187,14 @@ function DuplicateCard({
                 <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => onMerge(person1.id, person2.id)}
+                    onClick={() => onRequestMerge(person1, person2)}
                 >
                     Keep Left
                 </Button>
                 <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => onMerge(person2.id, person1.id)}
+                    onClick={() => onRequestMerge(person2, person1)}
                 >
                     Keep Right
                 </Button>

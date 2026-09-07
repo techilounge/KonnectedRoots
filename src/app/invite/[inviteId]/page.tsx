@@ -9,6 +9,16 @@ import { httpsCallable } from 'firebase/functions';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Loader2, TreeDeciduous, Check, X, LogIn } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
@@ -37,6 +47,7 @@ export default function InvitePage({ params }: InvitePageProps) {
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [isDeclineDialogOpen, setIsDeclineDialogOpen] = useState(false);
 
     useEffect(() => {
         const fetchInvitation = async () => {
@@ -208,9 +219,9 @@ export default function InvitePage({ params }: InvitePageProps) {
                 <CardFooter className="flex gap-3">
                     <Button
                         variant="outline"
-                        onClick={handleDecline}
+                        onClick={() => setIsDeclineDialogOpen(true)}
                         disabled={processing}
-                        className="flex-1"
+                        className="flex-1 text-destructive hover:text-destructive hover:bg-destructive/10"
                     >
                         <X className="mr-2 h-4 w-4" />
                         Decline
@@ -229,6 +240,30 @@ export default function InvitePage({ params }: InvitePageProps) {
                     </Button>
                 </CardFooter>
             </Card>
+
+            <AlertDialog open={isDeclineDialogOpen} onOpenChange={setIsDeclineDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Decline Invitation?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to decline this invitation to collaborate on the{' '}
+                            <strong>{invitation?.treeName || 'family'}</strong> tree? You will not be able to access this tree unless the owner sends you a new invitation.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Back</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={async () => {
+                                setIsDeclineDialogOpen(false);
+                                await handleDecline();
+                            }}
+                            className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                        >
+                            Decline Invitation
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

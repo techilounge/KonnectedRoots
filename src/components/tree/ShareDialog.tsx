@@ -10,6 +10,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -57,6 +67,7 @@ export default function ShareDialog({ isOpen, onClose, tree }: ShareDialogProps)
   const [isLoading, setIsLoading] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<CollaboratorRole>('viewer');
+  const [invitationToCancel, setInvitationToCancel] = useState<{ id: string; email: string } | null>(null);
 
   const treeUrl = typeof window !== 'undefined' ? `${window.location.origin}/tree/${tree.id}` : '';
 
@@ -268,7 +279,8 @@ export default function ShareDialog({ isOpen, onClose, tree }: ShareDialogProps)
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <>
+      <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="font-headline text-2xl flex items-center">
@@ -376,8 +388,9 @@ export default function ShareDialog({ isOpen, onClose, tree }: ShareDialogProps)
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => handleCancelInvitation(inv.id)}
+                        onClick={() => setInvitationToCancel({ id: inv.id, email: inv.inviteeEmail })}
                         className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        title="Cancel Invitation"
                       >
                         <X className="h-4 w-4" />
                       </Button>
@@ -395,6 +408,36 @@ export default function ShareDialog({ isOpen, onClose, tree }: ShareDialogProps)
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <AlertDialog
+      open={!!invitationToCancel}
+      onOpenChange={(open) => !open && setInvitationToCancel(null)}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Cancel Invitation?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Are you sure you want to cancel the invitation sent to <strong>{invitationToCancel?.email}</strong>? They will no longer be able to use the invitation link to join this tree.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Keep Invitation</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={async () => {
+              if (invitationToCancel) {
+                const id = invitationToCancel.id;
+                setInvitationToCancel(null);
+                await handleCancelInvitation(id);
+              }
+            }}
+            className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+          >
+            Cancel Invitation
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
 

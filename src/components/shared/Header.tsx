@@ -1,5 +1,6 @@
 
 "use client";
+import { useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -11,6 +12,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useAuth } from '@/hooks/useAuth';
 import { Settings, LayoutDashboard, LogOut, UserCircle, CreditCard } from 'lucide-react';
 import Logo from './Logo';
@@ -18,6 +29,7 @@ import NotificationBell from '@/components/NotificationBell';
 
 export default function Header() {
   const { user, logout, loading } = useAuth();
+  const [isSignOutDialogOpen, setIsSignOutDialogOpen] = useState(false);
   const userName = user?.displayName || user?.email || 'User';
   const userInitial = (user?.displayName?.[0] || user?.email?.[0] || 'U').toUpperCase();
 
@@ -88,6 +100,14 @@ export default function Header() {
                         Billing & Plans
                       </Link>
                     </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => setIsSignOutDialogOpen(true)}
+                      className="text-destructive focus:text-destructive cursor-pointer"
+                    >
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Sign Out
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
                 <Button variant="outline" asChild>
@@ -95,7 +115,7 @@ export default function Header() {
                     <LayoutDashboard className="mr-2 h-4 w-4" /> Dashboard
                   </Link>
                 </Button>
-                <Button variant="ghost" onClick={() => logout()}>
+                <Button variant="ghost" onClick={() => setIsSignOutDialogOpen(true)}>
                   <LogOut className="mr-2 h-4 w-4" /> Sign Out
                 </Button>
               </>
@@ -112,6 +132,29 @@ export default function Header() {
           </div>
         </div>
       </div>
+
+      <AlertDialog open={isSignOutDialogOpen} onOpenChange={setIsSignOutDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sign Out?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to sign out? You will need to log back in to access and manage your family trees.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                setIsSignOutDialogOpen(false);
+                await logout();
+              }}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+            >
+              Sign Out
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </header>
   );
 }

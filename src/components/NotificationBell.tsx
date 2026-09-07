@@ -12,6 +12,16 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { useNotifications, AppNotification } from '@/hooks/useNotifications';
 import { cn } from '@/lib/utils';
@@ -21,6 +31,7 @@ export default function NotificationBell() {
     const router = useRouter();
     const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification } = useNotifications();
     const [open, setOpen] = useState(false);
+    const [notificationToDelete, setNotificationToDelete] = useState<AppNotification | null>(null);
 
     const handleNotificationClick = (notification: AppNotification) => {
         markAsRead(notification.id);
@@ -52,76 +63,107 @@ export default function NotificationBell() {
     };
 
     return (
-        <DropdownMenu open={open} onOpenChange={setOpen}>
-            <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="relative">
-                    <Bell className="h-5 w-5" />
-                    {unreadCount > 0 && (
-                        <Badge
-                            variant="destructive"
-                            className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center text-xs"
-                        >
-                            {unreadCount > 9 ? '9+' : unreadCount}
-                        </Badge>
-                    )}
-                </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80">
-                <DropdownMenuLabel className="flex items-center justify-between">
-                    <span>Notifications</span>
-                    {unreadCount > 0 && (
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => { e.preventDefault(); markAllAsRead(); }}
-                            className="h-6 text-xs"
-                        >
-                            <CheckCheck className="h-3 w-3 mr-1" />
-                            Mark all read
-                        </Button>
-                    )}
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-
-                {notifications.length === 0 ? (
-                    <div className="py-8 text-center text-muted-foreground text-sm">
-                        No notifications yet
-                    </div>
-                ) : (
-                    <div className="max-h-80 overflow-y-auto">
-                        {notifications.slice(0, 10).map((notification) => (
-                            <DropdownMenuItem
-                                key={notification.id}
-                                className={cn(
-                                    "flex items-start gap-3 p-3 cursor-pointer",
-                                    !notification.read && "bg-primary/5"
-                                )}
-                                onClick={() => handleNotificationClick(notification)}
+        <>
+            <DropdownMenu open={open} onOpenChange={setOpen}>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="relative">
+                        <Bell className="h-5 w-5" />
+                        {unreadCount > 0 && (
+                            <Badge
+                                variant="destructive"
+                                className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center text-xs"
                             >
-                                <div className="mt-0.5">
-                                    {getNotificationIcon(notification.type)}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium truncate">{notification.title}</p>
-                                    <p className="text-xs text-muted-foreground line-clamp-2">{notification.message}</p>
-                                    <p className="text-xs text-muted-foreground mt-1">{formatTime(notification.createdAt)}</p>
-                                </div>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6 opacity-0 group-hover:opacity-100"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        deleteNotification(notification.id);
-                                    }}
+                                {unreadCount > 9 ? '9+' : unreadCount}
+                            </Badge>
+                        )}
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-80">
+                    <DropdownMenuLabel className="flex items-center justify-between">
+                        <span>Notifications</span>
+                        {unreadCount > 0 && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => { e.preventDefault(); markAllAsRead(); }}
+                                className="h-6 text-xs"
+                            >
+                                <CheckCheck className="h-3 w-3 mr-1" />
+                                Mark all read
+                            </Button>
+                        )}
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+
+                    {notifications.length === 0 ? (
+                        <div className="py-8 text-center text-muted-foreground text-sm">
+                            No notifications yet
+                        </div>
+                    ) : (
+                        <div className="max-h-80 overflow-y-auto">
+                            {notifications.slice(0, 10).map((notification) => (
+                                <DropdownMenuItem
+                                    key={notification.id}
+                                    className={cn(
+                                        "flex items-start gap-3 p-3 cursor-pointer group",
+                                        !notification.read && "bg-primary/5"
+                                    )}
+                                    onClick={() => handleNotificationClick(notification)}
                                 >
-                                    <Trash2 className="h-3 w-3" />
-                                </Button>
-                            </DropdownMenuItem>
-                        ))}
-                    </div>
-                )}
-            </DropdownMenuContent>
-        </DropdownMenu>
+                                    <div className="mt-0.5">
+                                        {getNotificationIcon(notification.type)}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium truncate">{notification.title}</p>
+                                        <p className="text-xs text-muted-foreground line-clamp-2">{notification.message}</p>
+                                        <p className="text-xs text-muted-foreground mt-1">{formatTime(notification.createdAt)}</p>
+                                    </div>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6 opacity-0 group-hover:opacity-100 hover:text-destructive"
+                                        title="Delete notification"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setNotificationToDelete(notification);
+                                        }}
+                                    >
+                                        <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                </DropdownMenuItem>
+                            ))}
+                        </div>
+                    )}
+                </DropdownMenuContent>
+            </DropdownMenu>
+
+            <AlertDialog
+                open={!!notificationToDelete}
+                onOpenChange={(open) => !open && setNotificationToDelete(null)}
+            >
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Notification?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to delete this notification: &ldquo;{notificationToDelete?.title}&rdquo;?
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={() => {
+                                if (notificationToDelete) {
+                                    deleteNotification(notificationToDelete.id);
+                                    setNotificationToDelete(null);
+                                }
+                            }}
+                            className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                        >
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </>
     );
 }
