@@ -13,11 +13,18 @@ export default function SystemBroadcastBanner() {
 
   useEffect(() => {
     try {
-      const unsub = onSnapshot(doc(db, 'system', 'configuration'), (snap) => {
-        if (snap.exists()) {
-          setConfig(snap.data() as SystemConfiguration);
+      const unsub = onSnapshot(
+        doc(db, 'system', 'configuration'),
+        (snap) => {
+          if (snap.exists()) {
+            setConfig(snap.data() as SystemConfiguration);
+          }
+        },
+        (err) => {
+          // Silently handle if document does not exist yet or connection issue
+          console.debug('System broadcast banner not accessible:', err.message);
         }
-      });
+      );
       return () => unsub();
     } catch (e) {
       console.warn('Could not subscribe to system broadcast banner:', e);

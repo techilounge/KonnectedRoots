@@ -8,8 +8,10 @@ service cloud.firestore {
       return request.auth != null && (
         request.auth.token.admin == true ||
         request.auth.token.role in ['admin', 'super_admin'] ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super_admin'])
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super_admin'] ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isPlatformAdmin == true
+        ))
       );
     }
 
@@ -156,8 +158,8 @@ service cloud.firestore {
 
     // System configuration & global platform flags
     match /system/{configDoc} {
-      // Authenticated users can read public configuration (broadcasts, maintenance mode)
-      allow read: if request.auth != null;
+      // Public read for announcement banner and maintenance notices
+      allow read: if true;
       // Only platform admins can write to system configuration
       allow write: if isPlatformAdmin();
     }

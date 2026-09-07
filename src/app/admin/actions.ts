@@ -21,7 +21,14 @@ async function verifyAdminCaller(idToken: string) {
     throw new Error('Unauthorized: Authentication token is required.');
   }
 
-  const decodedToken = await adminAuth.verifyIdToken(idToken);
+  let decodedToken;
+  try {
+    decodedToken = await adminAuth.verifyIdToken(idToken);
+  } catch (err: any) {
+    console.error('[Admin Auth Error]: Failed to verify ID token:', err);
+    throw new Error(`Authentication token verification failed: ${err?.message || 'Invalid or expired token'}`);
+  }
+
   const uid = decodedToken.uid;
 
   // Check 1: Custom Claims
@@ -36,15 +43,19 @@ async function verifyAdminCaller(idToken: string) {
   }
 
   // Check 2: Firestore users/{uid} document role
-  const userSnap = await adminDb.collection('users').doc(uid).get();
-  if (userSnap.exists) {
-    const data = userSnap.data();
-    if (data?.role === 'admin' || data?.role === 'super_admin' || data?.isPlatformAdmin === true) {
-      return decodedToken;
+  try {
+    const userSnap = await adminDb.collection('users').doc(uid).get();
+    if (userSnap.exists) {
+      const data = userSnap.data();
+      if (data?.role === 'admin' || data?.role === 'super_admin' || data?.isPlatformAdmin === true) {
+        return decodedToken;
+      }
     }
+  } catch (dbErr) {
+    console.error('[Admin Auth Error]: Failed to query user document in Firestore:', dbErr);
   }
 
-  throw new Error('Forbidden: Caller is not a Platform Administrator.');
+  throw new Error(`Forbidden: User (${decodedToken.email || uid}) is not a Platform Administrator.`);
 }
 
 /**
