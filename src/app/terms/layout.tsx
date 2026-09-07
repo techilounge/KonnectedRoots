@@ -1,14 +1,25 @@
 import type { Metadata } from 'next';
 
+const siteUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://konnectedroots.app';
+
 export const metadata: Metadata = {
+  title: 'Terms of Service | KonnectedRoots',
+  description: 'Read the Terms of Service for the KonnectedRoots platform. Understand user rights, content ownership, acceptable use, and subscription terms.',
+  alternates: {
+    canonical: `${siteUrl}/terms`,
+  },
+  openGraph: {
     title: 'Terms of Service | KonnectedRoots',
-    description: 'Read the Terms of Service for KonnectedRoots family tree builder. Understand your rights and responsibilities when using our platform.',
+    description: 'Understand your rights and terms when using the KonnectedRoots family tree platform.',
+    url: `${siteUrl}/terms`,
+    type: 'website',
+  },
 };
 
 export default function TermsLayout({
-    children,
+  children,
 }: {
-    children: React.ReactNode;
+  children: React.ReactNode;
 }) {
-    return children;
+  return children;
 }

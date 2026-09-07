@@ -1,20 +1,64 @@
 import type { Metadata } from 'next';
+import JsonLd from '@/components/seo/JsonLd';
+
+const siteUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://konnectedroots.app';
 
 export const metadata: Metadata = {
-    title: 'Features | KonnectedRoots - Build Your Family Tree Online',
-    description: 'Discover powerful features to build your family tree: interactive tree builder, real-time collaboration, AI-powered insights, GEDCOM import/export, and more. Start free today.',
-    keywords: ['family tree builder', 'genealogy software', 'ancestry', 'collaboration', 'GEDCOM', 'AI genealogy'],
-    openGraph: {
-        title: 'Features | KonnectedRoots',
-        description: 'Powerful tools to build and share your family tree.',
-        type: 'website',
+  title: 'Platform Features | Interactive Tree Builder, Collaboration & AI Insights',
+  description: 'Explore state-of-the-art genealogy features: dynamic family tree visualizer, real-time multi-user collaboration, AI biographies, photo enhancement, and full GEDCOM file interoperability.',
+  keywords: [
+    'family tree builder features',
+    'genealogy software tools',
+    'AI family history',
+    'collaborative ancestry tree',
+    'GEDCOM import export',
+    'family tree chart visualizer',
+    'ancestral document OCR',
+  ],
+  alternates: {
+    canonical: `${siteUrl}/features`,
+  },
+  openGraph: {
+    title: 'Platform Features | KonnectedRoots',
+    description: 'Explore the full suite of interactive tools to build, share, and preserve your family heritage.',
+    url: `${siteUrl}/features`,
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Platform Features | KonnectedRoots',
+    description: 'Explore the full suite of interactive tools to build, share, and preserve your family heritage.',
+  },
+};
+
+const breadcrumbSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    {
+      '@type': 'ListItem',
+      position: 1,
+      name: 'Home',
+      item: siteUrl,
     },
+    {
+      '@type': 'ListItem',
+      position: 2,
+      name: 'Features',
+      item: `${siteUrl}/features`,
+    },
+  ],
 };
 
 export default function FeaturesLayout({
-    children,
+  children,
 }: {
-    children: React.ReactNode;
+  children: React.ReactNode;
 }) {
-    return children;
+  return (
+    <>
+      <JsonLd data={breadcrumbSchema} />
+      {children}
+    </>
+  );
 }
