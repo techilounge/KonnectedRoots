@@ -8,13 +8,18 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { FileImage, FileText, FileCode, Loader2, Download, CheckCircle2 } from 'lucide-react';
+import { FileImage, FileText, FileCode, Loader2, Download, CheckCircle2, Lock } from 'lucide-react';
 import { useState } from 'react';
 import type { Person, FamilyTree } from '@/types';
 import { downloadGedcom, validateTreeForExport, type ExportValidationResult } from '@/lib/gedcom-generator';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import ExportWarningsDialog from './ExportWarningsDialog';
+import { Badge } from '@/components/ui/badge';
+import { useAuth } from '@/hooks/useAuth';
+import { useEntitlements } from '@/hooks/useEntitlements';
+import { handleRecordExport } from '@/app/actions';
+import { useToast } from '@/hooks/use-toast';
 
 interface ExportDialogProps {
     isOpen: boolean;
@@ -38,6 +43,14 @@ export default function ExportDialog({
     onEditPerson,
     onFixOrphanedReferences,
 }: ExportDialogProps) {
+    const { user, refreshUserProfile } = useAuth();
+    const { entitlements, limits, canExportGedcom, shouldWatermark } = useEntitlements();
+    const usage = entitlements?.usage;
+    const exportLimitPerMonth = limits.exportLimitPerMonth;
+    const canExportGedcomActive = canExportGedcom();
+    const watermarkExportsActive = shouldWatermark();
+    const { toast } = useToast();
+
     const [exportStatus, setExportStatus] = useState<Record<ExportType, ExportStatus>>({
         png: 'idle',
         pdf: 'idle',
@@ -128,6 +141,15 @@ export default function ExportDialog({
     const handleExportPNG = async () => {
         if (!canvasRef.current) return;
 
+        if (exportLimitPerMonth !== null && (usage?.exportsUsed || 0) >= exportLimitPerMonth) {
+            toast({
+                variant: "destructive",
+                title: "Monthly Export Limit Reached",
+                description: `You have reached your limit of ${exportLimitPerMonth} exports this month on the Free plan. Please upgrade to Pro for unlimited exports.`,
+            });
+            return;
+        }
+
         setExportStatus(prev => ({ ...prev, png: 'loading' }));
 
         try {
@@ -162,7 +184,7 @@ export default function ExportDialog({
                         htmlEl.style.gap = computed.gap;
                         htmlEl.style.flexShrink = computed.flexShrink;
 
-                        // Background & Borders
+                        // Background & borders
                         htmlEl.style.backgroundColor = computed.backgroundColor;
                         htmlEl.style.borderWidth = computed.borderWidth;
                         htmlEl.style.borderStyle = computed.borderStyle;
@@ -170,7 +192,7 @@ export default function ExportDialog({
                         htmlEl.style.borderRadius = computed.borderRadius;
                         htmlEl.style.boxShadow = computed.boxShadow;
 
-                        // Text
+                        // Typography
                         htmlEl.style.color = computed.color;
                         htmlEl.style.fontSize = computed.fontSize;
                         htmlEl.style.fontWeight = computed.fontWeight;
@@ -184,7 +206,7 @@ export default function ExportDialog({
                         htmlEl.style.visibility = computed.visibility;
                     };
 
-                    // Expand foreignObject elements to accommodate borders (they clip the 2px border)
+                    // Expand foreignObject elements to accommodate borders
                     const foreignObjects = clonedDoc.querySelectorAll('foreignObject');
                     foreignObjects.forEach((fo) => {
                         const width = fo.getAttribute('width');
@@ -193,17 +215,14 @@ export default function ExportDialog({
                         if (height) fo.setAttribute('height', String(parseInt(height) + 4));
                     });
 
-                    // Inline styles for all person cards and their children
+                    // Explicitly style each person card and its children
                     const personCards = clonedDoc.querySelectorAll('[data-person-id]');
                     personCards.forEach((card) => {
-                        // Make sure container doesn't clip borders
                         (card as HTMLElement).style.overflow = 'visible';
-
-                        // Inline styles for every element inside the card
                         card.querySelectorAll('*').forEach(inlineStyles);
                         inlineStyles(card);
 
-                        // Explicitly set all 4 border sides for the inner card div
+                        // Ensure card border and background are explicitly preserved
                         const innerDiv = card.querySelector('div');
                         if (innerDiv) {
                             const computed = getComputedStyle(innerDiv);
@@ -221,11 +240,10 @@ export default function ExportDialog({
                             htmlEl.style.borderBottomColor = computed.borderBottomColor;
                             htmlEl.style.borderLeftColor = computed.borderLeftColor;
                             htmlEl.style.overflow = 'visible';
-                            // Force box-sizing
                             htmlEl.style.boxSizing = 'border-box';
                         }
 
-                        // Ensure images have rounded style
+                        // Style avatars
                         card.querySelectorAll('img').forEach((img) => {
                             const computed = getComputedStyle(img);
                             (img as HTMLElement).style.borderRadius = computed.borderRadius || '50%';
@@ -235,7 +253,7 @@ export default function ExportDialog({
                         });
                     });
 
-                    // Inline styles for SVG elements
+                    // Ensure SVG connection lines are rendered with proper strokes
                     const svgElements = clonedDoc.querySelectorAll('svg, line, path, circle, rect');
                     svgElements.forEach((el) => {
                         const computed = getComputedStyle(el);
@@ -249,10 +267,29 @@ export default function ExportDialog({
             // Restore original image srcs
             cleanup();
 
+            // Apply watermark for Free tier
+            if (watermarkExportsActive) {
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.save();
+                    ctx.font = 'bold 22px sans-serif';
+                    ctx.fillStyle = 'rgba(120, 120, 120, 0.45)';
+                    ctx.textAlign = 'right';
+                    ctx.fillText('Created with KonnectedRoots (Free)', canvas.width - 24, canvas.height - 24);
+                    ctx.restore();
+                }
+            }
+
             const link = document.createElement('a');
             link.download = `${treeName.replace(/[^a-zA-Z0-9]/g, '_')}.png`;
             link.href = canvas.toDataURL('image/png');
             link.click();
+
+            if (user) {
+                const token = await user.getIdToken();
+                await handleRecordExport(token);
+                await refreshUserProfile();
+            }
 
             setExportStatus(prev => ({ ...prev, png: 'success' }));
             setTimeout(() => setExportStatus(prev => ({ ...prev, png: 'idle' })), 2000);
@@ -264,6 +301,15 @@ export default function ExportDialog({
 
     const handleExportPDF = async () => {
         if (!canvasRef.current) return;
+
+        if (exportLimitPerMonth !== null && (usage?.exportsUsed || 0) >= exportLimitPerMonth) {
+            toast({
+                variant: "destructive",
+                title: "Monthly Export Limit Reached",
+                description: `You have reached your limit of ${exportLimitPerMonth} exports this month on the Free plan. Please upgrade to Pro for unlimited exports.`,
+            });
+            return;
+        }
 
         setExportStatus(prev => ({ ...prev, pdf: 'loading' }));
 
@@ -364,6 +410,19 @@ export default function ExportDialog({
             // Restore original image srcs
             cleanup();
 
+            // Apply watermark for Free tier
+            if (watermarkExportsActive) {
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.save();
+                    ctx.font = 'bold 22px sans-serif';
+                    ctx.fillStyle = 'rgba(120, 120, 120, 0.45)';
+                    ctx.textAlign = 'right';
+                    ctx.fillText('Created with KonnectedRoots (Free)', canvas.width - 24, canvas.height - 24);
+                    ctx.restore();
+                }
+            }
+
             const imgData = canvas.toDataURL('image/png');
             const imgWidth = canvas.width;
             const imgHeight = canvas.height;
@@ -379,6 +438,12 @@ export default function ExportDialog({
             pdf.addImage(imgData, 'PNG', 0, 0, imgWidth / 2, imgHeight / 2);
             pdf.save(`${treeName.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
 
+            if (user) {
+                const token = await user.getIdToken();
+                await handleRecordExport(token);
+                await refreshUserProfile();
+            }
+
             setExportStatus(prev => ({ ...prev, pdf: 'success' }));
             setTimeout(() => setExportStatus(prev => ({ ...prev, pdf: 'idle' })), 2000);
         } catch (error) {
@@ -388,6 +453,24 @@ export default function ExportDialog({
     };
 
     const handleExportGEDCOM = async () => {
+        if (!canExportGedcomActive) {
+            toast({
+                variant: "destructive",
+                title: "Pro Feature",
+                description: "GEDCOM file export is available on Pro and Family plans. Please upgrade to export standard genealogy files.",
+            });
+            return;
+        }
+
+        if (exportLimitPerMonth !== null && (usage?.exportsUsed || 0) >= exportLimitPerMonth) {
+            toast({
+                variant: "destructive",
+                title: "Monthly Export Limit Reached",
+                description: `You have reached your limit of ${exportLimitPerMonth} exports this month.`,
+            });
+            return;
+        }
+
         // Run pre-export validation
         const validation = validateTreeForExport(people);
 
@@ -402,11 +485,16 @@ export default function ExportDialog({
         performGedcomExport();
     };
 
-    const performGedcomExport = () => {
+    const performGedcomExport = async () => {
         setExportStatus(prev => ({ ...prev, gedcom: 'loading' }));
 
         try {
             downloadGedcom(people, treeName);
+            if (user) {
+                const token = await user.getIdToken();
+                await handleRecordExport(token);
+                await refreshUserProfile();
+            }
             setExportStatus(prev => ({ ...prev, gedcom: 'success' }));
             setTimeout(() => setExportStatus(prev => ({ ...prev, gedcom: 'idle' })), 2000);
             setShowWarningsDialog(false);
@@ -465,6 +553,16 @@ export default function ExportDialog({
                         <DialogDescription>
                             Choose a format to download your tree. ({people.length} family members)
                         </DialogDescription>
+
+                        {/* Monthly export allowance indicator */}
+                        <div className="flex items-center justify-between text-xs px-3 py-2 bg-muted/40 rounded-md border border-border/60 mt-2">
+                            <span className="text-muted-foreground font-medium">Monthly Export Allowance:</span>
+                            <span className="font-semibold">
+                                {exportLimitPerMonth === null
+                                    ? 'Unlimited (Pro / Family)'
+                                    : `${usage?.exportsUsed || 0} / ${exportLimitPerMonth} used this month`}
+                            </span>
+                        </div>
                     </DialogHeader>
 
                     <div className="space-y-3 py-4">
@@ -478,20 +576,28 @@ export default function ExportDialog({
                                         {option.icon}
                                     </div>
                                     <div>
-                                        <h4 className="font-medium">{option.title}</h4>
+                                        <div className="flex items-center gap-2">
+                                            <h4 className="font-medium">{option.title}</h4>
+                                            {option.type === 'gedcom' && !canExportGedcomActive && (
+                                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 gap-1 font-semibold">
+                                                    <Lock className="h-3 w-3" /> PRO
+                                                </Badge>
+                                            )}
+                                        </div>
                                         <p className="text-xs text-muted-foreground">{option.description}</p>
                                     </div>
                                 </div>
                                 <Button
                                     size="sm"
-                                    variant="outline"
+                                    variant={option.type === 'gedcom' && !canExportGedcomActive ? "secondary" : "outline"}
                                     onClick={option.handler}
                                     disabled={exportStatus[option.type] === 'loading'}
                                 >
                                     {getButtonIcon(option.type)}
                                     <span className="ml-2">
                                         {exportStatus[option.type] === 'loading' ? 'Exporting...' :
-                                            exportStatus[option.type] === 'success' ? 'Done!' : 'Export'}
+                                            exportStatus[option.type] === 'success' ? 'Done!' :
+                                            option.type === 'gedcom' && !canExportGedcomActive ? 'Upgrade' : 'Export'}
                                     </span>
                                 </Button>
                             </div>

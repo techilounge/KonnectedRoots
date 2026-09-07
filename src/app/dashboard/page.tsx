@@ -128,9 +128,11 @@ export default function DashboardPage() {
         return idMapping.get(oldId) || oldId;
       };
 
-      // Second pass: remap relationship IDs and write to Firestore
-      const batch = writeBatch(db);
+      // Second pass: remap relationship IDs and write to Firestore in chunks of max 400 writes
+      const BATCH_SIZE = 400;
+      let currentBatch = writeBatch(db);
       let batchCount = 0;
+      let totalCommitted = 0;
 
       for (const person of people) {
         const newId = idMapping.get(person.id)!;
@@ -158,15 +160,23 @@ export default function DashboardPage() {
           }
         }
 
-        console.log('[GEDCOM Import] Adding person:', person.firstName, person.lastName,
-          'parentId1:', cleanPerson.parentId1, 'spouseIds:', cleanPerson.spouseIds);
-        batch.set(personRef, cleanPerson);
+        currentBatch.set(personRef, cleanPerson);
         batchCount++;
+
+        if (batchCount >= BATCH_SIZE) {
+          await currentBatch.commit();
+          totalCommitted += batchCount;
+          console.log(`[GEDCOM Import] Committed chunk of ${batchCount} operations (total: ${totalCommitted})`);
+          currentBatch = writeBatch(db);
+          batchCount = 0;
+        }
       }
 
-      console.log('[GEDCOM Import] Committing batch with', batchCount, 'operations');
-      await batch.commit();
-      console.log('[GEDCOM Import] Batch committed successfully');
+      if (batchCount > 0) {
+        await currentBatch.commit();
+        totalCommitted += batchCount;
+        console.log(`[GEDCOM Import] Committed final chunk of ${batchCount} operations (total: ${totalCommitted})`);
+      }
 
       toast({
         title: "Import Successful!",
@@ -221,24 +231,23 @@ export default function DashboardPage() {
     const treeToDelete = familyTrees.find(t => t.id === deletingTreeId);
 
     try {
-      const batch = writeBatch(db);
-
       // First, delete all people in the tree's subcollection
       const peopleRef = collection(db, 'trees', deletingTreeId, 'people');
       const peopleSnapshot = await getDocs(peopleRef);
 
       console.log(`[Clean Delete] Deleting ${peopleSnapshot.docs.length} people from tree "${treeToDelete?.title}"`);
 
-      peopleSnapshot.docs.forEach(personDoc => {
-        batch.delete(personDoc.ref);
-      });
-
-      // Then delete the tree document itself
       const treeDocRef = doc(db, 'trees', deletingTreeId);
-      batch.delete(treeDocRef);
+      const allRefsToDelete = [...peopleSnapshot.docs.map(doc => doc.ref), treeDocRef];
 
-      // Commit all deletions in a single batch
-      await batch.commit();
+      // Chunk deletions into batches of max 400 operations (under Firestore's 500 limit)
+      const BATCH_SIZE = 400;
+      for (let i = 0; i < allRefsToDelete.length; i += BATCH_SIZE) {
+        const chunk = allRefsToDelete.slice(i, i + BATCH_SIZE);
+        const batch = writeBatch(db);
+        chunk.forEach(ref => batch.delete(ref));
+        await batch.commit();
+      }
 
       toast({
         variant: "destructive",
@@ -289,7 +298,7 @@ export default function DashboardPage() {
           />
         ) : (
           <div className="text-center py-10 border-2 border-dashed border-border rounded-lg">
-            <p className="text-muted-foreground mb-4">You haven't created any family trees yet.</p>
+            <p className="text-muted-foreground mb-4">You haven&apos;t created any family trees yet.</p>
             <Button onClick={() => setIsCreateDialogOpen(true)} variant="outline">
               Start Your First Tree
             </Button>

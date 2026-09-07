@@ -10,6 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { FileText, Upload, Loader2, Copy, Check, X, Calendar, MapPin, Users } from 'lucide-react';
 import { handleExtractDocumentText } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 import Image from 'next/image';
 
 interface DocumentOCRDialogProps {
@@ -45,6 +46,7 @@ export default function DocumentOCRDialog({
     } | null>(null);
     const [copied, setCopied] = useState(false);
     const { toast } = useToast();
+    const { user, refreshUserProfile } = useAuth();
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -87,12 +89,16 @@ export default function DocumentOCRDialog({
         try {
             // Extract base64 data from preview (remove data:image/xxx;base64, prefix)
             const base64Data = imagePreview.split(',')[1];
+            const authToken = user ? await user.getIdToken() : undefined;
 
             const response = await handleExtractDocumentText({
                 imageBase64: base64Data,
                 mimeType: imageFile.type,
                 documentType,
+                authToken,
             });
+
+            if (user) await refreshUserProfile();
 
             if ('error' in response) {
                 toast({
@@ -109,6 +115,7 @@ export default function DocumentOCRDialog({
             }
         } catch (error) {
             console.error("OCR error:", error);
+            if (user) await refreshUserProfile();
             toast({
                 variant: "destructive",
                 title: "Error",

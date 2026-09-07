@@ -1,12 +1,13 @@
 
 "use client";
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Loader2, SettingsIcon, Bell, Palette, Mail, Save } from 'lucide-react';
+import { Loader2, SettingsIcon, Bell, Palette, Mail, Save, CreditCard, ChevronRight } from 'lucide-react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/clients';
 import { useToast } from '@/hooks/use-toast';
@@ -88,6 +89,23 @@ export default function SettingsPage() {
           <CardDescription>Customize your KonnectedRoots experience.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-8">
+
+          {/* Billing & Subscription Quick Link */}
+          <div className="p-4 bg-muted/30 border rounded-lg flex items-center justify-between">
+            <div className="space-y-1">
+              <h3 className="text-base font-headline font-semibold flex items-center gap-2">
+                <CreditCard className="h-5 w-5 text-primary" /> Billing & Subscription
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Manage your plan, check AI credits and export allowances, or view receipts.
+              </p>
+            </div>
+            <Button variant="outline" size="sm" asChild className="gap-1">
+              <Link href="/settings/billing">
+                Manage <ChevronRight className="h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
 
           {/* Email Preferences Section */}
           <div className="space-y-4">

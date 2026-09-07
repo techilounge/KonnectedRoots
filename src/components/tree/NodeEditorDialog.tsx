@@ -28,6 +28,7 @@ import TranslationDialog from '@/components/tree/TranslationDialog';
 import DocumentOCRDialog from '@/components/tree/DocumentOCRDialog';
 import PhotoEnhanceDialog from '@/components/tree/PhotoEnhanceDialog';
 import { handleGenerateBiography } from '@/app/actions';
+import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useParams } from 'next/navigation';
 import { uploadPersonPhoto } from "@/lib/uploadPersonPhoto";
@@ -51,6 +52,7 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
   const [isOCROpen, setIsOCROpen] = useState(false);
   const [isEnhanceOpen, setIsEnhanceOpen] = useState(false);
   const { toast } = useToast();
+  const { user, refreshUserProfile } = useAuth();
   const profilePictureInputRef = useRef<HTMLInputElement>(null);
   const params = useParams();
   const treeId = propTreeId || params.treeId as string;
@@ -114,7 +116,9 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
     };
 
     try {
-      const result = await handleGenerateBiography(biographyInput);
+      const authToken = user ? await user.getIdToken() : undefined;
+      const result = await handleGenerateBiography({ ...biographyInput, authToken });
+      if (user) await refreshUserProfile();
       if ('error' in result) {
         toast({ variant: "destructive", title: "AI Error", description: result.error });
       } else {
@@ -123,6 +127,7 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
       }
     } catch (error) {
       console.error("Failed to generate biography:", error);
+      if (user) await refreshUserProfile();
       toast({ variant: "destructive", title: "Error", description: "Could not generate biography." });
     } finally {
       setIsGeneratingBio(false);

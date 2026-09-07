@@ -58,7 +58,7 @@ export function AICreditUsageCard({ usage, className }: AICreditUsageCardProps) 
                 {isLow && (
                     <div className="flex items-start space-x-2 text-sm text-amber-600 bg-amber-50 p-3 rounded-md">
                         <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-                        <span>You're running low on credits. Enhancement features may be unavailable soon.</span>
+                        <span>You&apos;re running low on credits. Enhancement features may be unavailable soon.</span>
                     </div>
                 )}
             </CardContent>

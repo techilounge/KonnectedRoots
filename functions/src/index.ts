@@ -20,7 +20,6 @@ import {
 
 // Initialize the Admin SDK
 admin.initializeApp();
-const auth = admin.auth();
 const db = admin.firestore();
 
 // Export Stripe functions
@@ -73,7 +72,15 @@ export const acceptInvitation = onCall(async (request) => {
         throw new HttpsError('not-found', 'Tree not found.');
       }
 
-      const collaborators = treeDoc.data()?.collaborators || {};
+      const treeData = treeDoc.data();
+      // VERIFY that the inviter is still owner or manager of the tree
+      const isOwner = treeData?.ownerId === invitation.inviterUid;
+      const isManager = treeData?.collaborators?.[invitation.inviterUid] === 'manager';
+      if (!isOwner && !isManager) {
+        throw new HttpsError('permission-denied', 'The inviter no longer has permission to invite users to this tree.');
+      }
+
+      const collaborators = treeData?.collaborators || {};
 
       // Update tree collaborators
       transaction.update(treeRef, {
@@ -145,47 +152,11 @@ export const acceptInvitation = onCall(async (request) => {
   }
 });
 
-// This function triggers whenever a document in the 'trees' collection is written (created or updated).
-// It sets a custom claim on the owner's user account, enabling security rules to quickly verify ownership.
-export const setTreeOwnerClaim = onDocumentWritten("trees/{treeId}", async (event) => {
-  if (!event.data) {
-    logger.info("No data associated with the event, skipping.");
-    return;
-  }
-
-  // Get the owner's UID from the tree document.
-  // Using after.data() means we get the most recent state of the document.
-  const ownerId = event.data.after.data()?.ownerId;
-
-  if (!ownerId) {
-    logger.warn(`Tree document ${event.params.treeId} is missing ownerId.`);
-    return;
-  }
-
-  // The custom claim key is prefixed to avoid collisions and clearly identify its purpose.
-  const customClaimKey = `isOwnerOfTree_${event.params.treeId}`;
-
-  try {
-    // Retrieve the user's current custom claims.
-    const user = await auth.getUser(ownerId);
-    const existingClaims = user.customClaims || {};
-
-    // If the claim is not already set to true, set it.
-    if (existingClaims[customClaimKey] !== true) {
-      const newClaims = {
-        ...existingClaims,
-        [customClaimKey]: true,
-      };
-
-      await auth.setCustomUserClaims(ownerId, newClaims);
-      logger.info(`Successfully set custom claim '${customClaimKey}' for user ${ownerId}.`);
-    } else {
-      logger.info(`Claim '${customClaimKey}' already exists for user ${ownerId}. No update needed.`);
-    }
-
-  } catch (error) {
-    logger.error(`Failed to set custom claim for user ${ownerId} on tree ${event.params.treeId}`, error);
-  }
+// DEPRECATED: Previously set custom claims on user auth tokens on every tree write.
+// Firebase Auth custom claims have a strict 1,000-byte limit and are not used in firestore.rules.
+// Disabled to prevent token bloat from corrupting user authentication.
+export const setTreeOwnerClaim = onDocumentWritten("trees/{treeId}", async () => {
+  return;
 });
 
 
@@ -213,7 +184,9 @@ export const updateTreeMemberCount = onDocumentWritten("trees/{treeId}/people/{p
 });
 
 
-export const sendInvitationEmail = onDocumentWritten("invitations/{inviteId}", async (event) => {
+export const sendInvitationEmail = onDocumentWritten(
+  "invitations/{inviteId}",
+  async (event) => {
   if (!event.data) return; // Document deleted
 
   // Check if document exists after change (it might be a delete operation)
@@ -295,7 +268,9 @@ export const sendInvitationEmail = onDocumentWritten("invitations/{inviteId}", a
 
 // Triggered when a new user document is created
 // Handles: 1) Sending welcome email, 2) Linking pending invitations
-export const onUserCreated = onDocumentCreated("users/{userId}", async (event) => {
+export const onUserCreated = onDocumentCreated(
+  "users/{userId}",
+  async (event) => {
   const snapshot = event.data;
   if (!snapshot) return;
 

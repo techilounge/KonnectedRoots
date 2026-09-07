@@ -209,7 +209,7 @@ export default function ProfilePage() {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              For GEDCOM exports of your family trees, use the Export feature in each tree's settings.
+              For GEDCOM exports of your family trees, use the Export feature in each tree&apos;s settings.
             </p>
           </div>
 

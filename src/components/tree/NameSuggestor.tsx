@@ -21,6 +21,7 @@ import { handleSuggestName } from '@/app/actions';
 import type { SuggestNameInput, SuggestNameOutput, Person } from '@/types';
 import { Loader2, Wand2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 
 interface NameSuggestorProps {
   isOpen: boolean;
@@ -41,6 +42,7 @@ export default function NameSuggestor({ isOpen, onClose, personDetails, onNameSu
   const [isLoading, setIsLoading] = useState(false);
   const [suggestion, setSuggestion] = useState<SuggestNameOutput | null>(null);
   const { toast } = useToast();
+  const { user, refreshUserProfile } = useAuth();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -64,20 +66,33 @@ export default function NameSuggestor({ isOpen, onClose, personDetails, onNameSu
   async function onSubmit(values: FormValues) {
     setIsLoading(true);
     setSuggestion(null);
-    const result = await handleSuggestName(values);
-    setIsLoading(false);
+    try {
+      const authToken = user ? await user.getIdToken() : undefined;
+      const result = await handleSuggestName({ ...values, authToken });
+      if (user) await refreshUserProfile();
+      setIsLoading(false);
 
-    if ('error' in result) {
+      if ('error' in result) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: result.error,
+        });
+      } else {
+        setSuggestion(result);
+        toast({
+          title: "Name Suggested!",
+          description: `AI suggested: ${result.name}. Reason: ${result.reason.substring(0, 50)}...`,
+        });
+      }
+    } catch (error) {
+      setIsLoading(false);
+      if (user) await refreshUserProfile();
+      console.error("Failed to suggest name:", error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: result.error,
-      });
-    } else {
-      setSuggestion(result);
-      toast({
-        title: "Name Suggested!",
-        description: `AI suggested: ${result.name}. Reason: ${result.reason.substring(0, 50)}...`,
+        description: "An unexpected error occurred while suggesting names.",
       });
     }
   }

@@ -11,7 +11,6 @@ import { Wand2, Loader2, Sparkles, Image as ImageIcon, ScanEye, Save, Upload, Ar
 import { handleEnhancePhoto } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
-import { consumeAIActions } from '@/lib/billing/usage';
 import { AI_ACTION_WEIGHTS } from '@/lib/billing/constants';
 import Image from 'next/image';
 
@@ -94,21 +93,6 @@ export default function PhotoEnhanceDialog({
         setIsLoading(true);
         setResult(null);
 
-        // 1. Consume Credits immediately
-        const consumption = await consumeAIActions(user.uid, AI_ACTION_WEIGHTS.enhance_photo);
-        if (!consumption.success) {
-            toast({
-                variant: "destructive",
-                title: "Insufficient Credits",
-                description: `You need ${AI_ACTION_WEIGHTS.enhance_photo} credits for this action. You have ${consumption.remaining} left.`,
-            });
-            setIsLoading(false);
-            return;
-        }
-
-        // Refresh to show deduction
-        await refreshUserProfile();
-
         try {
             // Get base64 data
             let base64Data = '';
@@ -129,17 +113,19 @@ export default function PhotoEnhanceDialog({
                 });
             }
 
+            const authToken = await user.getIdToken();
+
             const response = await handleEnhancePhoto({
                 imageBase64: base64Data,
                 mimeType,
                 options,
+                authToken,
             });
 
-            if ('error' in response) {
-                // REFUND on error
-                await consumeAIActions(user.uid, -AI_ACTION_WEIGHTS.enhance_photo);
-                await refreshUserProfile();
+            // Refresh user profile so credit counters update immediately in UI
+            await refreshUserProfile();
 
+            if ('error' in response) {
                 toast({
                     variant: "destructive",
                     title: "Enhancement Failed",
@@ -149,9 +135,6 @@ export default function PhotoEnhanceDialog({
                 setResult(response);
                 setShowEnhanced(true);
 
-                // Refresh credit balance again just in case server logic changed
-                await refreshUserProfile();
-
                 toast({
                     title: "Photo Enhanced!",
                     description: `Applied: ${response.enhancementsApplied.join(', ')}`,
@@ -159,10 +142,7 @@ export default function PhotoEnhanceDialog({
             }
         } catch (error) {
             console.error("Enhancement error:", error);
-            // REFUND on error
-            await consumeAIActions(user.uid, -AI_ACTION_WEIGHTS.enhance_photo);
             await refreshUserProfile();
-
             toast({
                 variant: "destructive",
                 title: "Error",

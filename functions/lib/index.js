@@ -50,7 +50,6 @@ const sendEmail_1 = require("./sendEmail");
 const emailTemplates_1 = require("./emailTemplates");
 // Initialize the Admin SDK
 admin.initializeApp();
-const auth = admin.auth();
 const db = admin.firestore();
 // Export Stripe functions
 var stripeWebhook_1 = require("./stripeWebhook");
@@ -100,7 +99,14 @@ exports.acceptInvitation = (0, https_1.onCall)(async (request) => {
             if (!treeDoc.exists) {
                 throw new https_1.HttpsError('not-found', 'Tree not found.');
             }
-            const collaborators = ((_a = treeDoc.data()) === null || _a === void 0 ? void 0 : _a.collaborators) || {};
+            const treeData = treeDoc.data();
+            // VERIFY that the inviter is still owner or manager of the tree
+            const isOwner = (treeData === null || treeData === void 0 ? void 0 : treeData.ownerId) === invitation.inviterUid;
+            const isManager = ((_a = treeData === null || treeData === void 0 ? void 0 : treeData.collaborators) === null || _a === void 0 ? void 0 : _a[invitation.inviterUid]) === 'manager';
+            if (!isOwner && !isManager) {
+                throw new https_1.HttpsError('permission-denied', 'The inviter no longer has permission to invite users to this tree.');
+            }
+            const collaborators = (treeData === null || treeData === void 0 ? void 0 : treeData.collaborators) || {};
             // Update tree collaborators
             transaction.update(treeRef, {
                 collaborators: Object.assign(Object.assign({}, collaborators), { [user.uid]: invitation.role })
@@ -155,40 +161,11 @@ exports.acceptInvitation = (0, https_1.onCall)(async (request) => {
         throw new https_1.HttpsError('internal', 'Internal server error while accepting invitation.');
     }
 });
-// This function triggers whenever a document in the 'trees' collection is written (created or updated).
-// It sets a custom claim on the owner's user account, enabling security rules to quickly verify ownership.
-exports.setTreeOwnerClaim = (0, firestore_1.onDocumentWritten)("trees/{treeId}", async (event) => {
-    var _a;
-    if (!event.data) {
-        logger.info("No data associated with the event, skipping.");
-        return;
-    }
-    // Get the owner's UID from the tree document.
-    // Using after.data() means we get the most recent state of the document.
-    const ownerId = (_a = event.data.after.data()) === null || _a === void 0 ? void 0 : _a.ownerId;
-    if (!ownerId) {
-        logger.warn(`Tree document ${event.params.treeId} is missing ownerId.`);
-        return;
-    }
-    // The custom claim key is prefixed to avoid collisions and clearly identify its purpose.
-    const customClaimKey = `isOwnerOfTree_${event.params.treeId}`;
-    try {
-        // Retrieve the user's current custom claims.
-        const user = await auth.getUser(ownerId);
-        const existingClaims = user.customClaims || {};
-        // If the claim is not already set to true, set it.
-        if (existingClaims[customClaimKey] !== true) {
-            const newClaims = Object.assign(Object.assign({}, existingClaims), { [customClaimKey]: true });
-            await auth.setCustomUserClaims(ownerId, newClaims);
-            logger.info(`Successfully set custom claim '${customClaimKey}' for user ${ownerId}.`);
-        }
-        else {
-            logger.info(`Claim '${customClaimKey}' already exists for user ${ownerId}. No update needed.`);
-        }
-    }
-    catch (error) {
-        logger.error(`Failed to set custom claim for user ${ownerId} on tree ${event.params.treeId}`, error);
-    }
+// DEPRECATED: Previously set custom claims on user auth tokens on every tree write.
+// Firebase Auth custom claims have a strict 1,000-byte limit and are not used in firestore.rules.
+// Disabled to prevent token bloat from corrupting user authentication.
+exports.setTreeOwnerClaim = (0, firestore_1.onDocumentWritten)("trees/{treeId}", async () => {
+    return;
 });
 // This function triggers whenever a person is added, updated, or deleted in a tree.
 // It recounts the total number of people in the tree and updates the 'memberCount' field.

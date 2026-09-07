@@ -54,7 +54,7 @@ export default function RelationshipsDialog({
                         Relationships for {person?.firstName || 'Person'}
                     </DialogTitle>
                     <DialogDescription>
-                        Manage this person's family connections.
+                        Manage this person&apos;s family connections.
                     </DialogDescription>
                 </DialogHeader>
 

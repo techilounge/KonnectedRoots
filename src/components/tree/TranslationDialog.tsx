@@ -11,6 +11,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Languages, Loader2, Copy, Check, Wand2 } from 'lucide-react';
 import { handleTranslateDocument } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 
 interface TranslationDialogProps {
     isOpen: boolean;
@@ -55,6 +56,7 @@ export default function TranslationDialog({
     } | null>(null);
     const [copied, setCopied] = useState(false);
     const { toast } = useToast();
+    const { user, refreshUserProfile } = useAuth();
 
     const handleTranslate = async () => {
         if (!inputText.trim()) {
@@ -69,24 +71,39 @@ export default function TranslationDialog({
         setIsLoading(true);
         setResult(null);
 
-        const response = await handleTranslateDocument({
-            text: inputText,
-            targetLanguage,
-        });
+        try {
+            const authToken = user ? await user.getIdToken() : undefined;
 
-        setIsLoading(false);
+            const response = await handleTranslateDocument({
+                text: inputText,
+                targetLanguage,
+                authToken,
+            });
 
-        if ('error' in response) {
+            if (user) await refreshUserProfile();
+
+            setIsLoading(false);
+
+            if ('error' in response) {
+                toast({
+                    variant: "destructive",
+                    title: "Translation Failed",
+                    description: response.error,
+                });
+            } else {
+                setResult(response);
+                toast({
+                    title: "Translation Complete",
+                    description: `Translated from ${response.detectedLanguage}`,
+                });
+            }
+        } catch (error) {
+            setIsLoading(false);
+            console.error("Translation error:", error);
             toast({
                 variant: "destructive",
-                title: "Translation Failed",
-                description: response.error,
-            });
-        } else {
-            setResult(response);
-            toast({
-                title: "Translation Complete",
-                description: `Translated from ${response.detectedLanguage}`,
+                title: "Error",
+                description: "An unexpected error occurred during translation.",
             });
         }
     };

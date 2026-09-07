@@ -68,6 +68,7 @@ const createUserProfileDocument = async (user: FirebaseUser, displayNameOverride
         entitlements: defaultEntitlements,
         createdAt: createdAt,
         updatedAt: createdAt,
+        lastActivityAt: createdAt,
       });
     } catch (error) {
       console.error("Error creating user profile document: ", error);
@@ -89,18 +90,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (user) {
         // User is signed in, fetch or create profile before setting state
         try {
-          let userProfileDoc = await getDoc(doc(db, `users/${user.uid}`));
+          const userDocRef = doc(db, `users/${user.uid}`);
+          let userProfileDoc = await getDoc(userDocRef);
 
           // If profile doesn't exist, create it (handles edge cases like failed initial creation)
           if (!userProfileDoc.exists()) {
             console.log('User profile not found, creating one...');
             await createUserProfileDocument(user);
-            userProfileDoc = await getDoc(doc(db, `users/${user.uid}`));
+            userProfileDoc = await getDoc(userDocRef);
           }
 
           if (userProfileDoc.exists()) {
-            setUserProfile(userProfileDoc.data() as UserProfile);
+            const profileData = userProfileDoc.data() as UserProfile;
+            setUserProfile(profileData);
             setUser(user);
+
+            // Throttle lastActivityAt updates to at most once every 6 hours
+            const lastActivity = profileData.lastActivityAt?.toDate?.() || (profileData.lastActivityAt ? new Date(profileData.lastActivityAt) : null);
+            const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
+            if (!lastActivity || lastActivity < sixHoursAgo) {
+              setDoc(userDocRef, { lastActivityAt: serverTimestamp() }, { merge: true }).catch((err) => {
+                console.warn('Could not update lastActivityAt:', err);
+              });
+            }
           } else {
             // Profile still doesn't exist after creation attempt - log error but keep user signed in
             console.error('Failed to create user profile document');

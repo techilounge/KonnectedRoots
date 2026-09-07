@@ -62,7 +62,7 @@ export default function ExportWarningsDialog({
                         Pre-Export Check Results
                     </DialogTitle>
                     <DialogDescription>
-                        We found {issues.length} {issues.length === 1 ? 'issue' : 'issues'} that may affect how "{treeName}" appears when imported into other genealogy software.
+                        We found {issues.length} {issues.length === 1 ? 'issue' : 'issues'} that may affect how &ldquo;{treeName}&rdquo; appears when imported into other genealogy software.
                     </DialogDescription>
                 </DialogHeader>
 

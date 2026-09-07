@@ -23,7 +23,7 @@ import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { db } from '@/lib/firebase/clients';
-import { collection, doc, getDocs, setDoc, deleteDoc, writeBatch, serverTimestamp, getDoc, updateDoc, query, where, onSnapshot, increment } from 'firebase/firestore';
+import { collection, doc, getDocs, setDoc, deleteDoc, writeBatch, serverTimestamp, getDoc, updateDoc, query, where, onSnapshot, increment, deleteField } from 'firebase/firestore';
 import { useAuth } from '@/hooks/useAuth';
 import { useUndoRedo } from '@/hooks/useUndoRedo';
 import { handleFindRelationship } from '@/app/actions';
@@ -36,7 +36,7 @@ export default function TreeEditorPage() {
   const params = useParams();
   const routeParam = params.treeId as string; // Could be slug or ID
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, refreshUserProfile } = useAuth();
   const [resolvedTreeId, setResolvedTreeId] = useState<string | null>(null);
   const { pushCommand, undo, redo, canUndo, canRedo, isProcessing: isUndoProcessing } = useUndoRedo(resolvedTreeId || '');
   const photoUploadInputRef = useRef<HTMLInputElement>(null);
@@ -109,27 +109,49 @@ export default function TreeEditorPage() {
     if (!routeParam || !user) return;
 
     const resolveTreeId = async () => {
-      // Try to find by slug, but only for trees owned by current user (to comply with security rules)
-      // Shared trees will still use the document ID directly
       const treesRef = collection(db, 'trees');
-      const slugQuery = query(
-        treesRef,
-        where('ownerId', '==', user.uid),
-        where('slug', '==', routeParam)
-      );
 
       try {
-        const slugSnapshot = await getDocs(slugQuery);
-
-        if (!slugSnapshot.empty) {
-          // Found by slug
-          setResolvedTreeId(slugSnapshot.docs[0].id);
-        } else {
-          // Fallback: assume it's a direct document ID (for shared trees or old trees)
+        // 1. Try direct document ID lookup first
+        const directDoc = await getDoc(doc(db, 'trees', routeParam));
+        if (directDoc.exists()) {
           setResolvedTreeId(routeParam);
+          return;
         }
+      } catch {
+        // Not a direct doc ID or slug lookup needed, continue
+      }
+
+      try {
+        // 2. Query trees owned by current user by slug
+        const ownedSlugQuery = query(
+          treesRef,
+          where('ownerId', '==', user.uid),
+          where('slug', '==', routeParam)
+        );
+        const ownedSnapshot = await getDocs(ownedSlugQuery);
+
+        if (!ownedSnapshot.empty) {
+          setResolvedTreeId(ownedSnapshot.docs[0].id);
+          return;
+        }
+
+        // 3. Query trees where current user is a collaborator by slug
+        const collabSlugQuery = query(
+          treesRef,
+          where(`collaborators.${user.uid}`, 'in', ['viewer', 'editor', 'manager']),
+          where('slug', '==', routeParam)
+        );
+        const collabSnapshot = await getDocs(collabSlugQuery);
+        if (!collabSnapshot.empty) {
+          setResolvedTreeId(collabSnapshot.docs[0].id);
+          return;
+        }
+
+        // 4. Fallback: treat routeParam as direct ID
+        setResolvedTreeId(routeParam);
       } catch (error) {
-        // Query failed (could be missing index), fall back to treating as ID
+        // Query failed (e.g. index building), fall back to treating as ID
         console.warn('Slug lookup failed, using as ID:', error);
         setResolvedTreeId(routeParam);
       }
@@ -404,12 +426,12 @@ export default function TreeEditorPage() {
       for (const childId of childrenIds) {
         const child = people.find(p => p.id === childId);
         if (child) {
-          const updates: Partial<Person> & { updatedAt: ReturnType<typeof serverTimestamp> } = { updatedAt: serverTimestamp() };
+          const updates: Record<string, any> = { updatedAt: serverTimestamp() };
           if (child.parentId1 === deletedPersonId) {
-            updates.parentId1 = undefined;
+            updates.parentId1 = deleteField();
           }
           if (child.parentId2 === deletedPersonId) {
-            updates.parentId2 = undefined;
+            updates.parentId2 = deleteField();
           }
           if (Object.keys(updates).length > 1) { // More than just updatedAt
             batch.update(doc(getPeopleColRef(), childId), updates);
@@ -509,13 +531,38 @@ export default function TreeEditorPage() {
       const updatedSpouseIds = [...new Set([...(keepPerson.spouseIds || []), ...(removePerson.spouseIds || [])])];
       const updatedChildrenIds = [...new Set([...(keepPerson.childrenIds || []), ...(removePerson.childrenIds || [])])];
 
-      // Update kept person with merged data
-      const keepRef = doc(getPeopleColRef(), keepId);
-      batch.update(keepRef, {
+      // Merge parent IDs if keepPerson lacks them
+      let mergedParentId1 = keepPerson.parentId1;
+      let mergedParentId2 = keepPerson.parentId2;
+      if (!mergedParentId1 && removePerson.parentId1 && removePerson.parentId1 !== keepId) {
+        mergedParentId1 = removePerson.parentId1;
+      }
+      if (!mergedParentId2 && removePerson.parentId2 && removePerson.parentId2 !== keepId) {
+        mergedParentId2 = removePerson.parentId2;
+      }
+
+      // Merge missing biographical fields from removed duplicate to keepPerson
+      const keepPersonUpdates: Record<string, any> = {
         spouseIds: updatedSpouseIds.filter(id => id !== keepId && id !== removeId),
         childrenIds: updatedChildrenIds.filter(id => id !== keepId && id !== removeId),
-        updatedAt: serverTimestamp()
-      });
+        updatedAt: serverTimestamp(),
+      };
+      if (mergedParentId1 && mergedParentId1 !== keepPerson.parentId1) keepPersonUpdates.parentId1 = mergedParentId1;
+      if (mergedParentId2 && mergedParentId2 !== keepPerson.parentId2) keepPersonUpdates.parentId2 = mergedParentId2;
+      if (!keepPerson.birthDate && removePerson.birthDate) keepPersonUpdates.birthDate = removePerson.birthDate;
+      if (!keepPerson.deathDate && removePerson.deathDate) keepPersonUpdates.deathDate = removePerson.deathDate;
+      if (!keepPerson.placeOfBirth && removePerson.placeOfBirth) keepPersonUpdates.placeOfBirth = removePerson.placeOfBirth;
+      if (!keepPerson.placeOfDeath && removePerson.placeOfDeath) keepPersonUpdates.placeOfDeath = removePerson.placeOfDeath;
+      if (!keepPerson.biography && removePerson.biography) keepPersonUpdates.biography = removePerson.biography;
+      if (!keepPerson.occupation && removePerson.occupation) keepPersonUpdates.occupation = removePerson.occupation;
+      if (!keepPerson.education && removePerson.education) keepPersonUpdates.education = removePerson.education;
+      if (!keepPerson.religion && removePerson.religion) keepPersonUpdates.religion = removePerson.religion;
+      if (!keepPerson.maidenName && removePerson.maidenName) keepPersonUpdates.maidenName = removePerson.maidenName;
+      if (!keepPerson.profilePictureUrl && removePerson.profilePictureUrl) keepPersonUpdates.profilePictureUrl = removePerson.profilePictureUrl;
+
+      // Update kept person with merged data
+      const keepRef = doc(getPeopleColRef(), keepId);
+      batch.update(keepRef, keepPersonUpdates);
 
       // Update all people who reference the removed person
       for (const person of people) {
@@ -533,11 +580,15 @@ export default function TreeEditorPage() {
           needsUpdate = true;
         }
         if (person.spouseIds?.includes(removeId)) {
-          updates.spouseIds = person.spouseIds.map(id => id === removeId ? keepId : id);
+          // Deduplicate spouse IDs so keepId isn't added twice if already present
+          const newSpouseIds = [...new Set(person.spouseIds.map(id => id === removeId ? keepId : id).filter(id => id !== person.id))];
+          updates.spouseIds = newSpouseIds;
           needsUpdate = true;
         }
         if (person.childrenIds?.includes(removeId)) {
-          updates.childrenIds = person.childrenIds.map(id => id === removeId ? keepId : id);
+          // Deduplicate children IDs so keepId isn't added twice if already present
+          const newChildrenIds = [...new Set(person.childrenIds.map(id => id === removeId ? keepId : id).filter(id => id !== person.id))];
+          updates.childrenIds = newChildrenIds;
           needsUpdate = true;
         }
 
@@ -909,8 +960,10 @@ export default function TreeEditorPage() {
     };
 
     try {
+      const authToken = user ? await user.getIdToken() : undefined;
       // Explicit cast to satisfy type checker for strict null checks
-      const result = await handleFindRelationship(input as any);
+      const result = await handleFindRelationship({ ...input, authToken } as any);
+      if (user) await refreshUserProfile();
       if ('error' in result) {
         toast({ variant: "destructive", title: "AI Error", description: result.error });
       } else {
@@ -918,6 +971,7 @@ export default function TreeEditorPage() {
         setIsRelationshipResultOpen(true);
       }
     } catch (error) {
+      if (user) await refreshUserProfile();
       toast({ variant: "destructive", title: "Error", description: "Failed to find relationship." });
     } finally {
       setIsCalculatingRelationship(false);

@@ -19,6 +19,38 @@
             ]
         },
         {
+            "collectionGroup": "invitations",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "inviterUid",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "status",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "updatedAt",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "users",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "billing.cancelAtPeriodEnd",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "billing.currentPeriodEnd",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
             "collectionGroup": "trees",
             "queryScope": "COLLECTION",
             "fields": [

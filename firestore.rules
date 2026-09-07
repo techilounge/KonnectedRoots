@@ -6,11 +6,14 @@ service cloud.firestore {
     // A user can read/write their own user profile document.
     // Any authenticated user can query users by email (for invitations)
     match /users/{userId} {
-      // Anyone authenticated can read user profiles (needed for invitations)
+      // Anyone authenticated can read user profiles (needed for invitations and collaborator lists)
       allow read: if request.auth != null;
-      // Only the user can update their own profile
-      allow update: if request.auth != null && request.auth.uid == userId;
-      allow create: if request.auth != null;
+      // Only the user can update their own profile, but CANNOT update billing, usage, or family plan fields
+      allow update: if request.auth != null && request.auth.uid == userId
+                    && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['billing', 'usage', 'family', 'entitlements', 'plan']);
+      allow create: if request.auth != null && request.auth.uid == userId
+                    && (!request.resource.data.keys().hasAny(['billing']) || request.resource.data.billing.plan == 'free')
+                    && (!request.resource.data.keys().hasAny(['plan']) || request.resource.data.plan == 'free');
     }
 
     // Rules for the 'trees' collection and its 'people' subcollection.
@@ -96,8 +99,17 @@ service cloud.firestore {
 
     // Invitations collection for tree collaboration
     match /invitations/{invitationId} {
-      // Anyone authenticated can create an invitation (for their own trees)
-      allow create: if request.auth != null && request.resource.data.inviterUid == request.auth.uid;
+      // Helper to check if inviter owns or manages the tree
+      function canInviteToTree(targetTreeId) {
+        let tree = get(/databases/$(database)/documents/trees/$(targetTreeId)).data;
+        return tree.ownerId == request.auth.uid || 
+               (request.auth.uid in tree.collaborators && tree.collaborators[request.auth.uid] == 'manager');
+      }
+
+      // Only the tree owner or a manager can create an invitation for their own tree
+      allow create: if request.auth != null 
+                    && request.resource.data.inviterUid == request.auth.uid
+                    && canInviteToTree(request.resource.data.treeId);
       
       // SECURITY NOTE: Public read is intentional for invite preview UX.
       // Users need to see "You've been invited by X to tree Y" before logging in.
@@ -108,11 +120,15 @@ service cloud.firestore {
       // Inviter can update (resend) and delete their invitations
       allow update, delete: if request.auth != null && resource.data.inviterUid == request.auth.uid;
       
-      // Invitee can update (accept/decline) their invitations
-      allow update: if request.auth != null && request.auth.token.email == resource.data.inviteeEmail;
-      
-      // Allow update by inviteeUid if set
-      allow update: if request.auth != null && resource.data.inviteeUid == request.auth.uid;
+      // Invitee can update (accept/decline) or delete their invitations
+      allow update: if request.auth != null && (
+        request.auth.token.email == resource.data.inviteeEmail || 
+        resource.data.inviteeUid == request.auth.uid
+      );
+      allow delete: if request.auth != null && (
+        request.auth.token.email == resource.data.inviteeEmail || 
+        resource.data.inviteeUid == request.auth.uid
+      );
     }
 
     // Notifications collection for in-app notifications
@@ -160,6 +176,12 @@ service cloud.firestore {
       }
     }
 
+    // Contact messages collection (persisted via server action with adminDb)
+    match /contact_messages/{messageId} {
+      // Direct client read/write disabled to protect user submissions & prevent spam
+      allow read, write: if false;
+    }
+
     // Billing events collection (for audit trail, managed by Cloud Functions)
     match /billing_events/{eventId} {
       // No client access - only Cloud Functions write here
@@ -167,3 +189,4 @@ service cloud.firestore {
     }
   }
 }
+

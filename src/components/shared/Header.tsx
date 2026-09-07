@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/hooks/useAuth';
-import { Settings, LayoutDashboard, LogOut, UserCircle } from 'lucide-react';
+import { Settings, LayoutDashboard, LogOut, UserCircle, CreditCard } from 'lucide-react';
 import Logo from './Logo';
 import NotificationBell from '@/components/NotificationBell';
 
@@ -80,6 +80,12 @@ export default function Header() {
                       <Link href="/settings">
                         <Settings className="mr-2 h-4 w-4" />
                         Settings
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/settings/billing">
+                        <CreditCard className="mr-2 h-4 w-4" />
+                        Billing & Plans
                       </Link>
                     </DropdownMenuItem>
                   </DropdownMenuContent>
