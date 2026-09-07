@@ -125,6 +125,19 @@ exports.createCheckoutSession = (0, https_1.onCall)({
     }
     // Get or create Stripe customer
     let customerId = (_b = userData === null || userData === void 0 ? void 0 : userData.billing) === null || _b === void 0 ? void 0 : _b.stripeCustomerId;
+    if (customerId) {
+        try {
+            const existing = await getStripe().customers.retrieve(customerId);
+            if (existing.deleted) {
+                customerId = null;
+            }
+        }
+        catch (err) {
+            if ((err === null || err === void 0 ? void 0 : err.code) === "resource_missing" || (err === null || err === void 0 ? void 0 : err.statusCode) === 400 || (err === null || err === void 0 ? void 0 : err.statusCode) === 404) {
+                customerId = null;
+            }
+        }
+    }
     if (!customerId && userEmail) {
         // Check if customer exists by email
         const existingCustomers = await getStripe().customers.list({
@@ -219,31 +232,89 @@ exports.createPortalSession = (0, https_1.onCall)({
     region: "us-central1",
     secrets: ["STRIPE_SECRET_KEY"],
 }, async (request) => {
-    var _a;
+    var _a, _b;
     // Must be authenticated
     if (!request.auth) {
-        throw new https_1.HttpsError("unauthenticated", "Must be logged in");
+        throw new https_1.HttpsError("unauthenticated", "Must be logged in to manage billing.");
     }
     const uid = request.auth.uid;
+    const userEmail = (_a = request.auth.token) === null || _a === void 0 ? void 0 : _a.email;
     // Get user data
     const userDoc = await db.collection("users").doc(uid).get();
     if (!userDoc.exists) {
-        throw new https_1.HttpsError("not-found", "User not found");
+        throw new https_1.HttpsError("not-found", "User profile not found.");
     }
     const userData = userDoc.data();
-    const customerId = (_a = userData === null || userData === void 0 ? void 0 : userData.billing) === null || _a === void 0 ? void 0 : _a.stripeCustomerId;
-    if (!customerId) {
-        throw new https_1.HttpsError("failed-precondition", "No billing account found");
+    let customerId = (_b = userData === null || userData === void 0 ? void 0 : userData.billing) === null || _b === void 0 ? void 0 : _b.stripeCustomerId;
+    // Verify if customer exists in the active Stripe account
+    if (customerId) {
+        try {
+            const customer = await getStripe().customers.retrieve(customerId);
+            if (customer.deleted) {
+                customerId = null;
+            }
+        }
+        catch (err) {
+            if ((err === null || err === void 0 ? void 0 : err.code) === "resource_missing" || (err === null || err === void 0 ? void 0 : err.statusCode) === 400 || (err === null || err === void 0 ? void 0 : err.statusCode) === 404) {
+                functions.logger.warn(`Stripe customer ${customerId} not found in active account. Will find or create valid customer.`);
+                customerId = null;
+            }
+            else {
+                functions.logger.error("Error checking Stripe customer:", err);
+                throw new https_1.HttpsError("internal", (err === null || err === void 0 ? void 0 : err.message) || "Failed to communicate with Stripe");
+            }
+        }
     }
-    // Create portal session
-    const session = await getStripe().billingPortal.sessions.create({
-        customer: customerId,
-        return_url: `${process.env.APP_URL || "https://konnectedroots.app"}/settings/billing`,
-    });
-    functions.logger.info(`Created portal session for user ${uid}`);
-    return {
-        url: session.url,
-    };
+    // If no valid Stripe customer found, lookup by email or create a new customer
+    if (!customerId) {
+        const emailToUse = userEmail || (userData === null || userData === void 0 ? void 0 : userData.email);
+        if (!emailToUse) {
+            throw new https_1.HttpsError("failed-precondition", "An email address is required to access billing.");
+        }
+        try {
+            const existingCustomers = await getStripe().customers.list({
+                email: emailToUse,
+                limit: 1,
+            });
+            if (existingCustomers.data.length > 0) {
+                customerId = existingCustomers.data[0].id;
+            }
+            else {
+                const newCustomer = await getStripe().customers.create({
+                    email: emailToUse,
+                    name: (userData === null || userData === void 0 ? void 0 : userData.displayName) || undefined,
+                    metadata: { kr_uid: uid },
+                });
+                customerId = newCustomer.id;
+            }
+            // Sync the valid customer ID back to Firestore
+            await userDoc.ref.set({
+                billing: {
+                    stripeCustomerId: customerId,
+                },
+            }, { merge: true });
+        }
+        catch (err) {
+            functions.logger.error("Error creating/looking up Stripe customer:", err);
+            throw new https_1.HttpsError("internal", (err === null || err === void 0 ? void 0 : err.message) || "Failed to initialize billing account in Stripe");
+        }
+    }
+    try {
+        // Create portal session
+        const returnUrl = `${process.env.APP_URL || "https://konnectedroots.app"}/settings/billing`;
+        const session = await getStripe().billingPortal.sessions.create({
+            customer: customerId,
+            return_url: returnUrl,
+        });
+        functions.logger.info(`Created portal session for user ${uid}, customer ${customerId}`);
+        return {
+            url: session.url,
+        };
+    }
+    catch (portalError) {
+        functions.logger.error("Error creating billing portal session:", portalError);
+        throw new https_1.HttpsError("failed-precondition", (portalError === null || portalError === void 0 ? void 0 : portalError.message) || "Could not open Stripe billing portal.");
+    }
 });
 /**
  * Add AI Pack to existing subscription
