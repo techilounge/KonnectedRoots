@@ -27,6 +27,8 @@ import {
   Check,
   AlertCircle,
   Clock,
+  CheckCircle2,
+  Ban,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -62,6 +64,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
+import AdminPagination from '@/components/admin/AdminPagination';
 
 export default function AdminUsersPage() {
   const { user, isSuperAdmin } = useAuth();
@@ -71,6 +74,8 @@ export default function AdminUsersPage() {
   const [search, setSearch] = useState('');
   const [planFilter, setPlanFilter] = useState('all');
   const [roleFilter, setRoleFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Selected user for detail modal
   const [selectedUser, setSelectedUser] = useState<AdminUserItem | null>(null);
@@ -104,6 +109,10 @@ export default function AdminUsersPage() {
   useEffect(() => {
     fetchUsers();
   }, [user, planFilter, roleFilter]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, planFilter, roleFilter]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -289,142 +298,167 @@ export default function AdminUsersPage() {
                   </td>
                 </tr>
               ) : (
-                users.map((u) => {
-                  const initial = (u.displayName?.[0] || u.email?.[0] || 'U').toUpperCase();
-                  const isSuspended = u.disabled;
+                users
+                  .slice((currentPage - 1) * pageSize, currentPage * pageSize)
+                  .map((u) => {
+                    const initial = (u.displayName?.[0] || u.email?.[0] || 'U').toUpperCase();
+                    const isSuspended = u.disabled;
 
-                  return (
-                    <tr key={u.uid} className="hover:bg-muted/30 transition-colors">
-                      {/* User Cell */}
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2.5">
-                          <Avatar className="h-8 w-8">
-                            <AvatarImage src={u.photoURL} alt={u.displayName} />
-                            <AvatarFallback className="text-[11px] bg-primary/10 text-primary font-bold">
-                              {initial}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="min-w-0">
-                            <p className="font-semibold text-foreground truncate">{u.displayName}</p>
-                            <p className="text-muted-foreground text-[11px] truncate max-w-[180px]">{u.email}</p>
+                    return (
+                      <tr key={u.uid} className="hover:bg-muted/30 transition-colors">
+                        {/* User Cell */}
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2.5">
+                            <Avatar className="h-8 w-8">
+                              <AvatarImage src={u.photoURL} alt={u.displayName} />
+                              <AvatarFallback className="text-[11px] bg-primary/10 text-primary font-bold">
+                                {initial}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0">
+                              <p className="font-semibold text-foreground truncate">{u.displayName}</p>
+                              <p className="text-muted-foreground text-[11px] truncate max-w-[180px]">{u.email}</p>
+                            </div>
                           </div>
-                        </div>
-                      </td>
+                        </td>
 
-                      {/* Plan Cell */}
-                      <td className="py-3 px-4">
-                        <Badge
-                          variant="outline"
-                          className={`capitalize text-[10px] font-semibold ${
-                            u.plan === 'family'
-                              ? 'bg-blue-500/10 text-blue-600 border-blue-500/30'
-                              : u.plan === 'pro'
-                              ? 'bg-amber-500/10 text-amber-600 border-amber-500/30'
-                              : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'
-                          }`}
-                        >
-                          {u.plan}
-                        </Badge>
-                      </td>
-
-                      {/* Role Cell */}
-                      <td className="py-3 px-4">
-                        {u.isPlatformAdmin ? (
-                          <Badge variant="default" className="text-[10px] bg-primary text-primary-foreground font-semibold">
-                            Admin
+                        {/* Plan Cell */}
+                        <td className="py-3 px-4">
+                          <Badge
+                            variant="outline"
+                            className={`capitalize text-[10px] font-semibold ${
+                              u.plan === 'family'
+                                ? 'bg-blue-500/10 text-blue-600 border-blue-500/30'
+                                : u.plan === 'pro'
+                                ? 'bg-amber-500/10 text-amber-600 border-amber-500/30'
+                                : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'
+                            }`}
+                          >
+                            {u.plan}
                           </Badge>
-                        ) : (
-                          <span className="text-muted-foreground text-[11px]">User</span>
-                        )}
-                      </td>
+                        </td>
 
-                      {/* AI Usage */}
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-1 font-medium">
-                          <span>{u.aiActionsUsed ?? 0}</span>
-                          <span className="text-muted-foreground">/ {u.aiActionsAllowance ?? 10}</span>
-                        </div>
-                      </td>
+                        {/* Role Cell */}
+                        <td className="py-3 px-4">
+                          {u.isPlatformAdmin ? (
+                            <Badge variant="default" className="text-[10px] bg-primary text-primary-foreground font-semibold">
+                              Admin
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-[11px]">User</span>
+                          )}
+                        </td>
 
-                      {/* Created */}
-                      <td className="py-3 px-4 text-muted-foreground whitespace-nowrap">
-                        {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}
-                      </td>
+                        {/* AI Usage */}
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-1 font-medium">
+                            <span>{u.aiActionsUsed ?? 0}</span>
+                            <span className="text-muted-foreground">/ {u.aiActionsAllowance ?? 10}</span>
+                          </div>
+                        </td>
 
-                      {/* Last Active */}
-                      <td className="py-3 px-4 text-muted-foreground whitespace-nowrap">
-                        {u.lastActivityAt ? new Date(u.lastActivityAt).toLocaleDateString() : '—'}
-                      </td>
+                        {/* Created */}
+                        <td className="py-3 px-4 text-muted-foreground whitespace-nowrap">
+                          {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}
+                        </td>
 
-                      {/* Action Menu */}
-                      <td className="py-3 px-4 text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-7 w-7">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48 text-xs">
-                            <DropdownMenuLabel>User Actions</DropdownMenuLabel>
-                            <DropdownMenuItem onClick={() => setSelectedUser(u)} className="cursor-pointer">
-                              View Full Profile
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
+                        {/* Last Active */}
+                        <td className="py-3 px-4 text-muted-foreground whitespace-nowrap">
+                          {u.lastActivityAt ? new Date(u.lastActivityAt).toLocaleDateString() : '—'}
+                        </td>
 
-                            {/* Change Plan Sub-items */}
-                            <DropdownMenuItem
-                              onClick={() => setPlanChangeDialog({ user: u, targetPlan: u.plan === 'pro' ? 'family' : 'pro' })}
-                              className="cursor-pointer"
-                            >
-                              <CreditCard className="mr-2 h-3.5 w-3.5 text-amber-500" />
-                              Modify Plan
-                            </DropdownMenuItem>
+                        {/* Action Menu */}
+                        <td className="py-3 px-4 text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-7 w-7">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48 text-xs">
+                              <DropdownMenuLabel>User Actions</DropdownMenuLabel>
+                              <DropdownMenuItem onClick={() => setSelectedUser(u)} className="cursor-pointer">
+                                View Full Profile
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
 
-                            {/* Grant Credits */}
-                            <DropdownMenuItem
-                              onClick={() => setCreditDialog({ user: u, amount: 25, reason: 'Admin courtesy bonus' })}
-                              className="cursor-pointer"
-                            >
-                              <Sparkles className="mr-2 h-3.5 w-3.5 text-purple-500" />
-                              Grant AI Credits
-                            </DropdownMenuItem>
+                              {/* Change Plan Sub-items */}
+                              <DropdownMenuItem
+                                onClick={() => setPlanChangeDialog({ user: u, targetPlan: u.plan === 'pro' ? 'family' : 'pro' })}
+                                className="cursor-pointer"
+                              >
+                                <CreditCard className="mr-2 h-3.5 w-3.5 text-amber-500" />
+                                Modify Plan
+                              </DropdownMenuItem>
 
-                            {/* Role Toggle */}
-                            <DropdownMenuItem
-                              onClick={() => setRoleDialog({ user: u, targetRole: u.isPlatformAdmin ? 'user' : 'admin' })}
-                              className="cursor-pointer"
-                            >
-                              <Shield className="mr-2 h-3.5 w-3.5 text-blue-500" />
-                              {u.isPlatformAdmin ? 'Demote to User' : 'Promote to Admin'}
-                            </DropdownMenuItem>
+                              {/* Grant Credits Sub-item */}
+                              <DropdownMenuItem
+                                onClick={() => setCreditDialog({ user: u, amount: 25, reason: '' })}
+                                className="cursor-pointer"
+                              >
+                                <Sparkles className="mr-2 h-3.5 w-3.5 text-purple-500" />
+                                Grant AI Credits
+                              </DropdownMenuItem>
 
-                            <DropdownMenuSeparator />
-
-                            {/* Suspend / Restore */}
-                            <DropdownMenuItem
-                              onClick={() => setSuspendDialog({ user: u, disabled: !isSuspended })}
-                              className={`${isSuspended ? 'text-emerald-600' : 'text-destructive'} cursor-pointer`}
-                            >
-                              {isSuspended ? (
-                                <>
-                                  <UserCheck className="mr-2 h-3.5 w-3.5" /> Reactivate Account
-                                </>
-                              ) : (
-                                <>
-                                  <UserX className="mr-2 h-3.5 w-3.5" /> Suspend Account
-                                </>
+                              {/* Promote / Demote Role (Only Super Admin) */}
+                              {isSuperAdmin && (
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    setRoleDialog({
+                                      user: u,
+                                      targetRole: u.role === 'admin' || u.role === 'super_admin' ? 'user' : 'admin',
+                                    })
+                                  }
+                                  className="cursor-pointer"
+                                >
+                                  <Shield className="mr-2 h-3.5 w-3.5 text-blue-500" />
+                                  {u.role === 'admin' || u.role === 'super_admin' ? 'Demote to User' : 'Promote to Admin'}
+                                </DropdownMenuItem>
                               )}
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </td>
-                    </tr>
-                  );
-                })
+
+                              <DropdownMenuSeparator />
+
+                              {/* Suspend Account */}
+                              <DropdownMenuItem
+                                onClick={() => setSuspendDialog({ user: u, disabled: !isSuspended })}
+                                className="cursor-pointer text-destructive focus:text-destructive"
+                              >
+                                {isSuspended ? (
+                                  <>
+                                    <CheckCircle2 className="mr-2 h-3.5 w-3.5 text-emerald-500" />
+                                    Restore Account
+                                  </>
+                                ) : (
+                                  <>
+                                    <Ban className="mr-2 h-3.5 w-3.5" />
+                                    Suspend Account
+                                  </>
+                                )}
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </td>
+                      </tr>
+                    );
+                  })
               )}
             </tbody>
           </table>
         </div>
+
+        {users.length > 0 && (
+          <div className="p-4 border-t border-border/40">
+            <AdminPagination
+              currentPage={currentPage}
+              totalItems={users.length}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+              pageSizeOptions={[10, 25, 50]}
+              itemLabel="users"
+            />
+          </div>
+        )}
       </Card>
 
       {/* 1. Plan Change AlertDialog */}

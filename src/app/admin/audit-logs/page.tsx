@@ -48,6 +48,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import AdminPagination from '@/components/admin/AdminPagination';
 
 export default function AdminAuditLogsPage() {
   const { user } = useAuth();
@@ -57,6 +58,8 @@ export default function AdminAuditLogsPage() {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLog, setSelectedLog] = useState<AuditLogItem | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [, startTransition] = useTransition();
 
   const loadLogs = async () => {
@@ -80,6 +83,10 @@ export default function AdminAuditLogsPage() {
     setLoading(true);
     loadLogs();
   }, [user, categoryFilter]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [categoryFilter, searchQuery]);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -218,7 +225,9 @@ export default function AdminAuditLogsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredLogs.map(log => (
+                  {filteredLogs
+                    .slice((currentPage - 1) * pageSize, currentPage * pageSize)
+                    .map(log => (
                     <TableRow key={log.id} className="hover:bg-muted/30 transition-colors">
                       <TableCell className="font-mono text-xs whitespace-nowrap text-muted-foreground">
                         {new Date(log.timestamp).toLocaleString()}
@@ -259,6 +268,19 @@ export default function AdminAuditLogsPage() {
                 </TableBody>
               </Table>
             </div>
+          )}
+
+          {filteredLogs.length > 0 && (
+            <AdminPagination
+              currentPage={currentPage}
+              totalItems={filteredLogs.length}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+              pageSizeOptions={[10, 25, 50, 100]}
+              itemLabel="logs"
+              className="border-t border-border/40 mt-3 pt-3"
+            />
           )}
         </CardContent>
       </Card>

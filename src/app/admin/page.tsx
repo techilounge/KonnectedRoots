@@ -42,6 +42,7 @@ import {
   Bar,
   Legend,
 } from 'recharts';
+import AdminPagination from '@/components/admin/AdminPagination';
 
 export default function AdminDashboardPage() {
   const { user } = useAuth();
@@ -49,6 +50,8 @@ export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [growthView, setGrowthView] = useState<'cumulative' | 'daily'>('cumulative');
+  const [activityPage, setActivityPage] = useState(1);
+  const [activityPageSize, setActivityPageSize] = useState(5);
 
   const fetchStats = async () => {
     if (!user) return;
@@ -584,34 +587,51 @@ export default function AdminDashboardPage() {
               No recent platform activity recorded.
             </div>
           ) : (
-            <div className="divide-y divide-border/60">
-              {stats.recentActivity.map((activity) => (
-                <div key={activity.id} className="py-3 flex items-center justify-between gap-4 first:pt-0 last:pb-0">
-                  <div className="flex items-center gap-3">
-                    <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                      {activity.type === 'signup' ? (
-                        <Users className="h-4 w-4" />
-                      ) : activity.type === 'tree_created' ? (
-                        <TreeDeciduous className="h-4 w-4" />
-                      ) : (
-                        <Zap className="h-4 w-4" />
-                      )}
+            <div className="space-y-3">
+              <div className="divide-y divide-border/60">
+                {stats.recentActivity
+                  .slice((activityPage - 1) * activityPageSize, activityPage * activityPageSize)
+                  .map((activity) => (
+                    <div key={activity.id} className="py-3 flex items-center justify-between gap-4 first:pt-0 last:pb-0">
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                          {activity.type === 'signup' ? (
+                            <Users className="h-4 w-4" />
+                          ) : activity.type === 'tree_created' ? (
+                            <TreeDeciduous className="h-4 w-4" />
+                          ) : (
+                            <Zap className="h-4 w-4" />
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-foreground">{activity.title}</p>
+                          <p className="text-[11px] text-muted-foreground">{activity.description}</p>
+                        </div>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground/80 shrink-0">
+                        {new Date(activity.timestamp).toLocaleDateString(undefined, {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span>
                     </div>
-                    <div>
-                      <p className="text-xs font-semibold text-foreground">{activity.title}</p>
-                      <p className="text-[11px] text-muted-foreground">{activity.description}</p>
-                    </div>
-                  </div>
-                  <span className="text-[10px] text-muted-foreground/80 shrink-0">
-                    {new Date(activity.timestamp).toLocaleDateString(undefined, {
-                      month: 'short',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </span>
-                </div>
-              ))}
+                  ))}
+              </div>
+
+              {stats.recentActivity.length > 0 && (
+                <AdminPagination
+                  currentPage={activityPage}
+                  totalItems={stats.recentActivity.length}
+                  pageSize={activityPageSize}
+                  onPageChange={setActivityPage}
+                  onPageSizeChange={setActivityPageSize}
+                  pageSizeOptions={[5, 10, 20]}
+                  itemLabel="activities"
+                  className="border-t border-border/40 mt-2"
+                />
+              )}
             </div>
           )}
         </CardContent>

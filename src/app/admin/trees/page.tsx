@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
+import AdminPagination from '@/components/admin/AdminPagination';
 
 export default function AdminTreesPage() {
   const { user } = useAuth();
@@ -38,6 +39,8 @@ export default function AdminTreesPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedTree, setSelectedTree] = useState<AdminTreeItem | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const fetchTrees = async () => {
     if (!user) return;
@@ -57,8 +60,13 @@ export default function AdminTreesPage() {
     fetchTrees();
   }, [user]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search]);
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setCurrentPage(1);
     fetchTrees();
   };
 
@@ -124,7 +132,9 @@ export default function AdminTreesPage() {
                   </td>
                 </tr>
               ) : (
-                trees.map((t) => (
+                trees
+                  .slice((currentPage - 1) * pageSize, currentPage * pageSize)
+                  .map((t) => (
                   <tr key={t.id} className="hover:bg-muted/30 transition-colors">
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
@@ -145,7 +155,7 @@ export default function AdminTreesPage() {
                     </td>
 
                     <td className="py-3 px-4">
-                      <span className="flex items-center gap-1.5 capitalize text-muted-foreground">
+                      <span className="capitalize inline-flex items-center gap-1 font-medium text-muted-foreground">
                         {t.visibility === 'public' ? (
                           <Globe className="h-3 w-3 text-blue-500" />
                         ) : t.visibility === 'link' ? (
@@ -197,6 +207,20 @@ export default function AdminTreesPage() {
             </tbody>
           </table>
         </div>
+
+        {trees.length > 0 && (
+          <div className="p-4 border-t border-border/40">
+            <AdminPagination
+              currentPage={currentPage}
+              totalItems={trees.length}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+              pageSizeOptions={[10, 25, 50]}
+              itemLabel="trees"
+            />
+          </div>
+        )}
       </Card>
 
       {/* Tree Inspect Modal */}

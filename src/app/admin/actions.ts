@@ -178,8 +178,8 @@ export async function getAdminDashboardData(idToken: string): Promise<AdminDashb
   // Recent platform activities
   const recentActivity: AdminActivityItem[] = [];
 
-  // Get recent 5 users
-  const recentUsersSnap = await adminDb.collection('users').orderBy('createdAt', 'desc').limit(5).get();
+  // Get recent users
+  const recentUsersSnap = await adminDb.collection('users').orderBy('createdAt', 'desc').limit(25).get();
   recentUsersSnap.forEach(doc => {
     const u = doc.data();
     recentActivity.push({
@@ -193,8 +193,8 @@ export async function getAdminDashboardData(idToken: string): Promise<AdminDashb
     });
   });
 
-  // Get recent 5 trees
-  const recentTreesSnap = await adminDb.collection('trees').orderBy('createdAt', 'desc').limit(5).get();
+  // Get recent trees
+  const recentTreesSnap = await adminDb.collection('trees').orderBy('createdAt', 'desc').limit(25).get();
   recentTreesSnap.forEach(doc => {
     const t = doc.data();
     recentActivity.push({
@@ -221,7 +221,7 @@ export async function getAdminDashboardData(idToken: string): Promise<AdminDashb
     planDistribution,
     aiActionsSeries,
     treeCreationSeries,
-    recentActivity: recentActivity.slice(0, 8),
+    recentActivity: recentActivity.slice(0, 50),
     systemStatus: {
       status: 'operational',
       latencyMs: 38,

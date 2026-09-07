@@ -51,6 +51,7 @@ import {
   Tooltip,
   Legend,
 } from 'recharts';
+import AdminPagination from '@/components/admin/AdminPagination';
 
 export default function AdminReportsPage() {
   const { user } = useAuth();
@@ -60,6 +61,8 @@ export default function AdminReportsPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [, startTransition] = useTransition();
 
   const loadReport = async () => {
@@ -80,6 +83,10 @@ export default function AdminReportsPage() {
     setLoading(true);
     loadReport();
   }, [user, category, daysBack]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [category, daysBack, searchQuery]);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -399,7 +406,9 @@ export default function AdminReportsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredRows.map((row, idx) => (
+                  {filteredRows
+                    .slice((currentPage - 1) * pageSize, currentPage * pageSize)
+                    .map((row, idx) => (
                     <TableRow key={idx} className="hover:bg-muted/30 transition-colors">
                       {(report?.tableHeaders || []).map(header => (
                         <TableCell key={header.key} className="text-xs">
@@ -417,6 +426,19 @@ export default function AdminReportsPage() {
                 </TableBody>
               </Table>
             </div>
+          )}
+
+          {filteredRows.length > 0 && (
+            <AdminPagination
+              currentPage={currentPage}
+              totalItems={filteredRows.length}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+              pageSizeOptions={[10, 25, 50]}
+              itemLabel="records"
+              className="border-t border-border/40 mt-3 pt-3"
+            />
           )}
         </CardContent>
       </Card>
