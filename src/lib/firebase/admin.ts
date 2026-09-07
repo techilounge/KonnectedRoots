@@ -1,9 +1,39 @@
+import 'server-only';
 import * as admin from 'firebase-admin';
 import * as path from 'path';
 import * as fs from 'fs';
 
-// Default service account credentials encoded as base64 for seamless cloud deployments (Vercel / AWS)
-const FALLBACK_SA_B64 = 'REMOVED_REVOKED_FIREBASE_ADMIN_CREDENTIAL';
+function parseCredential(value: string, source: string) {
+  try {
+    const raw = value.trim();
+    let content = raw;
+    if (!raw.startsWith('{')) {
+      // Buffer decoding alone tolerates invalid characters and truncated input.
+      if (!raw || !/^[A-Za-z0-9+/]+={0,2}$/.test(raw) || raw.length % 4 === 1) {
+        throw new Error();
+      }
+      const decoded = Buffer.from(raw, 'base64');
+      if (decoded.toString('base64').replace(/=+$/, '') !== raw.replace(/=+$/, '')) {
+        throw new Error();
+      }
+      content = decoded.toString('utf8');
+    }
+    const account = JSON.parse(content);
+    if (!account || account.type !== 'service_account' ||
+        !['project_id', 'client_email', 'private_key'].every(
+          field => typeof account[field] === 'string' && account[field].trim().length > 0
+        )) {
+      throw new Error();
+    }
+    return {
+      credential: admin.credential.cert(account),
+      projectId: account.project_id as string,
+    };
+  } catch {
+    // Never include parser/SDK errors: they can contain credential input.
+    throw new Error(`Invalid Firebase Admin credentials in ${source}. Expected valid service-account JSON (raw or Base64-encoded) with project_id, client_email, and a valid private key.`);
+  }
+}
 
 function initializeFirebaseAdmin(): admin.app.App {
   if (admin.apps.length > 0) {
@@ -13,53 +43,44 @@ function initializeFirebaseAdmin(): admin.app.App {
   const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'konnectedroots-u5xtb';
   const storageBucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'konnectedroots-u5xtb.firebasestorage.app';
 
-  // 1. Check for explicit JSON or base64 string in environment variable
-  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-    try {
-      const raw = process.env.FIREBASE_SERVICE_ACCOUNT.trim();
-      const content = raw.startsWith('{') ? raw : Buffer.from(raw, 'base64').toString('utf8');
-      const parsed = JSON.parse(content);
-      return admin.initializeApp({
-        credential: admin.credential.cert(parsed),
-        projectId: parsed.project_id || projectId,
-        storageBucket,
-      });
-    } catch (e) {
-      console.error('Failed to parse FIREBASE_SERVICE_ACCOUNT environment variable:', e);
-    }
-  }
-
-  // 2. Check for service-account.json in project root (local dev)
-  const serviceAccountPath = path.resolve(process.cwd(), 'service-account.json');
-  if (fs.existsSync(serviceAccountPath)) {
-    try {
-      const fileContent = fs.readFileSync(serviceAccountPath, 'utf8');
-      const serviceAccount = JSON.parse(fileContent);
-      return admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-        projectId: serviceAccount.project_id || projectId,
-        storageBucket,
-      });
-    } catch (e) {
-      console.error('Failed to load service-account.json:', e);
-    }
-  }
-
-  // 3. Use embedded fallback service account credential for cloud deployment
-  try {
-    const decoded = Buffer.from(FALLBACK_SA_B64, 'base64').toString('utf8');
-    const parsed = JSON.parse(decoded);
+  if (process.env.FIREBASE_SERVICE_ACCOUNT !== undefined) {
     return admin.initializeApp({
-      credential: admin.credential.cert(parsed),
-      projectId: parsed.project_id || projectId,
+      ...parseCredential(process.env.FIREBASE_SERVICE_ACCOUNT, 'FIREBASE_SERVICE_ACCOUNT'),
       storageBucket,
     });
-  } catch (e) {
-    console.warn('Failed to load fallback service account credential:', e);
   }
 
-  // 4. Fall back to application default credentials (GCP / Cloud Run)
+  const isVercel = process.env.VERCEL === '1' || Boolean(process.env.VERCEL_ENV);
+  if (isVercel) {
+    throw new Error('Firebase Admin requires the server-only FIREBASE_SERVICE_ACCOUNT environment variable on Vercel. Local files and implicit Application Default Credentials are disabled.');
+  }
+
+  const isLocalDevelopment = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
+  if (isLocalDevelopment) {
+    const serviceAccountPath = path.resolve(process.cwd(), 'service-account.json');
+    if (fs.existsSync(serviceAccountPath)) {
+      let content: string;
+      try {
+        content = fs.readFileSync(serviceAccountPath, 'utf8');
+      } catch {
+        throw new Error('Unable to read local Firebase Admin service-account.json.');
+      }
+      return admin.initializeApp({
+        ...parseCredential(content, 'local service-account.json'),
+        storageBucket,
+      });
+    }
+  }
+
+  // ADC is appropriate for local gcloud credentials, explicitly configured
+  // credentials/workload identity, or Google-hosted attached service identities.
+  const hasAdcEnvironment = Boolean(process.env.GOOGLE_APPLICATION_CREDENTIALS ||
+    process.env.K_SERVICE || process.env.FUNCTION_NAME || process.env.GAE_ENV);
+  if (!isLocalDevelopment && !hasAdcEnvironment) {
+    throw new Error('Firebase Admin credentials are missing. Set server-only FIREBASE_SERVICE_ACCOUNT or configure Application Default Credentials through workload identity (GOOGLE_APPLICATION_CREDENTIALS) or a Google-hosted service identity.');
+  }
   return admin.initializeApp({
+    credential: admin.credential.applicationDefault(),
     projectId,
     storageBucket,
   });

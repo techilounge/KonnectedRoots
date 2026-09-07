@@ -69,7 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Admin Sidebar & Header UX**: Relocated desktop sidebar collapse button outside the search input into `AdminHeader.tsx` (`ChevronLeft`/`ChevronRight`) with secondary footer toggle. Fixed SVG branding logo dimensions and enforced `overflow-hidden` on the sidebar header to prevent layout overflow.
 
 ### Fixed
-- **Vercel Server Action 500s**: Added embedded base64 fallback service account credentials in `src/lib/firebase/admin.ts` to ensure seamless server action execution in Vercel serverless environments.
+- **Firebase Admin credential security**: Removed the former embedded credential fallback. Vercel deployments require server-only `FIREBASE_SERVICE_ACCOUNT`; production credentials must never be committed.
 - **Snapshot Permission Errors**: Deployed updated Firestore security rules granting public read access on `system/{configDoc}` for the broadcast banner.
 
 ## [0.2.1] - 2026-01-19

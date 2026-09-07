@@ -84,7 +84,7 @@ KonnectedRoots/
 │   ├── lib/
 │   │   ├── firebase/
 │   │   │   ├── clients.ts        # Firebase client initialization
-│   │   │   └── admin.ts          # Firebase Admin SDK with robust Vercel fallback credentials
+│   │   │   └── admin.ts          # Firebase Admin SDK with server-only credential initialization
 │   │   ├── tree-validator.ts     # Family tree data integrity checks (dates, cycles, orphans)
 │   │   ├── duplicate-detector.ts # Duplicate ancestor identification algorithm
 │   │   └── gedcom-generator.ts   # GEDCOM 5.5.1 parser and serializer
@@ -122,14 +122,12 @@ npm run set-admin your-email@example.com admin
 ## 5. Vercel & Firebase Admin Credentials Architecture
 
 > [!IMPORTANT]
-> **Vercel Server Action Fallback:**
-> Because `service-account.json` is gitignored and cannot be committed, [`src/lib/firebase/admin.ts`](file:///c:/Users/Precision%207560/APPs/KonnectedRoots/src/lib/firebase/admin.ts) includes a multi-tiered credential loader:
-> 1. `FIREBASE_SERVICE_ACCOUNT` environment variable (if set in Vercel).
-> 2. `FIREBASE_SERVICE_ACCOUNT_KEY` environment variable.
-> 3. Embedded base64-encoded service account credential fallback for production continuity.
-> 4. Local `service-account.json` file check for local development.
->
-> This guarantees that Server Actions (`getAdminUsers`, `updateUserPlanByAdmin`, etc.) will **never throw HTTP 500** in production due to missing credentials.
+> Production Firebase Admin credentials must come from server-side environment variables or workload identity and must never be committed to the repository.
+> - On Vercel, set server-only `FIREBASE_SERVICE_ACCOUNT` to raw service-account JSON or Base64-encoded JSON. Missing or invalid credentials fail initialization; no embedded credential, local file, or implicit ADC fallback is allowed.
+> - Never expose this variable through `NEXT_PUBLIC_*` or Next.js `env` configuration. Parsing errors must not include credential contents.
+> - Local development/test may use the gitignored root `service-account.json` when the environment variable is absent. Production never loads this file.
+> - Outside Vercel, ADC is supported in development/test, with explicitly configured `GOOGLE_APPLICATION_CREDENTIALS` (including workload identity configuration), or Google-hosted Cloud Run/Functions/App Engine service identities. Other production environments must explicitly configure credentials.
+> - `NEXT_PUBLIC_FIREBASE_PROJECT_ID` and `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` contain public project configuration only.
 
 ---
 
