@@ -191,3 +191,14 @@ npm run set-admin your-email@example.com admin
 - Private AI collections: ai_configuration, ai_providers, ai_invocations, ai_usage_months, ai_model_health. Direct client access is denied; server actions enforce roles.
 - Budget reservations and circuit state must persist across serverless instances. Telemetry must not record prompts, documents, images or response contents. Do not replace missing telemetry with invented figures.
 - Run npm test in addition to typecheck, lint and build. Provider/Firestore tests are mocked; preview verification with configured IAM and provider credentials is a separate deployment step.
+
+## 9. Required security controls
+
+- Production secrets never belong in source, including encoded credentials. Firebase Admin uses secure server-side environment credentials or configured workload identity, never embedded fallbacks.
+- Firebase Browser API key is public configuration (`NEXT_PUBLIC_FIREBASE_API_KEY`) but must be restricted to approved websites and Firebase APIs, never Generative Language API.
+- AI provider secrets are server-only. Google Secret Manager is the credential vault; Google's legacy server environment migration fallback must never become public configuration.
+- Stripe webhook signing secret is managed through Firebase Functions Secrets and bound to the webhook function. Never commit its value.
+- GitHub Secret Scanning, Push Protection and Gitleaks are required controls. Run `npm run security:secrets` with the documented Gitleaks CLI installed; review staged changes and run the staged scan in docs/security/SECURE_DEVELOPMENT.md.
+- Read docs/security/GIT_HISTORY_REMEDIATION.md before history cleanup. Never automatically force-push, delete remote branches, rotate production credentials or change visibility. Incident remains CONTAINED until owner verification closes it.
+- See docs/security/validation-results.md for scan/build limitations. Workflow files are not evidence of active remote checks until pushed and run.
+- The root Next.js `tsconfig.json` excludes `functions/src`; Firebase Functions are compiled from `functions/tsconfig.json` with their own dependencies and predeploy build.

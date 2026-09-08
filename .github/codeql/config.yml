@@ -1,0 +1,11 @@
+name: Next.js and Firebase Functions
+paths:
+  - src
+  - functions/src
+  - scripts
+  - next.config.ts
+paths-ignore:
+  - '**/node_modules/**'
+  - functions/lib
+  - .next
+  - coverage

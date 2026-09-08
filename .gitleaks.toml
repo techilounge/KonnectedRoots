@@ -1,0 +1,12 @@
+title = "KonnectedRoots secret detection"
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Generated dependency/build directories; see docs/security/SECURE_DEVELOPMENT.md. No credential-pattern exemptions."
+paths = [
+  '''(^|/)node_modules/''',
+  '''(^|/)(\.next|coverage|\.firebase)/''',
+  '''^(out|build)/''',
+  '''^functions/lib/''',
+]
