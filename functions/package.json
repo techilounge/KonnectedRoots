@@ -1,6 +1,7 @@
 {
   "name": "functions",
   "scripts": {
+    "test": "npm run build && node --test tests/*.test.cjs",
     "lint": "eslint --ext .js,.ts .",
     "build": "tsc",
     "build:watch": "tsc --watch",

@@ -410,7 +410,7 @@ Also store UID in Stripe customer metadata:
           `break;`  
         `}`
 
-        `case "invoice.paid": {`  
+        `case "invoice.payment_succeeded": {`
           `// Optional: ensure status active if needed`  
           `break;`  
         `}`
@@ -557,4 +557,3 @@ When user calls an AI feature:
    * if token usage metadata indicates \> budget → `actions = ceil(max(input/1000, output/500))`, cap at 5
 
 4. If remaining \< actions → block \+ upsell (AI Pack or Pro/Family)
-

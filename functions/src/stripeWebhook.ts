@@ -333,7 +333,7 @@ export const stripeWebhook = onRequest(
                     break;
                 }
 
-                case "invoice.paid": {
+                case "invoice.payment_succeeded": {
                     const paidInvoice = event.data.object as Stripe.Invoice;
                     logger.info("Invoice paid:", paidInvoice.id);
 
