@@ -1,5 +1,5 @@
 
-'use server';
+import 'server-only';
 
 /**
  * @fileOverview An AI agent that suggests names based on historical trends, cultural origins, and naming conventions.
@@ -9,8 +9,8 @@
  * - SuggestNameOutput - The return type for the suggestName function.
  */
 
-import { ai } from '@/ai/genkit';
-import { z } from 'genkit';
+import { structured } from '@/lib/ai/gateway';
+import { z } from 'zod';
 
 const SuggestNameInputSchema = z.object({
   gender: z.enum(['male', 'female', 'other', 'unknown']).describe('The gender of the person.'), // Updated gender
@@ -26,33 +26,6 @@ const SuggestNameOutputSchema = z.object({
 export type SuggestNameOutput = z.infer<typeof SuggestNameOutputSchema>;
 
 export async function suggestName(input: SuggestNameInput): Promise<SuggestNameOutput> {
-  return suggestNameFlow(input);
+  const data = SuggestNameInputSchema.parse(input);
+  return structured('suggestName', "Suggest a historically and culturally appropriate name for the provided gender, origin and period. Explain the reasoning." + '\nData: ' + JSON.stringify(data), SuggestNameOutputSchema, "{\"name\":\"string\",\"reason\":\"string\"}");
 }
-
-const prompt = ai.definePrompt({
-  name: 'suggestNamePrompt',
-  input: { schema: SuggestNameInputSchema },
-  output: { schema: SuggestNameOutputSchema },
-  prompt: `You are an expert in historical names and naming conventions.
-
-  Based on the following information, suggest a name for the person and explain your reasoning.
-
-  Gender: {{{gender}}}
-  Origin: {{#if origin}}{{{origin}}}{{else}}Any{{/if}}
-  Historical Period: {{#if historicalPeriod}}{{{historicalPeriod}}}{{else}}Any{{/if}}`,
-});
-
-const suggestNameFlow = ai.defineFlow(
-  {
-    name: 'suggestNameFlow',
-    inputSchema: SuggestNameInputSchema,
-    outputSchema: SuggestNameOutputSchema,
-  },
-  async input => {
-    const { output } = await prompt(input);
-    if (!output) {
-      throw new Error("AI failed to suggest a name.");
-    }
-    return output;
-  }
-);

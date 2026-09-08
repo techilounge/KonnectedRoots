@@ -161,14 +161,14 @@ export default function AdminAIMeteringPage() {
             <h1 className="text-3xl font-bold tracking-tight">AI Operations & Metering</h1>
           </div>
           <p className="text-muted-foreground mt-1 text-sm md:text-base">
-            Real-time telemetry, model compute economics, tool-level consumption, and quota tracking.
+            UTC month telemetry, estimated provider costs and application credit quotas.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           <Badge variant="outline" className="gap-1.5 px-3 py-1.5 border-purple-500/30 bg-purple-500/5 text-purple-600 dark:text-purple-400 text-xs font-semibold">
             <Cpu className="w-3.5 h-3.5" />
-            Gemini 2.0 Flash
+            {data?.modelSummary || 'No telemetry yet'}
           </Badge>
           <Button
             variant="outline"
@@ -204,7 +204,7 @@ export default function AdminAIMeteringPage() {
             )}
             <div className="flex items-center gap-1.5 mt-2 text-xs text-muted-foreground">
               <Badge variant="outline" className="text-purple-600 bg-purple-500/10 border-purple-500/20 px-1.5 py-0">
-                +22% this mo
+                Monthly credits
               </Badge>
               <span>Platform-wide calls</span>
             </div>
@@ -229,7 +229,7 @@ export default function AdminAIMeteringPage() {
               </div>
             )}
             <div className="flex items-center gap-1.5 mt-2 text-xs text-muted-foreground">
-              <span className="text-emerald-600 font-medium">Avg $0.0028</span>
+              <span className="text-emerald-600 font-medium">Avg {data?.averageCost == null ? '—' : '$' + data.averageCost.toFixed(6)}</span>
               <span>per generation</span>
             </div>
           </CardContent>
@@ -269,18 +269,19 @@ export default function AdminAIMeteringPage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-extrabold tracking-tight text-foreground">
-              840ms
+              {data?.averageLatencyMs == null ? '—' : data.averageLatencyMs + 'ms'}
             </div>
             <div className="flex items-center gap-1.5 mt-2 text-xs text-muted-foreground">
               <Badge variant="outline" className="text-emerald-600 bg-emerald-500/10 border-emerald-500/20 px-1.5 py-0">
-                Healthy
+                Recorded
               </Badge>
-              <span>99.8% success SLA</span>
+              <span>{data?.successRate == null ? 'No completed invocations' : data.successRate.toFixed(1) + '% success'}</span>
             </div>
           </CardContent>
         </Card>
       </div>
 
+      <p className="text-sm text-muted-foreground">Reported tokens: {data?.inputTokens.toLocaleString() ?? '0'} input / {data?.outputTokens.toLocaleString() ?? '0'} output. Reserved spending: {data?.reservedCost.toFixed(4) ?? '0'} USD. Missing provider usage is conservatively estimated; figures are not invoices.</p>
       {/* Volume by Tool Chart */}
       <Card className="border-border/50 bg-card/60 backdrop-blur-sm shadow-sm">
         <CardHeader>
@@ -503,7 +504,7 @@ export default function AdminAIMeteringPage() {
             Live AI Generation Activity Stream
           </CardTitle>
           <CardDescription className="text-xs">
-            Recent asynchronous inference tasks processed by the Gemini multimodal engine
+            Recent provider attempts recorded by the AI gateway
           </CardDescription>
         </CardHeader>
         <CardContent>

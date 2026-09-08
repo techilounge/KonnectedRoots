@@ -144,6 +144,8 @@ export interface AdminActivityItem {
 }
 
 export interface AdminDashboardStats {
+  aiModelSummary: string;
+  aiSuccessRate: number | null;
   totalUsers: number;
   freeUsers: number;
   proUsers: number;

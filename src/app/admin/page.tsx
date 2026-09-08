@@ -235,7 +235,7 @@ export default function AdminDashboardPage() {
               Calls this billing cycle
             </div>
             <div className="pt-2 text-[10px] text-purple-600 dark:text-purple-400 font-medium">
-              Gemini 2.0 Flash • 99.8% success
+              {stats?.aiModelSummary} · {stats?.aiSuccessRate == null ? 'No completed invocations' : stats.aiSuccessRate.toFixed(1) + '% success'}
             </div>
           </CardContent>
         </Card>
@@ -535,7 +535,7 @@ export default function AdminDashboardPage() {
                 </Badge>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Google GenAI (Gemini)</span>
+                <span className="text-muted-foreground">{stats?.aiModelSummary || 'AI provider gateway'}</span>
                 <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-0">
                   Active
                 </Badge>

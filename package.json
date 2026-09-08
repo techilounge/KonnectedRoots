@@ -10,7 +10,8 @@
     "start": "next start",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
-    "set-admin": "node scripts/set-admin.mjs"
+    "set-admin": "node scripts/set-admin.mjs",
+    "test": "node --test --test-isolation=none scripts/*.test.cjs"
   },
   "dependencies": {
     "@genkit-ai/googleai": "^1.27.0",

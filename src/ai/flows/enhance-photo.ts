@@ -1,13 +1,13 @@
-'use server';
+import 'server-only';
 
 /**
  * @fileOverview AI-powered photo enhancement for old/damaged family photos.
- * Uses Gemini 2.5 Flash Image (Nano Banana) for AI-powered photo restoration,
+ * Uses configured image analysis and editing models for AI-powered photo restoration,
  * including colorization, face restoration, and damage repair.
  */
 
-import { ai } from '@/ai/genkit';
-import { z } from 'genkit';
+import { generate, structured } from '@/lib/ai/gateway';
+import { z } from 'zod';
 import sharp from 'sharp';
 
 const EnhancePhotoInputSchema = z.object({
@@ -55,34 +55,15 @@ Examine the photo for:
 
 Be thorough in your analysis to help guide the restoration process.`;
 
-    const { output } = await ai.generate({
-        model: 'googleai/gemini-2.0-flash',
-        prompt: [
-            { text: prompt },
-            {
-                media: {
-                    url: `data:${mimeType};base64,${imageBase64}`,
-                    contentType: mimeType as 'image/png' | 'image/jpeg' | 'image/webp',
-                }
-            }
-        ],
-        output: { schema: PhotoAnalysisSchema },
-    });
-
-    return output;
+    return structured('photoAnalysis', prompt, PhotoAnalysisSchema, '{"isBlackAndWhite":true,"hasDamage":false,"damageDescription":"string","hasFaces":true,"faceCount":1,"quality":"low|medium|high","suggestedEnhancements":[],"era":"string"}', { base64: imageBase64, mimeType });
 }
 
 export async function enhancePhoto(input: EnhancePhotoInput): Promise<EnhancePhotoOutput> {
     return enhancePhotoFlow(input);
 }
 
-const enhancePhotoFlow = ai.defineFlow(
-    {
-        name: 'enhancePhotoFlow',
-        inputSchema: EnhancePhotoInputSchema,
-        outputSchema: EnhancePhotoOutputSchema,
-    },
-    async (input) => {
+async function enhancePhotoFlow(raw: EnhancePhotoInput): Promise<EnhancePhotoOutput> {
+        const input = EnhancePhotoInputSchema.parse(raw);
         // First, analyze the photo to understand what enhancements are needed
         const analysis = await analyzePhoto(input.imageBase64, input.mimeType);
 
@@ -150,35 +131,9 @@ IMPORTANT:
 
 Generate a restored version of this photo.`;
 
-        // Use Gemini 2.5 Flash Image for the actual enhancement
-        const { media } = await ai.generate({
-            model: 'googleai/gemini-2.5-flash-image',
-            prompt: [
-                { text: restorationPrompt },
-                {
-                    media: {
-                        url: `data:${input.mimeType};base64,${input.imageBase64}`,
-                        contentType: input.mimeType as 'image/png' | 'image/jpeg' | 'image/webp',
-                    }
-                }
-            ],
-            config: {
-                responseModalities: ['IMAGE', 'TEXT'],
-            },
-        });
-
-        // Extract the generated image
-        if (!media || !media.url) {
-            throw new Error('Failed to generate enhanced image. The model did not return an image.');
-        }
-
-        // Parse the data URL to get base64
-        const dataUrlMatch = media.url.match(/^data:([^;]+);base64,(.+)$/);
-        if (!dataUrlMatch) {
-            throw new Error('Invalid image data received from the model.');
-        }
-
-        const rawBase64 = dataUrlMatch[2];
+        const result = await generate('enhancePhoto', { prompt: restorationPrompt, image: { base64: input.imageBase64, mimeType: input.mimeType }, maxOutputTokens: 4096, imageOutput: true });
+        if (!result.image) throw new Error('No restored image returned.');
+        const rawBase64 = result.image.base64;
 
         // Compress and convert to WebP using Sharp.js
         const rawBuffer = Buffer.from(rawBase64, 'base64');
@@ -209,6 +164,3 @@ Generate a restored version of this photo.`;
             description,
         };
     }
-);
-
-

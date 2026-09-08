@@ -1,12 +1,12 @@
-'use server';
+import 'server-only';
 
 /**
  * @fileOverview AI-powered document translation for genealogy research.
  * Translates foreign-language documents while preserving genealogy-specific terms.
  */
 
-import { ai } from '@/ai/genkit';
-import { z } from 'genkit';
+import { structured } from '@/lib/ai/gateway';
+import { z } from 'zod';
 
 const TranslateDocumentInputSchema = z.object({
     text: z.string().describe('The text to translate'),
@@ -27,55 +27,6 @@ const TranslateDocumentOutputSchema = z.object({
 export type TranslateDocumentOutput = z.infer<typeof TranslateDocumentOutputSchema>;
 
 export async function translateDocument(input: TranslateDocumentInput): Promise<TranslateDocumentOutput> {
-    return translateDocumentFlow(input);
+  const data = TranslateDocumentInputSchema.parse(input);
+  return structured('translateDocument', "Translate to targetLanguage (English by default). Auto-detect source language unless specified. Preserve formatting, proper names and ambiguous dates; list genealogy-specific terms and meanings." + '\nData: ' + JSON.stringify(data), TranslateDocumentOutputSchema, "{\"translatedText\":\"string\",\"detectedLanguage\":\"string\",\"genealogyTerms\":[{\"original\":\"string\",\"translation\":\"string\",\"context\":\"string\"}]}");
 }
-
-const prompt = ai.definePrompt({
-    name: 'translateDocumentPrompt',
-    input: { schema: TranslateDocumentInputSchema },
-    output: { schema: TranslateDocumentOutputSchema },
-    prompt: `You are an expert translator specializing in genealogy and historical documents.
-
-Your task is to translate the following text to {{targetLanguage}}.
-
-{{#if sourceLanguage}}
-Source language: {{sourceLanguage}}
-{{else}}
-Detect the source language automatically.
-{{/if}}
-
-TEXT TO TRANSLATE:
-"""
-{{{text}}}
-"""
-
-INSTRUCTIONS:
-1. Provide an accurate translation preserving the original meaning
-2. Maintain formatting (line breaks, paragraphs) where possible
-3. Keep proper nouns (names, places) in their original form when appropriate
-4. Identify any genealogy-specific terms (birth, death, marriage, baptism, etc.) and list them separately
-5. For dates, preserve the original format but clarify if ambiguous
-
-Genealogy terms to look for include:
-- Birth/born, death/died, marriage/married, baptism/christening
-- Father, mother, son, daughter, spouse, widow/widower
-- Occupation, residence, witness, godparent
-- Church, parish, cemetery, registry
-
-Return the translation along with detected language and any genealogy terms found.`,
-});
-
-const translateDocumentFlow = ai.defineFlow(
-    {
-        name: 'translateDocumentFlow',
-        inputSchema: TranslateDocumentInputSchema,
-        outputSchema: TranslateDocumentOutputSchema,
-    },
-    async (input) => {
-        const { output } = await prompt(input);
-        if (!output) {
-            throw new Error('AI failed to translate the document.');
-        }
-        return output;
-    }
-);

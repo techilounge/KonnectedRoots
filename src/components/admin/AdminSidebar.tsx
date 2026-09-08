@@ -46,6 +46,7 @@ const navSections = [
     title: 'Intelligence',
     items: [
       { href: '/admin/ai-metering', label: 'AI Operations', icon: Sparkles },
+      { href: '/admin/ai-configuration', label: 'AI Configuration', icon: Sliders },
       { href: '/admin/reports', label: 'Reports & Exports', icon: FileBarChart },
     ],
   },

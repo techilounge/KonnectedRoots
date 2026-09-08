@@ -1,5 +1,7 @@
 "use server";
 
+import { withAIContext } from '@/lib/ai/gateway';
+
 import { suggestName as suggestNameFlow, type SuggestNameInput, type SuggestNameOutput } from '@/ai/flows/suggest-name';
 import { generateBiography as generateBiographyFlow, type GenerateBiographyInput, type GenerateBiographyOutput } from '@/ai/flows/generate-biography-flow';
 import { findRelationship as findRelationshipFlow, type FindRelationshipInput, type FindRelationshipOutput } from '@/ai/flows/find-relationship-flow';
@@ -38,7 +40,7 @@ export async function handleSuggestName(input: SuggestNameInput & { authToken?: 
   }
 
   try {
-    const result = await suggestNameFlow(parsedInput.data);
+    const result = await withAIContext(deductResult.uid!, () => suggestNameFlow(parsedInput.data));
     return result;
   } catch (error) {
     console.error("Error in handleSuggestName:", error);
@@ -81,7 +83,7 @@ export async function handleGenerateBiography(input: GenerateBiographyInput & { 
   }
 
   try {
-    const result = await generateBiographyFlow(parsedInput.data);
+    const result = await withAIContext(deductResult.uid!, () => generateBiographyFlow(parsedInput.data));
     return result;
   } catch (error) {
     console.error("Error in handleGenerateBiography:", error);
@@ -113,31 +115,9 @@ const FindRelationshipInputSchema = z.object({
 });
 
 export async function handleFindRelationship(input: FindRelationshipInput & { authToken?: string }): Promise<FindRelationshipOutput | { error: string }> {
-  const deductResult = await verifyAuthAndDeductAICredits(input.authToken, 'find_relationship');
-  if (!deductResult.success) {
-    return { error: deductResult.error || "Authentication or credit verification failed." };
-  }
-
-  const parsedInput = FindRelationshipInputSchema.safeParse(input);
-  if (!parsedInput.success) {
-    console.error("Invalid input for relationship finding:", parsedInput.error.format());
-    if (deductResult.uid && deductResult.cost) {
-      await refundAICredits(deductResult.uid, deductResult.cost);
-    }
-    return { error: "Invalid input: " + parsedInput.error.format()._errors.join(', ') };
-  }
-
-  try {
-    const result = await findRelationshipFlow(parsedInput.data as FindRelationshipInput);
-    return result;
-  } catch (error) {
-    console.error("Error in handleFindRelationship:", error);
-    if (deductResult.uid && deductResult.cost) {
-      await refundAICredits(deductResult.uid, deductResult.cost);
-    }
-    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
-    return { error: `Failed to find relationship: ${errorMessage}. Please try again.` };
-  }
+  const parsed = FindRelationshipInputSchema.safeParse(input);
+  if (!parsed.success) return { error: 'Invalid relationship input.' };
+  return findRelationshipFlow(parsed.data);
 }
 
 // 4. Translate Document
@@ -164,7 +144,7 @@ export async function handleTranslateDocument(input: TranslateDocumentInput & { 
   }
 
   try {
-    const result = await translateDocumentFlow(parsedInput.data);
+    const result = await withAIContext(deductResult.uid!, () => translateDocumentFlow(parsedInput.data));
     return result;
   } catch (error) {
     console.error("Error in handleTranslateDocument:", error);
@@ -200,7 +180,7 @@ export async function handleExtractDocumentText(input: ExtractDocumentTextInput 
   }
 
   try {
-    const result = await extractDocumentTextFlow(parsedInput.data);
+    const result = await withAIContext(deductResult.uid!, () => extractDocumentTextFlow(parsedInput.data));
     return result;
   } catch (error) {
     console.error("Error in handleExtractDocumentText:", error);
@@ -241,7 +221,7 @@ export async function handleEnhancePhoto(input: EnhancePhotoInput & { authToken?
   }
 
   try {
-    const result = await enhancePhotoFlow(parsedInput.data);
+    const result = await withAIContext(deductResult.uid!, () => enhancePhotoFlow(parsedInput.data));
     return result;
   } catch (error) {
     console.error("Error in handleEnhancePhoto:", error);

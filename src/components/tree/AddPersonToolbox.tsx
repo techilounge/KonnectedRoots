@@ -64,11 +64,11 @@ export default function AddPersonToolbox({
         </CardContent>
       </Card>
 
-      {/* AI Relationship Finder - Repurposed AI Tools */}
+      {/* Relationship Finder - Repurposed AI Tools */}
       <Card className={cn("bg-secondary/50 transition-all", isRelationshipFinderMode && "ring-2 ring-accent")}>
         <CardHeader className="p-3">
           <CardTitle className="text-md font-headline flex items-center">
-            <Wand2 className="mr-2 h-5 w-5 text-accent" /> AI Relationship Finder
+            <Wand2 className="mr-2 h-5 w-5 text-accent" /> Relationship Finder
           </CardTitle>
         </CardHeader>
         <CardContent className="p-3">

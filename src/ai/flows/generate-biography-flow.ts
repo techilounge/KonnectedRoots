@@ -1,5 +1,5 @@
 
-'use server';
+import 'server-only';
 /**
  * @fileOverview An AI agent that generates a biography for a person based on provided details.
  *
@@ -8,8 +8,8 @@
  * - GenerateBiographyOutput - The return type for the generateBiography function.
  */
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import { structured } from '@/lib/ai/gateway';
+import {z} from 'zod';
 
 const GenerateBiographyInputSchema = z.object({
   firstName: z.string().optional().describe('The first name of the person.'),
@@ -32,48 +32,6 @@ const GenerateBiographyOutputSchema = z.object({
 export type GenerateBiographyOutput = z.infer<typeof GenerateBiographyOutputSchema>;
 
 export async function generateBiography(input: GenerateBiographyInput): Promise<GenerateBiographyOutput> {
-  return generateBiographyFlow(input);
+  const data = GenerateBiographyInputSchema.parse(input);
+  return structured('generateBiography', "Write a concise biography of a few paragraphs using the provided facts. Preserve names, timeline and uncertainty. Do not invent missing facts or list missing fields." + '\nData: ' + JSON.stringify(data), GenerateBiographyOutputSchema, "{\"biography\":\"string\"}");
 }
-
-const prompt = ai.definePrompt({
-  name: 'generateBiographyPrompt',
-  input: {schema: GenerateBiographyInputSchema},
-  output: {schema: GenerateBiographyOutputSchema},
-  prompt: `You are a helpful assistant tasked with writing a concise and engaging biography.
-Based on the following details for {{#if firstName}}{{{firstName}}}{{/if}} {{#if lastName}}{{{lastName}}}{{/if}}, craft a narrative biography.
-{{#if maidenName}}If applicable, note that their maiden name was {{{maidenName}}}.{{/if}}
-Highlight key life events, achievements, and personal characteristics if information is available.
-If dates are provided, use them to frame the timeline of their life.
-
-Details:
-{{#if firstName}}- First Name: {{{firstName}}}{{/if}}
-{{#if lastName}}- Last Name: {{{lastName}}}{{/if}}
-{{#if maidenName}}- Maiden Name: {{{maidenName}}}{{/if}}
-{{#if birthDate}}- Birth Date: {{{birthDate}}}{{/if}}
-{{#if placeOfBirth}}- Place of Birth: {{{placeOfBirth}}}{{/if}}
-{{#if deathDate}}- Death Date: {{{deathDate}}}{{/if}}
-{{#if placeOfDeath}}- Place of Death: {{{placeOfDeath}}}{{/if}}
-{{#if occupation}}- Occupation: {{{occupation}}}{{/if}}
-{{#if education}}- Education: {{{education}}}{{/if}}
-{{#if religion}}- Religion: {{{religion}}}{{/if}}
-{{#if existingBiography}}- Existing Notes/Biography (for reference/expansion): {{{existingBiography}}}{{/if}}
-
-Please generate a biography of a few paragraphs. If some information is missing, write the biography based on the available data and do not explicitly mention the missing fields.
-Focus on creating a readable and informative summary.
-`,
-});
-
-const generateBiographyFlow = ai.defineFlow(
-  {
-    name: 'generateBiographyFlow',
-    inputSchema: GenerateBiographyInputSchema,
-    outputSchema: GenerateBiographyOutputSchema,
-  },
-  async (input) => {
-    const {output} = await prompt(input);
-    if (!output) {
-        throw new Error("AI failed to generate a biography.");
-    }
-    return output;
-  }
-);

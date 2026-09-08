@@ -6,12 +6,12 @@ Welcome to **KonnectedRoots** (`https://konnectedroots.app`). This document is d
 
 ## 1. Project Overview & Architecture
 
-KonnectedRoots is an enterprise-grade, full-stack genealogy platform built with **Next.js 16 (App Router + Turbopack)**, **Firebase (Auth, Firestore, Storage)**, **Stripe (Subscriptions)**, **Google Gemini GenAI (Genkit)**, and **Resend (Transactional Emails)**.
+KonnectedRoots is an enterprise-grade, full-stack genealogy platform built with **Next.js 16 (App Router + Turbopack)**, **Firebase (Auth, Firestore, Storage)**, **Stripe (Subscriptions)**, **a multi-provider AI gateway**, and **Resend (Transactional Emails)**.
 
 ### Core Value Propositions:
 - **Interactive Visual Tree Builder**: Real-time family tree canvas with pan/zoom, auto-layout, node editing, relationships, and full Undo/Redo command stack.
 - **GEDCOM 5.5.1 Interoperability**: Full import and export compatible with Ancestry, MyHeritage, and FamilySearch.
-- **AI-Powered Genealogical Intelligence**: AI biography generator, ancestral handwriting/document OCR text extraction, historical photo restoration, and relationship inference using Google Gemini 2.0 Flash.
+- **AI-Powered Genealogical Intelligence**: AI biography generator, ancestral handwriting/document OCR text extraction, historical photo restoration, through the server-only AI gateway. Relationship Finder is deterministic and consumes zero AI credits.
 - **Collaboration**: Invite family members via email with role-based access control (`owner`, `editor`, `viewer`).
 - **Platform Admin Portal (`/admin`)**: Complete command center for managing users, trees, subscriptions, Gemini AI quotas, system-wide broadcast banners, feature killswitches, and immutable security audit logs.
 
@@ -28,7 +28,7 @@ KonnectedRoots is an enterprise-grade, full-stack genealogy platform built with 
 | **Client Auth & DB** | Firebase SDK v11.10 (`firebase/auth`, `firebase/firestore`, `firebase/storage`) |
 | **Server Operations** | Firebase Admin SDK v12.2 (`firebase-admin`) |
 | **Billing & Payments** | Stripe Node SDK (Live Mode subscriptions: Free, Pro $9.99/mo, Family $19.99/mo) |
-| **GenAI Models** | Google Gemini 2.0 Flash via Genkit (`genkit`, `@genkit-ai/*`) |
+| **GenAI Models** | Configurable Google, DeepSeek, OpenRouter, OpenAI, Anthropic and compatible-provider adapters (`src/lib/ai`) |
 | **Email Service** | Resend API with custom branded HTML email templates |
 | **Hosting & Analytics** | Vercel (Production & Preview environments) + `@vercel/analytics` |
 | **SEO & Sitemaps** | Dynamic Next.js App Router metadata, Schema.org JSON-LD, `sitemap.ts`, `robots.ts` |
@@ -181,3 +181,13 @@ npm run set-admin your-email@example.com admin
 ---
 
 *Document created: September 2026. Maintained by the Antigravity Agentic Engineering Team.*
+
+## 8. AI control plane
+
+- Read [AI_CONTROL_PLANE.md](docs/AI_CONTROL_PLANE.md) before changing AI routing, credentials or budgets.
+- All six AI features use the server-only gateway in src/lib/ai; no model IDs belong in flows. Relationship Finder must remain unmetered and deterministic.
+- /admin/ai-configuration manages providers, reviewed model capabilities/prices, feature routing, budgets and controlled tests. Require verified Auth admin claims; credential mutations and custom endpoints require super_admin. Never authorize credential writes using profile flags alone.
+- Provider API keys live only in Google Secret Manager. Firestore stores private metadata, never raw keys. Never use system/*, users/* or NEXT_PUBLIC_* for AI secrets. Every credential mutation records audit intent and result.
+- Private AI collections: ai_configuration, ai_providers, ai_invocations, ai_usage_months, ai_model_health. Direct client access is denied; server actions enforce roles.
+- Budget reservations and circuit state must persist across serverless instances. Telemetry must not record prompts, documents, images or response contents. Do not replace missing telemetry with invented figures.
+- Run npm test in addition to typecheck, lint and build. Provider/Firestore tests are mocked; preview verification with configured IAM and provider credentials is a separate deployment step.

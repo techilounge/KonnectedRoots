@@ -143,7 +143,7 @@ export function needsMonthlyReset(storedMonthKey: string): boolean {
 export const AI_ACTION_WEIGHTS = {
     'suggest_name': 1,
     'generate_biography': 1,
-    'find_relationship': 1,
+    'find_relationship': 0,
     'translate_document': 2,
     'ocr_document': 1,
     'enhance_photo': 15,

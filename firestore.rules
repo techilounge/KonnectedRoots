@@ -156,6 +156,13 @@ service cloud.firestore {
       }
     }
 
+    // Private AI control plane. All access goes through authenticated server actions.
+    match /ai_configuration/{document=**} { allow read, write: if false; }
+    match /ai_providers/{document=**} { allow read, write: if false; }
+    match /ai_invocations/{document=**} { allow read, write: if false; }
+    match /ai_usage_months/{document=**} { allow read, write: if false; }
+    match /ai_model_health/{document=**} { allow read, write: if false; }
+
     // System configuration & global platform flags
     match /system/{configDoc} {
       // Public read for announcement banner and maintenance notices

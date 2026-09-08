@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — Multi-provider AI control plane
+
+- Added server-only adapters for Gemini, DeepSeek, OpenRouter, OpenAI, Anthropic and custom OpenAI-compatible endpoints, with capability-aware feature routing and privacy policies.
+- Added /admin/ai-configuration for provider credentials, reviewed models, routing, budgets and synthetic tests; keys use Google Secret Manager with Super Admin authorization and mutation audits.
+- Migrated biography, names, translation, OCR and two-step photo restoration to the gateway. Removed obsolete direct Gemini model references and made deterministic Relationship Finder unlimited and unmetered.
+- Added persistent circuit breakers, qualified fallback, transactional budget reservations and content-free provider telemetry. Replaced synthetic AI cost/activity figures in admin metering, reports and dashboard charts.
+- Added private Firestore rules and automated unit/integration tests. See docs/AI_CONTROL_PLANE.md for IAM, migration and validation requirements.
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
@@ -95,7 +103,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **AI Document Translation**: Optimize genealogy documents translation with genealogy-specific term preservation and side-by-side view.
 - **AI Handwriting OCR**: Extract text from handwritten historical documents using Gemini Vision.
-- **AI Photo Enhancement**: Restore, sharpen, and colorize old photos using Gemini 2.5 Flash Image.
+- **AI Photo Enhancement**: Restore, sharpen, and colorize old photos through the configurable AI gateway.
 - **AI Credit System**: Implemented consolidated usage tracking, cost labels (e.g., 15 credits for enhancement), and real-time balance updates.
 - **User Profile Usage Card**: Visual credit monitoring card in User Profile.
 - **Pre-Export Validation**: GEDCOM export now validates tree data before exporting, warning about issues like invalid gender, missing names, parent-child age conflicts, and orphaned relationships.

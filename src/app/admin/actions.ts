@@ -1,4 +1,6 @@
 "use server";
+import { readUsage, monthKey } from '@/lib/ai/telemetry';
+import { features, type Invocation } from '@/lib/ai/types';
 
 import { adminAuth, adminDb } from '@/lib/firebase/admin';
 import type {
@@ -166,14 +168,8 @@ export async function getAdminDashboardData(idToken: string): Promise<AdminDashb
     { name: 'Family', value: familyUsers, color: '#2563EB' },
   ];
 
-  // AI actions series estimate
-  const aiActionsSeries = [
-    { name: 'Biographies', count: Math.round(totalAiActionsUsed * 0.35), costEstimate: Math.round(totalAiActionsUsed * 0.35 * 0.002 * 100) / 100 },
-    { name: 'Name Suggest', count: Math.round(totalAiActionsUsed * 0.25), costEstimate: Math.round(totalAiActionsUsed * 0.25 * 0.001 * 100) / 100 },
-    { name: 'Doc OCR', count: Math.round(totalAiActionsUsed * 0.20), costEstimate: Math.round(totalAiActionsUsed * 0.20 * 0.005 * 100) / 100 },
-    { name: 'Photo Enhance', count: Math.round(totalAiActionsUsed * 0.12), costEstimate: Math.round(totalAiActionsUsed * 0.12 * 0.010 * 100) / 100 },
-    { name: 'Translation', count: Math.round(totalAiActionsUsed * 0.08), costEstimate: Math.round(totalAiActionsUsed * 0.08 * 0.002 * 100) / 100 },
-  ];
+  const aiUsage = await readUsage();
+  const aiActionsSeries = features.map(name => ({ name, count: aiUsage.features[name]?.count || 0, costEstimate: aiUsage.features[name]?.spent || 0 }));
 
   // Recent platform activities
   const recentActivity: AdminActivityItem[] = [];
@@ -215,7 +211,9 @@ export async function getAdminDashboardData(idToken: string): Promise<AdminDashb
     familyUsers,
     totalTrees,
     totalPeople,
-    totalAiActionsUsed,
+    totalAiActionsUsed: aiUsage.count,
+    aiModelSummary: Object.values(aiUsage.models).map(m => m.name).join(', ') || 'No telemetry yet',
+    aiSuccessRate: aiUsage.count ? aiUsage.successes / aiUsage.count * 100 : null,
     estimatedMRR,
     userGrowthSeries,
     planDistribution,
@@ -752,6 +750,13 @@ export async function getAdminBillingMetrics(idToken: string): Promise<AdminBill
 // -----------------------------------------------------------------------------
 
 export interface AdminAIMeteringData {
+  inputTokens: number;
+  outputTokens: number;
+  reservedCost: number;
+  modelSummary: string;
+  averageLatencyMs: number | null;
+  successRate: number | null;
+  averageCost: number | null;
   totalComputeUsed: number;
   totalAllowanceAllUsers: number;
   utilizationRate: number;
@@ -822,83 +827,29 @@ export async function getAdminAIMeteringData(idToken: string): Promise<AdminAIMe
     ? Math.round((totalComputeUsed / totalAllowanceAllUsers) * 1000) / 10
     : 0;
 
-  const bioCount = Math.round(totalComputeUsed * 0.35);
-  const nameCount = Math.round(totalComputeUsed * 0.25);
-  const ocrCount = Math.round(totalComputeUsed * 0.18);
-  const enhanceCount = Math.round(totalComputeUsed * 0.12);
-  const transCount = Math.round(totalComputeUsed * 0.06);
-  const relCount = Math.max(0, totalComputeUsed - (bioCount + nameCount + ocrCount + enhanceCount + transCount));
-
-  const toolBreakdown = [
-    {
-      name: 'Biography Generator',
-      toolKey: 'generateBiography',
-      count: bioCount,
-      costPerUnit: 0.002,
-      totalCost: Math.round(bioCount * 0.002 * 100) / 100,
-      percentage: totalComputeUsed > 0 ? Math.round((bioCount / totalComputeUsed) * 100) : 35,
-      description: 'Generates rich biographical narratives from ancestor vital facts using Gemini 2.0 Flash',
-    },
-    {
-      name: 'Name Suggestion',
-      toolKey: 'suggestName',
-      count: nameCount,
-      costPerUnit: 0.001,
-      totalCost: Math.round(nameCount * 0.001 * 100) / 100,
-      percentage: totalComputeUsed > 0 ? Math.round((nameCount / totalComputeUsed) * 100) : 25,
-      description: 'Context-aware naming suggestions based on culture, period, and parental lineage',
-    },
-    {
-      name: 'Document OCR Text Extractor',
-      toolKey: 'extractDocumentText',
-      count: ocrCount,
-      costPerUnit: 0.005,
-      totalCost: Math.round(ocrCount * 0.005 * 100) / 100,
-      percentage: totalComputeUsed > 0 ? Math.round((ocrCount / totalComputeUsed) * 100) : 18,
-      description: 'Multimodal vision transcription of historical birth, census, and military records',
-    },
-    {
-      name: 'Historical Photo Enhancer',
-      toolKey: 'enhancePhoto',
-      count: enhanceCount,
-      costPerUnit: 0.010,
-      totalCost: Math.round(enhanceCount * 0.010 * 100) / 100,
-      percentage: totalComputeUsed > 0 ? Math.round((enhanceCount / totalComputeUsed) * 100) : 12,
-      description: 'Restoration, scratch removal, and sharpness enhancement for ancestor portraits',
-    },
-    {
-      name: 'Document Translator',
-      toolKey: 'translateDocument',
-      count: transCount,
-      costPerUnit: 0.002,
-      totalCost: Math.round(transCount * 0.002 * 100) / 100,
-      percentage: totalComputeUsed > 0 ? Math.round((transCount / totalComputeUsed) * 100) : 6,
-      description: 'Language translation of immigration records and old handwritten letters',
-    },
-    {
-      name: 'Relationship Inference',
-      toolKey: 'findRelationship',
-      count: relCount,
-      costPerUnit: 0.0015,
-      totalCost: Math.round(relCount * 0.0015 * 100) / 100,
-      percentage: totalComputeUsed > 0 ? Math.round((relCount / totalComputeUsed) * 100) : 4,
-      description: 'Deep kinship graph analysis determining distant generational cousinship',
-    },
-  ];
-
-  const estimatedCostUsd = Math.round(toolBreakdown.reduce((acc, t) => acc + t.totalCost, 0) * 100) / 100;
-
-  const tools = ['generateBiography', 'suggestName', 'extractDocumentText', 'enhancePhoto', 'translateDocument'];
-  const recentInvocations = topUsers.slice(0, 8).map((u, i) => ({
-    id: `ai_inv_${i}_${Date.now()}`,
-    tool: tools[i % tools.length],
-    userEmail: u.email,
-    status: 'success' as const,
-    durationMs: 820 + (i * 115) % 900,
-    timestamp: new Date(Date.now() - i * 18 * 60 * 1000).toISOString(),
-  }));
+  const usage = await readUsage();
+  const toolBreakdown = features.map(toolKey => {
+    const entry = usage.features[toolKey] || { count: 0, spent: 0 };
+    return { name: toolKey, toolKey, count: entry.count, costPerUnit: entry.count ? entry.spent / entry.count : 0,
+      totalCost: entry.spent, percentage: usage.count ? entry.count / usage.count * 100 : 0, description: 'Recorded gateway invocations this UTC month' };
+  });
+  const estimatedCostUsd = usage.spent;
+  const events = await adminDb.collection('ai_invocations').orderBy('timestamp', 'desc').limit(25).get();
+  const recentInvocations = events.docs.filter(d => d.data().state === 'complete').map(d => {
+    const event = d.data() as Invocation;
+    return { id: d.id, tool: event.feature + ' · ' + event.providerId + '/' + event.modelId,
+      userEmail: event.uid, status: event.success ? 'success' as const : event.errorCode === 'rate_limited' ? 'rate_limited' as const : 'error' as const,
+      durationMs: event.latencyMs, timestamp: event.timestamp };
+  });
 
   return {
+    modelSummary: Object.values(usage.models).map(m => m.name).join(', ') || 'No invocations recorded',
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    reservedCost: usage.reserved,
+    averageLatencyMs: usage.count ? Math.round(usage.latencyMs / usage.count) : null,
+    successRate: usage.count ? usage.successes / usage.count * 100 : null,
+    averageCost: usage.count ? usage.spent / usage.count : null,
     totalComputeUsed,
     totalAllowanceAllUsers,
     utilizationRate,
@@ -1104,51 +1055,20 @@ export async function getAdminReportData(
     };
   }
 
-  // 4. Category: AI Compute
-  let totalAiUsed = 0;
-  const aiTableRows: Record<string, any>[] = [];
-
-  usersSnap.forEach(doc => {
-    const u = doc.data();
-    const used = Number(u.usage?.aiActionsUsed) || 0;
-    totalAiUsed += used;
-    if (used > 0) {
-      aiTableRows.push({
-        user: u.email || 'N/A',
-        plan: (u.plan || 'free').toUpperCase(),
-        creditsUsed: used,
-        estimatedCost: `$${(used * 0.0025).toFixed(3)}`,
-      });
-    }
-  });
-
-  aiTableRows.sort((a, b) => b.creditsUsed - a.creditsUsed);
-
+  const aiUsage = await readUsage();
   return {
-    title: 'GenAI Model Utilization & Unit Cost Report',
-    category: 'ai',
-    dateRange: `Last ${daysBack} Days`,
+    title: 'AI Provider Usage & Estimated Cost', category: 'ai', dateRange: 'UTC month ' + monthKey(),
     summaryMetrics: [
-      { label: 'Total AI Actions Consumed', value: totalAiUsed },
-      { label: 'Estimated GenAI Model Cost', value: `$${(totalAiUsed * 0.0025).toFixed(2)}` },
-      { label: 'Avg Actions / Active User', value: usersSnap.size > 0 ? (totalAiUsed / usersSnap.size).toFixed(1) : 0 },
-      { label: 'Model Provider', value: 'Google Gemini 2.0 Flash' },
+      { label: 'Provider invocations', value: aiUsage.count },
+      { label: 'Estimated cost (USD)', value: aiUsage.spent.toFixed(4) },
+      { label: 'Input tokens', value: aiUsage.inputTokens },
+      { label: 'Output tokens', value: aiUsage.outputTokens },
     ],
-    chartData: [
-      { label: 'Biography', primary: Math.round(totalAiUsed * 0.35) },
-      { label: 'Names', primary: Math.round(totalAiUsed * 0.25) },
-      { label: 'OCR', primary: Math.round(totalAiUsed * 0.18) },
-      { label: 'Photo', primary: Math.round(totalAiUsed * 0.12) },
-      { label: 'Translate', primary: Math.round(totalAiUsed * 0.06) },
-    ],
-    tableHeaders: [
-      { key: 'user', label: 'User Email' },
-      { key: 'plan', label: 'Subscription' },
-      { key: 'creditsUsed', label: 'Credits Consumed' },
-      { key: 'estimatedCost', label: 'Compute Cost (Est)' },
-    ],
-    tableRows: aiTableRows.slice(0, 100),
+    chartData: features.map(label => ({ label, primary: aiUsage.features[label]?.count || 0 })),
+    tableHeaders: [{ key: 'model', label: 'Provider / Model' }, { key: 'count', label: 'Invocations' }, { key: 'cost', label: 'Estimated USD' }],
+    tableRows: Object.values(aiUsage.models).map(m => ({ model: m.name, count: m.count, cost: m.spent.toFixed(6) })),
   };
+
 }
 
 // -----------------------------------------------------------------------------

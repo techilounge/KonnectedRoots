@@ -1,12 +1,12 @@
-'use server';
+import 'server-only';
 
 /**
  * @fileOverview AI-powered handwriting/document OCR for genealogy research.
  * Extracts text from photos of old handwritten documents using AI vision.
  */
 
-import { ai } from '@/ai/genkit';
-import { z } from 'genkit';
+import { structured } from '@/lib/ai/gateway';
+import { z } from 'zod';
 
 const ExtractDocumentTextInputSchema = z.object({
     imageBase64: z.string().describe('Base64 encoded image data'),
@@ -30,53 +30,6 @@ const ExtractDocumentTextOutputSchema = z.object({
 export type ExtractDocumentTextOutput = z.infer<typeof ExtractDocumentTextOutputSchema>;
 
 export async function extractDocumentText(input: ExtractDocumentTextInput): Promise<ExtractDocumentTextOutput> {
-    return extractDocumentTextFlow(input);
+  const data = ExtractDocumentTextInputSchema.parse(input);
+  return structured('extractDocumentText', "Transcribe all visible text, preserving structure. Mark illegible or unclear text; detect language, confidence and genealogical names, dates, places, and relationships." + '\nData: ' + JSON.stringify({ documentType: data.documentType }), ExtractDocumentTextOutputSchema, "{\"extractedText\":\"string\",\"confidence\":\"high|medium|low\",\"detectedLanguage\":\"string\",\"genealogyData\":{\"names\":[],\"dates\":[],\"places\":[],\"relationships\":[]}}", { base64: data.imageBase64, mimeType: data.mimeType });
 }
-
-const extractDocumentTextFlow = ai.defineFlow(
-    {
-        name: 'extractDocumentTextFlow',
-        inputSchema: ExtractDocumentTextInputSchema,
-        outputSchema: ExtractDocumentTextOutputSchema,
-    },
-    async (input) => {
-        const prompt = `You are an expert at reading and transcribing historical documents, including handwritten text.
-
-Analyze this image and extract all readable text. This appears to be a ${input.documentType || 'historical document'}.
-
-INSTRUCTIONS:
-1. Transcribe ALL visible text from the document, preserving the original structure as much as possible
-2. For handwritten text, do your best to interpret difficult-to-read cursive or archaic handwriting
-3. Identify the language of the document
-4. Rate your confidence in the transcription accuracy (high/medium/low)
-5. Extract genealogy-relevant information:
-   - Names of people mentioned
-   - Dates (birth, death, marriage, etc.)
-   - Places and locations
-   - Relationship terms (father, mother, son, daughter, spouse, etc.)
-
-If parts are illegible, indicate with [illegible] or [unclear: possible interpretation].
-
-Return the extracted text, detected language, confidence level, and any genealogy data found.`;
-
-        const { output } = await ai.generate({
-            model: 'googleai/gemini-2.0-flash',
-            prompt: [
-                { text: prompt },
-                {
-                    media: {
-                        url: `data:${input.mimeType};base64,${input.imageBase64}`,
-                        contentType: input.mimeType as 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif',
-                    }
-                }
-            ],
-            output: { schema: ExtractDocumentTextOutputSchema },
-        });
-
-        if (!output) {
-            throw new Error('AI failed to extract text from the document.');
-        }
-
-        return output;
-    }
-);
