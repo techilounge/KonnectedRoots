@@ -8,7 +8,7 @@ export function googleProvider(key: string): Provider {
     const data = await requestJson(`${base}/models/${encodeURIComponent(model)}:generateContent`, headers, {
       contents: [{ role: 'user', parts: [{ text: r.prompt }, ...(r.image ? [{ inlineData: { mimeType: r.image.mimeType, data: r.image.base64 } }] : [])] }],
       generationConfig: { maxOutputTokens: r.maxOutputTokens,
-        ...(r.imageOutput ? { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { imageSize: '1K' } } : r.structured ? { responseMimeType: 'application/json' } : {}) },
+        ...(r.imageOutput ? { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { imageSize: '1K' } } : r.structured ? { responseMimeType: 'application/json', ...(r.responseSchema ? { responseJsonSchema: r.responseSchema } : {}) } : {}) },
     });
     const candidate = data.candidates?.[0];
     if (data.promptFeedback?.blockReason || ['SAFETY', 'PROHIBITED_CONTENT', 'IMAGE_SAFETY', 'RECITATION'].includes(candidate?.finishReason)) throw new AIError('content_policy');

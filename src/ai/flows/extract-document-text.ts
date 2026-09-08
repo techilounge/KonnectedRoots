@@ -29,7 +29,21 @@ const ExtractDocumentTextOutputSchema = z.object({
 });
 export type ExtractDocumentTextOutput = z.infer<typeof ExtractDocumentTextOutputSchema>;
 
+const responseSchema = {
+  type: 'object',
+  required: ['extractedText', 'confidence', 'detectedLanguage'],
+  properties: {
+    extractedText: { type: 'string' },
+    confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+    detectedLanguage: { type: 'string' },
+    genealogyData: {
+      type: 'object',
+      properties: Object.fromEntries(['names', 'dates', 'places', 'relationships'].map(key => [key, { type: 'array', items: { type: 'string' } }])),
+    },
+  },
+};
+
 export async function extractDocumentText(input: ExtractDocumentTextInput): Promise<ExtractDocumentTextOutput> {
   const data = ExtractDocumentTextInputSchema.parse(input);
-  return structured('extractDocumentText', "Transcribe all visible text, preserving structure. Mark illegible or unclear text; detect language, confidence and genealogical names, dates, places, and relationships." + '\nData: ' + JSON.stringify({ documentType: data.documentType }), ExtractDocumentTextOutputSchema, "{\"extractedText\":\"string\",\"confidence\":\"high|medium|low\",\"detectedLanguage\":\"string\",\"genealogyData\":{\"names\":[],\"dates\":[],\"places\":[],\"relationships\":[]}}", { base64: data.imageBase64, mimeType: data.mimeType });
+  return structured('extractDocumentText', "Transcribe all visible text, preserving structure. Mark illegible or unclear text. confidence must be exactly one of high, medium, or low. detectedLanguage must be a string. Genealogy lists must contain strings, not objects; use empty arrays when nothing is found. Do not invent missing information." + '\nData: ' + JSON.stringify({ documentType: data.documentType }), ExtractDocumentTextOutputSchema, JSON.stringify(responseSchema), { base64: data.imageBase64, mimeType: data.mimeType }, responseSchema);
 }

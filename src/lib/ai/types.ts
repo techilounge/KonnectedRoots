@@ -34,7 +34,7 @@ export type ProviderConfig = { providerId: ProviderId; enabled: boolean; credent
   credentialFingerprint: string | null; secretVersion: string | null; credentialSource: 'environment' | 'vault' | 'none';
   status: string; lastTestedAt: string | null; lastSuccessfulTest: string | null; baseUrl?: string };
 export type Control = { models: Model[]; routes: Record<Feature, Route>; budgets: Budgets };
-export type AIRequest = { prompt: string; image?: { base64: string; mimeType: string }; maxOutputTokens: number; structured?: boolean; imageOutput?: boolean };
+export type AIRequest = { prompt: string; image?: { base64: string; mimeType: string }; maxOutputTokens: number; structured?: boolean; responseSchema?: Record<string, unknown>; imageOutput?: boolean };
 export type AIResponse = { text: string; image?: { base64: string; mimeType: string }; inputTokens: number | null; outputTokens: number | null; textOutputTokens?: number | null; reportedCostUsd?: number | null };
 export interface Provider {
   testConnection(): Promise<void>;

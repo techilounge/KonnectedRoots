@@ -33,6 +33,24 @@ const { AIError, modelSchema, budgetSchema } = load('src/lib/ai/types.ts');
 const providers = ['google', 'deepseek', 'openrouter'].map(providerId => ({ providerId, enabled: true, credentialConfigured: true }));
 const req = { prompt: 'Synthetic fixture', maxOutputTokens: 512, structured: true };
 const config = () => structuredClone(defaults);
+test('OCR sends required fields and confidence enum to Google and retains validation', async () => {
+  let args;
+  const flow = loader({'@/lib/ai/gateway': {structured: async (...values) => {args = values; return {};}}})('src/ai/flows/extract-document-text.ts');
+  await flow.extractDocumentText({imageBase64:'fixture',mimeType:'image/png'});
+  const schema = args[5];
+  assert.deepEqual(schema.required, ['extractedText','confidence','detectedLanguage']);
+  assert.deepEqual(schema.properties.confidence.enum, ['high','medium','low']);
+  assert.equal(args[2].safeParse({extractedText:'Fixture',confidence:'high|medium|low',detectedLanguage:'English'}).success,false);
+  assert.equal(args[2].safeParse({extractedText:'Fixture',confidence:'high',detectedLanguage:'English'}).success,true);
+  let body;
+  const provider = loader({}, {fetch: async (_url, options) => {
+    body=JSON.parse(options.body);
+    return {ok:true,json:async()=>({candidates:[{content:{parts:[{text:'{}'}]}}]})};
+  }})('src/lib/ai/providers/google.ts').googleProvider('fixture');
+  await provider.analyzeImage({prompt:args[1],image:args[4],structured:true,responseSchema:schema,maxOutputTokens:4096},'fixture');
+  assert.deepEqual(body.generationConfig.responseJsonSchema,schema);
+  assert.equal(body.generationConfig.responseMimeType,'application/json');
+});
 test('OpenRouter image generation and editing parse real raster output and preserve reported cost', async () => {
   const png = (await require('sharp')({create:{width:2,height:2,channels:3,background:'#bfa889'}}).png().toBuffer()).toString('base64');
   const calls = [];
