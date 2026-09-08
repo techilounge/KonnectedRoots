@@ -26,8 +26,19 @@ export async function addSecretVersion(provider: ProviderId, key: string): Promi
   return result.name;
 }
 export async function destroySecretVersion(provider: ProviderId, version: string) {
-  if (!version.startsWith(`${secretName(provider)}/versions/`) || !/\/versions\/\d+$/.test(version)) throw new AIError('secret_reference_invalid');
-  await vault(`${version}:destroy`, 'POST', {});
+  await vault(`${await verifiedVersion(provider, version)}:destroy`, 'POST', {});
+}
+async function verifiedVersion(provider: ProviderId, version: string): Promise<string> {
+  const match = /^projects\/([a-zA-Z0-9-]+)\/secrets\/([^/]+)\/versions\/([0-9]+)$/.exec(version);
+  if (!match || match[2] !== `konnectedroots-ai-${provider}`) throw new AIError('secret_reference_invalid');
+  const expected = `${secretName(provider)}/versions/${match[3]}`;
+  if (version === expected) return expected;
+  // Google canonicalizes project IDs to numbers. Verify the alias against
+  // metadata in the configured project before reading or destroying a payload.
+  if (!/^\d+$/.test(match[1])) throw new AIError('secret_reference_invalid');
+  const metadata = await vault(expected);
+  if (metadata.name !== version) throw new AIError('secret_reference_invalid');
+  return expected;
 }
 export async function providerSecret(config: ProviderConfig): Promise<string> {
   if (!config.credentialConfigured) throw new AIError('credential_missing');
@@ -35,8 +46,8 @@ export async function providerSecret(config: ProviderConfig): Promise<string> {
     const key = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
     if (key) return key;
   }
-  if (config.credentialSource !== 'vault' || !config.secretVersion?.startsWith(`${secretName(config.providerId)}/versions/`) || !/\/versions\/\d+$/.test(config.secretVersion)) throw new AIError('credential_missing');
-  const result = await vault(`${config.secretVersion}:access`);
+  if (config.credentialSource !== 'vault' || !config.secretVersion) throw new AIError('credential_missing');
+  const result = await vault(`${await verifiedVersion(config.providerId, config.secretVersion)}:access`);
   if (!result.payload?.data) throw new AIError('credential_missing');
   return Buffer.from(result.payload.data, 'base64').toString('utf8');
 }

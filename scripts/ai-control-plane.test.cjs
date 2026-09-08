@@ -33,6 +33,32 @@ const { AIError, modelSchema, budgetSchema } = load('src/lib/ai/types.ts');
 const providers = ['google', 'deepseek', 'openrouter'].map(providerId => ({ providerId, enabled: true, credentialConfigured: true }));
 const req = { prompt: 'Synthetic fixture', maxOutputTokens: 512, structured: true };
 const config = () => structuredClone(defaults);
+test('vault credentials accept verified numeric project aliases and reject foreign references', async () => {
+  const calls = [];
+  const name = 'projects/123456/secrets/konnectedroots-ai-openrouter/versions/7';
+  const l = loader({'@/lib/firebase/admin': {adminApp: {options: {credential: {getAccessToken: async () => ({access_token: 'fixture'})}}}}}, {
+    process: {env: {AI_SECRET_PROJECT_ID: 'fixture-project'}},
+    fetch: async (url, options) => {
+      calls.push({url, method: options.method});
+      return {ok: true, json: async () => url.endsWith(':access') ? {payload: {data: Buffer.from('synthetic-key').toString('base64')}} : {name}};
+    },
+  });
+  const secrets = l('src/lib/ai/secrets.ts');
+  const provider = {providerId: 'openrouter', credentialConfigured: true, credentialSource: 'vault', secretVersion: name};
+  assert.equal(await secrets.providerSecret(provider), 'synthetic-key');
+  assert.equal(calls.length, 2);
+  assert.ok(calls.every(c => c.url.includes('projects/fixture-project/')));
+  await secrets.destroySecretVersion('openrouter', name);
+  assert.ok(calls.at(-1).url.endsWith('/versions/7:destroy'));
+  const before = calls.length;
+  await assert.rejects(() => secrets.providerSecret({...provider, secretVersion: name.replace('openrouter', 'google')}), /secret_reference_invalid/);
+  assert.equal(calls.length, before);
+  await assert.rejects(() => secrets.providerSecret({...provider, secretVersion: name.replace('123456', '999999')}), /secret_reference_invalid/);
+  assert.equal(calls.length, before + 1); // Metadata only; no payload access.
+  await assert.rejects(() => secrets.destroySecretVersion('openrouter', name.replace('123456', '999999')), /secret_reference_invalid/);
+  assert.ok(!calls.at(-1).url.endsWith(':destroy'));
+  await assert.rejects(() => secrets.providerSecret({...provider, secretVersion: name.replace('/7', '/latest')}), /secret_reference_invalid/);
+});
 test('fixed defaults and unconfigured primary use available fallback', () => {
   assert.equal(candidates(config(), providers, 'generateBiography', req)[0].providerId, 'deepseek');
   assert.equal(candidates(config(), providers.slice(0, 1), 'generateBiography', req)[0].providerId, 'google');
