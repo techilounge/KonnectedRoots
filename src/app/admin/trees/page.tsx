@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { getAdminTrees } from '@/app/admin/actions';
 import type { AdminTreeItem } from '@/types';
@@ -53,6 +54,7 @@ export default function AdminTreesPage() {
       setTrees(list);
     } catch (e) {
       console.error('Error fetching admin trees:', e);
+      toast({ variant: 'destructive', title: 'Could not load trees' });
     } finally {
       setLoading(false);
     }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from 'react';
+import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { getAdminReportData } from '@/app/admin/actions';
 import type { ReportDataset } from '@/app/admin/actions';
@@ -72,8 +73,10 @@ export default function AdminReportsPage() {
       const token = await user.getIdToken();
       const res = await getAdminReportData(token, category, daysBack);
       setReport(res);
+      if (refreshing) toast({ title: 'Report refreshed' });
     } catch (err) {
       console.error('Failed to load report data:', err);
+      toast({ variant: 'destructive', title: 'Could not load data', description: 'Please refresh and try again.' });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -121,6 +124,8 @@ export default function AdminReportsPage() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast({ title: 'CSV download started' });
   };
 
   const handleExportJSON = () => {
@@ -137,6 +142,7 @@ export default function AdminReportsPage() {
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
+    toast({ title: 'JSON download started' });
   };
 
   const filteredRows = (report?.tableRows || []).filter(row => {

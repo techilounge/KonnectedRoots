@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
+import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { getAdminDashboardData } from '@/app/admin/actions';
 import type { AdminDashboardStats } from '@/types';
@@ -59,8 +60,10 @@ export default function AdminDashboardPage() {
       const idToken = await user.getIdToken();
       const data = await getAdminDashboardData(idToken);
       setStats(data);
+      if (refreshing) toast({ title: 'Dashboard refreshed' });
     } catch (error) {
       console.error('Error fetching admin dashboard data:', error);
+      toast({ variant: 'destructive', title: 'Could not load data', description: 'Please refresh and try again.' });
     } finally {
       setLoading(false);
       setRefreshing(false);

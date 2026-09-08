@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from 'react';
+import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { getAdminAIMeteringData, grantBonusCreditsByAdmin } from '@/app/admin/actions';
 import type { AdminAIMeteringData } from '@/app/admin/actions';
@@ -78,8 +79,10 @@ export default function AdminAIMeteringPage() {
       const token = await user.getIdToken();
       const res = await getAdminAIMeteringData(token);
       setData(res);
+      if (refreshing) toast({ title: 'AI operations refreshed' });
     } catch (err) {
       console.error('Failed to load AI metering data:', err);
+      toast({ variant: 'destructive', title: 'Could not load AI operations' });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -110,6 +113,7 @@ export default function AdminAIMeteringPage() {
         creditReason || 'Administrator bonus grant from AI Metering console'
       );
       setCreditSuccessMsg(`Successfully credited +${creditAmount} AI actions to ${selectedUser.email}`);
+      toast({ title: 'Credits granted', description: `${creditAmount} AI credits added.` });
       setTimeout(() => {
         setSelectedUser(null);
         setCreditSuccessMsg(null);
@@ -118,7 +122,7 @@ export default function AdminAIMeteringPage() {
       }, 1500);
     } catch (err: any) {
       console.error('Failed to grant bonus credits:', err);
-      alert(err?.message || 'Failed to grant credits');
+      toast({ variant: 'destructive', title: 'Action failed', description: 'Failed to grant credits' });
     } finally {
       setSubmittingCredits(false);
     }

@@ -1,6 +1,7 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import Image from 'next/image';
+import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -77,11 +78,17 @@ export default function AIConfigurationPage() {
     setData(result); setCustomUrl(result.providers.find(p => p.providerId === 'custom')?.baseUrl || '');
   }, [user]);
   useEffect(() => { reload().catch(() => setMessage('Could not load AI configuration. Administrator claims are required.')); }, [reload]);
-  const perform = async (work: (token: string) => Promise<unknown>, refresh = true) => {
+  const perform = async (work: (token: string) => Promise<unknown>, refresh = true, success = 'AI action completed') => {
     if (!user) return;
     setBusy(true); setMessage('');
-    try { const result = await work(await user.getIdToken()); if (refresh) await reload(); setMessage(result && typeof result === 'object' && 'cleanupRequired' in result && result.cleanupRequired ? 'Credential change completed. Remove the old environment key or clean up the previous vault version; see audit logs.' : 'Completed.'); }
-    catch (error) { setMessage(error instanceof Error ? error.message : 'Operation failed.'); }
+    try {
+      const result = await work(await user.getIdToken());
+      const cleanup = result && typeof result === 'object' && 'cleanupRequired' in result && result.cleanupRequired;
+      const description = cleanup ? 'Credential change completed. Remove the old environment key or clean up the previous vault version; see audit logs.' : success;
+      setMessage(description); toast({ title: cleanup ? 'Action completed — follow-up needed' : success, ...(cleanup ? { description } : {}) });
+      if (refresh) { try { await reload(); } catch { setMessage('Action completed, but the view could not refresh. Refresh to see the latest data.'); toast({ variant: 'destructive', title: 'Refresh failed', description: 'The action completed. Refresh to see the latest data.' }); } }
+    }
+    catch (error) { const description = error instanceof Error ? error.message : 'Operation failed.'; setMessage(description); toast({ variant: 'destructive', title: 'AI action failed', description }); }
     finally { setBusy(false); }
   };
   const confirm = (title: string, work: (token: string) => Promise<unknown>) => setConfirmation({ title, run: () => perform(work) });

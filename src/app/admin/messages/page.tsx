@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from 'react';
+import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { getContactMessages, updateContactMessageStatus } from '@/app/admin/actions';
 import type { ContactMessageItem } from '@/types';
@@ -70,8 +71,10 @@ export default function AdminMessagesPage() {
       const token = await user.getIdToken();
       const res = await getContactMessages(token, statusFilter);
       setMessages(res);
+      if (refreshing) toast({ title: 'Support inquiries refreshed' });
     } catch (err) {
       console.error('Failed to load contact messages:', err);
+      toast({ variant: 'destructive', title: 'Could not load support inquiries' });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -102,11 +105,12 @@ export default function AdminMessagesPage() {
     try {
       const token = await user.getIdToken();
       await updateContactMessageStatus(token, selectedMessage.id, editStatus, editNotes);
+      toast({ title: 'Support inquiry updated', description: 'Status and notes saved.' });
       setSelectedMessage(null);
       loadMessages();
     } catch (err: any) {
       console.error('Failed to update message status:', err);
-      alert(err?.message || 'Failed to update message');
+      toast({ variant: 'destructive', title: 'Action failed', description: 'Failed to update message' });
     } finally {
       setUpdating(false);
     }

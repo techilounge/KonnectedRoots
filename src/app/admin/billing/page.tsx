@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from 'react';
+import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { getAdminBillingMetrics } from '@/app/admin/actions';
 import type { AdminBillingData } from '@/app/admin/actions';
@@ -73,8 +74,10 @@ export default function AdminBillingPage() {
       const token = await user.getIdToken();
       const res = await getAdminBillingMetrics(token);
       setData(res);
+      if (refreshing) toast({ title: 'Subscriptions refreshed' });
     } catch (err) {
       console.error('Failed to load admin billing data:', err);
+      toast({ variant: 'destructive', title: 'Could not load data', description: 'Please refresh and try again.' });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -92,10 +95,15 @@ export default function AdminBillingPage() {
     });
   };
 
-  const handleCopy = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
+  const handleCopy = async (text: string, id: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(id);
+      toast({ title: 'Copied to clipboard' });
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch {
+      toast({ variant: 'destructive', title: 'Copy failed' });
+    }
   };
 
   const filteredSubscribers = (data?.subscribers || []).filter(sub => {

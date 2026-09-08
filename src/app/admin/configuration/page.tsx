@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from 'react';
+import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { getSystemConfiguration, saveSystemConfiguration } from '@/app/admin/actions';
 import type { SystemConfiguration } from '@/types';
@@ -63,6 +64,7 @@ export default function AdminConfigurationPage() {
       setConfig(res);
     } catch (err) {
       console.error('Failed to load system configuration:', err);
+      toast({ variant: 'destructive', title: 'Could not load configuration' });
     } finally {
       setLoading(false);
     }
@@ -79,11 +81,12 @@ export default function AdminConfigurationPage() {
     try {
       const token = await user.getIdToken();
       await saveSystemConfiguration(token, config);
+      toast({ title: 'Configuration saved' });
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err: any) {
       console.error('Failed to save system configuration:', err);
-      alert(err?.message || 'Failed to save configuration');
+      toast({ variant: 'destructive', title: 'Action failed', description: 'The change could not be saved. Please try again.' });
     } finally {
       setSaving(false);
       setConfirmOpen(false);

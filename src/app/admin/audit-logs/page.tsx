@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from 'react';
+import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { getAuditLogs } from '@/app/admin/actions';
 import type { AuditLogItem } from '@/types';
@@ -72,8 +73,10 @@ export default function AdminAuditLogsPage() {
         limit: 100,
       });
       setLogs(res);
+      if (refreshing) toast({ title: 'Audit trail refreshed' });
     } catch (err) {
       console.error('Failed to load audit logs:', err);
+      toast({ variant: 'destructive', title: 'Could not load data', description: 'Please refresh and try again.' });
     } finally {
       setLoading(false);
       setRefreshing(false);
