@@ -8,7 +8,7 @@ export const requirements: Record<Feature, Capability[]> = {
 export function compatible(feature: Feature, model: Model) { return requirements[feature].every(c => model.capabilities.includes(c)); }
 export const adapterCapabilities: Record<ProviderId, readonly Capability[]> = {
   google: capabilities, deepseek: ['text', 'vision', 'structuredOutput', 'toolCalling'],
-  openrouter: ['text', 'vision', 'structuredOutput', 'toolCalling'], openai: ['text', 'vision', 'structuredOutput', 'toolCalling'],
+  openrouter: capabilities, openai: ['text', 'vision', 'structuredOutput', 'toolCalling'],
   anthropic: ['text', 'vision', 'structuredOutput', 'toolCalling'], custom: ['text', 'vision', 'structuredOutput', 'toolCalling'],
 };
 const model = (providerId: ProviderId, modelId: string, caps: Capability[], input: number, output: number, quality = 75, imageCost: number | null = null): Model =>

@@ -33,6 +33,54 @@ const { AIError, modelSchema, budgetSchema } = load('src/lib/ai/types.ts');
 const providers = ['google', 'deepseek', 'openrouter'].map(providerId => ({ providerId, enabled: true, credentialConfigured: true }));
 const req = { prompt: 'Synthetic fixture', maxOutputTokens: 512, structured: true };
 const config = () => structuredClone(defaults);
+test('OpenRouter image generation and editing parse real raster output and preserve reported cost', async () => {
+  const png = (await require('sharp')({create:{width:2,height:2,channels:3,background:'#bfa889'}}).png().toBuffer()).toString('base64');
+  const calls = [];
+  let response = {data:[{b64_json:png,media_type:'image/png'}],usage:{prompt_tokens:10,completion_tokens:2000,cost:0.012}};
+  const l = loader({}, {fetch:async (url, options) => {calls.push({url,body:JSON.parse(options.body)});return {ok:true,json:async()=>response};}});
+  const p = l('src/lib/ai/providers/openrouter.ts').openrouterProvider('synthetic-key');
+  const result = await p.generateImage({prompt:'Synthetic fixture',maxOutputTokens:512,imageOutput:true},'meta/muse-image');
+  assert.equal(result.image.mimeType,'image/png'); assert.equal(result.reportedCostUsd,0.012);
+  assert.equal(result.text,''); assert.equal(result.textOutputTokens,undefined);
+  assert.ok(calls[0].url.endsWith('/images')); assert.equal(calls[0].body.n,1); assert.equal(calls[0].body.input_references,undefined);
+  await p.imageEdit({prompt:'Edit fixture',maxOutputTokens:512,image:{base64:png,mimeType:'image/png'}},'meta/muse-image');
+  assert.equal(calls[1].body.input_references[0].image_url.url,`data:image/png;base64,${png}`);
+  assert.equal(calls[1].body.provider.allow_fallbacks,false);
+  for (const data of [[],[{url:'https://example.invalid/image'}],[{b64_json:'broken',media_type:'image/png'}],[{b64_json:png,media_type:'image/svg+xml'}],[{b64_json:png},{b64_json:png}]]) {
+    response={data}; await assert.rejects(()=>p.generateImage({prompt:'fixture',maxOutputTokens:512},'fixture'),/invalid_image_response/);
+  }
+  response={data:[{b64_json:png}],usage:{cost:-1}};
+  assert.equal((await p.generateImage({prompt:'fixture',maxOutputTokens:512},'fixture')).reportedCostUsd,null);
+});
+test('OpenRouter image discovery merges modalities without inventing image prices', async () => {
+  const l=loader({}, {fetch:async url=>({ok:true,json:async()=>url.endsWith('/images/models') ? {data:[{id:'fixture/image',architecture:{input_modalities:['text','image']}}]} : {data:[{id:'fixture/image',pricing:{prompt:'0',completion:'0'}}]}})});
+  const models=await l('src/lib/ai/providers/openrouter.ts').openrouterProvider('fixture').listModels();
+  assert.equal(models.length,1); assert.ok(models[0].capabilities.includes('imageEditing')); assert.equal(models[0].imageCost,undefined);
+});
+test('image eligibility explains credentials, privacy, capability and missing prices', () => {
+  const {modelUnavailableReason: reason}=load('src/lib/ai/availability.ts');
+  const m={...config().models[1],providerId:'openrouter'}; const route={...config().routes.enhancePhoto,privacy:'aggregator_allowed'};
+  assert.equal(reason(m,'enhancePhoto',route,providers[2]),null);
+  assert.match(reason(m,'enhancePhoto',route,{enabled:true,credentialConfigured:false}),/credential/);
+  assert.match(reason(m,'enhancePhoto',{...route,privacy:'direct_providers_only'},providers[2]),/aggregator_allowed/);
+  assert.match(reason({...m,imageCost:null},'enhancePhoto',route,providers[2]),/prices/);
+  assert.match(reason({...m,providerId:'openai'},'enhancePhoto',route,providers[2]),/unsupported/);
+});
+test('image gateway uses reported dollars without double counting and retains estimates for missing cost', async () => {
+  for (const reportedCostUsd of [0,0.02,null]) {
+    let event, reserved;
+    const c=config(); c.models[1].providerId='openrouter'; c.routes.enhancePhoto={...c.routes.enhancePhoto,primary:c.models[1],privacy:'aggregator_allowed'};
+    const l=loader({
+      '@/lib/firebase/admin':{adminDb:{collection:()=>({doc:()=>({get:async()=>({data:()=>({})})})})}},
+      './config':{loadControl:async()=>c,loadProviders:async()=>providers},
+      './telemetry':{readUsage:async()=>({spent:0,reserved:0}),reserve:async(_c,_f,_m,amount)=>{reserved=amount;return {amount};},settle:async(_r,e)=>{event=e;}},
+      './providers':{getProvider:async()=>({generateImage:async()=>({text:'',image:{base64:'fixture',mimeType:'image/png'},inputTokens:10,outputTokens:2000,reportedCostUsd})})},
+    });
+    const g=l('src/lib/ai/gateway.ts');
+    await g.withPlayground('admin',()=>g.generate('enhancePhoto',{prompt:'fixture',maxOutputTokens:512,imageOutput:true},undefined,c.models[1]));
+    assert.equal(event.estimatedCostUsd,reportedCostUsd ?? reserved); assert.equal(event.costIsReservation,reportedCostUsd===null);
+  }
+});
 test('vault credentials accept verified numeric project aliases and reject foreign references', async () => {
   const calls = [];
   const name = 'projects/123456/secrets/konnectedroots-ai-openrouter/versions/7';

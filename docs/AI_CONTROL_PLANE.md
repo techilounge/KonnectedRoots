@@ -43,7 +43,19 @@ Firestore rules deny all direct client access to the five AI collections, includ
 
 ## Providers and initial models
 
-Adapters: Google Gemini, DeepSeek Direct, OpenRouter, OpenAI, Anthropic and a custom OpenAI-compatible endpoint. Text/structured/vision capabilities are adapter- and model-dependent. Google implements image generation/editing. The other initial adapters intentionally do not advertise image editing; route restoration through Google. OpenAI uses Chat Completions for compatibility. Anthropic structured output uses JSON instructions followed by server schema validation. Tool-calling capability can be cataloged, but these genealogy features do not invoke external tools.
+Adapters: Google Gemini, DeepSeek Direct, OpenRouter, OpenAI, Anthropic and a custom OpenAI-compatible endpoint. Text/structured/vision capabilities are adapter- and model-dependent. Google and OpenRouter implement image generation/editing. Other adapters do not advertise image editing. OpenAI uses Chat Completions for compatibility. Anthropic structured output uses JSON instructions followed by server schema validation. Tool-calling capability can be cataloged, but these genealogy features do not invoke external tools.
+
+### OpenRouter image setup
+
+1. Save and test the OpenRouter credential in Providers, then Sync models. Discovery merges the chat and dedicated image catalogs. Existing reviewed records remain unchanged; review their capabilities manually.
+2. In Models, find the exact OpenRouter model ID. Enable imageGeneration for image output, and imageEditing only when reference-image input is supported. Unsupported adapter capabilities cannot be selected; legacy unsupported selections can be unchecked.
+3. Review the model's endpoint pricing. Set Per image to a conservative estimate covering output and reference-image charges for one image at the provider's default settings. Token prices are separate; use zero only for verified included/free charges. Unknown prices block testing. Resolution/tier pricing is not automatically inferred from catalog names.
+4. Save changes. Under Feature Routing, set enhancePhoto Privacy to aggregator_allowed and save. Select the model in Health & Testing. Unavailable models show a reason and cannot be run. Live budget and circuit checks still apply on the server.
+5. Run the controlled test, which may incur a provider charge. Verify returned image, reported spending and telemetry before routing user photos to this model.
+
+OpenRouter uses POST /api/v1/images with n=1 and optional input_references, keeping provider fallback disabled. Responses must contain one base64 raster image; remote URLs, SVG, malformed data, animated and excessive-size images are rejected. Decoded PNG/JPEG/WebP images are normalized to PNG. Text requests continue using Chat Completions.
+
+For image responses, finite nonnegative usage.cost is the complete reported charge; it replaces the estimate without adding image/token charges again. Missing cost retains the reserved estimate even if aggregate image token usage is present. Estimates are application budget controls, not invoice guarantees; actual provider charges may exceed the reservation and are recorded in full. No model-specific price is hardcoded. See [OpenRouter Image API](https://openrouter.ai/docs/guides/overview/multimodal/image-generation).
 
 Seeded models and conservative paid-tier USD estimates, verified 2026-09-07:
 

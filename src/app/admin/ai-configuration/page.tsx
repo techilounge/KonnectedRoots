@@ -9,7 +9,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import AdminPagination from '@/components/admin/AdminPagination';
 import { capabilities, features, providerIds, type Feature, type Model, type ProviderId, type Target } from '@/lib/ai/types';
-import { compatible, modelKey } from '@/lib/ai/registry';
+import { adapterCapabilities, compatible, modelKey } from '@/lib/ai/registry';
+import { modelUnavailableReason } from '@/lib/ai/availability';
 import { getAIConfiguration, mutateCredential, saveAIControl, saveProvider, syncModels, testModel, testProvider } from './actions';
 
 type Snapshot = Awaited<ReturnType<typeof getAIConfiguration>>;
@@ -64,7 +65,7 @@ export default function AIConfigurationPage() {
   const [newModel, setNewModel] = useState('');
   const [testFeature, setTestFeature] = useState<Feature>('suggestName');
   const [testTarget, setTestTarget] = useState('');
-  const [testResult, setTestResult] = useState<Awaited<ReturnType<typeof testModel>> | null>(null);
+  const [testResult, setTestResult] = useState<Exclude<Awaited<ReturnType<typeof testModel>>, { error: string }> | null>(null);
   const reload = useCallback(async () => {
     if (!user) return;
     const result = await getAIConfiguration(await user.getIdToken());
@@ -92,6 +93,8 @@ export default function AIConfigurationPage() {
   const routeOptions = (feature: Feature) => control.models.filter(m => m.enabled && compatible(feature, m) &&
     (control.routes[feature].privacy !== 'direct_providers_only' || !['openrouter', 'custom'].includes(m.providerId)));
   const targetFromKey = (key: string): Target => { const m = control.models.find(m => modelKey(m) === key)!; return { providerId: m.providerId, modelId: m.modelId }; };
+  const testOptions = control.models.map(model => ({ model, reason: modelUnavailableReason(model, testFeature, control.routes[testFeature], data.providers.find(p => p.providerId === model.providerId)) }));
+  const selectedTest = testOptions.find(o => modelKey(o.model) === testTarget);
   const targets = (feature: Feature, value: Target, change: (target: Target) => void, label: string) => <label className="grid gap-1 text-sm">{label}<select className={selectClass} value={modelKey(value)} onChange={e => change(targetFromKey(e.target.value))}>
     {!routeOptions(feature).some(m => modelKey(m) === modelKey(value)) && <option value={modelKey(value)}>Incompatible: {modelKey(value)}</option>}
     {routeOptions(feature).map(m => <option key={modelKey(m)} value={modelKey(m)}>{m.providerId} / {m.displayName}</option>)}
@@ -143,7 +146,8 @@ export default function AIConfigurationPage() {
       {filteredModels.slice((visiblePage - 1) * 10, visiblePage * 10).map(({ model, index }) => { return <Card key={modelKey(model)}><CardHeader><CardTitle className="text-base">{modelKey(model)}</CardTitle></CardHeader><CardContent className="space-y-3">
         <label className="flex gap-2"><input type="checkbox" checked={model.enabled} onChange={e => updateModel(index, { enabled: e.target.checked })} />Enabled</label>
         <Input aria-label="Display name" value={model.displayName} onChange={e => updateModel(index, { displayName: e.target.value })} />
-        <div className="flex flex-wrap gap-4">{capabilities.map(cap => <label key={cap} className="flex gap-1 text-sm"><input type="checkbox" checked={model.capabilities.includes(cap)} onChange={e => updateModel(index, { capabilities: e.target.checked ? [...model.capabilities, cap] : model.capabilities.filter(c => c !== cap) })} />{cap}</label>)}</div>
+        <div className="flex flex-wrap gap-4">{capabilities.map(cap => <label key={cap} className="flex gap-1 text-sm"><input type="checkbox" disabled={!adapterCapabilities[model.providerId].includes(cap) && !model.capabilities.includes(cap)} checked={model.capabilities.includes(cap)} onChange={e => updateModel(index, { capabilities: e.target.checked ? [...model.capabilities, cap] : model.capabilities.filter(c => c !== cap) })} />{cap}{!adapterCapabilities[model.providerId].includes(cap) && ' (unsupported)'}</label>)}</div>
+        <p className="text-xs text-muted-foreground">Select only capabilities documented for this model. For image requests, Per image is a conservative estimate including image/reference charges; token rates are separate. Enter 0 only when verified free or included.</p>
         <div className="grid sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <NumberField label="Context tokens" value={model.contextWindow} onChange={n => updateModel(index, { contextWindow: n || 1024 })} />
           <NumberField label="Input / million tokens" value={model.inputCostPerMillion} onChange={n => updateModel(index, { inputCostPerMillion: n })} />
@@ -173,8 +177,10 @@ export default function AIConfigurationPage() {
     </CardContent></Card></TabsContent>
     <TabsContent value="health & testing" className="space-y-4"><Card><CardHeader><CardTitle>Controlled model test</CardTitle></CardHeader><CardContent className="space-y-3"><p className="text-sm">Uses synthetic data and the normal privacy, budget, telemetry and circuit-breaker controls. Provider charges count toward the platform budget; no user AI credits are deducted.</p>
       <select aria-label="Test feature" className={selectClass} value={testFeature} onChange={e => { setTestFeature(e.target.value as Feature); setTestTarget(''); }}>{features.map(f => <option key={f}>{f}</option>)}</select>
-      <select aria-label="Test provider and model" className={selectClass} value={testTarget} onChange={e => setTestTarget(e.target.value)}><option value="">Select provider / model</option>{routeOptions(testFeature).map(m => <option value={modelKey(m)} key={modelKey(m)}>{modelKey(m)}</option>)}</select>
-      <Button disabled={busy || !testTarget} onClick={() => perform(async token => { setTestResult(null); setTestResult(await testModel(token, { feature: testFeature, target: targetFromKey(testTarget) })); })}>Run controlled test</Button>
+      <select aria-label="Test provider and model" className={selectClass} value={testTarget} onChange={e => { setTestTarget(e.target.value); setTestResult(null); }}><option value="">Select provider / model</option>{testOptions.map(({ model, reason }) => <option value={modelKey(model)} key={modelKey(model)}>{modelKey(model)}{reason ? ' — unavailable' : ''}</option>)}</select>
+      {selectedTest?.reason && <p role="status" className="text-sm text-destructive">{selectedTest.reason}</p>}
+      <p className="text-xs text-muted-foreground">Save model and routing changes before testing. Tests also enforce the saved budget, request-cost limit and circuit state.</p>
+      <Button disabled={busy || !selectedTest || Boolean(selectedTest.reason)} onClick={() => perform(async token => { setTestResult(null); const result = await testModel(token, { feature: testFeature, target: targetFromKey(testTarget) }); if ('error' in result) throw new Error(`Controlled test failed: ${result.error}. Check saved configuration, provider access and budget limits.`); setTestResult(result); })}>Run controlled test</Button>
       {testResult && <div className="space-y-2"><p>{testResult.latencyMs}ms · Input {testResult.inputTokens ?? 'unknown'} / Output {testResult.outputTokens ?? 'unknown'} tokens · ${testResult.estimatedCostUsd.toFixed(6)} · JSON validity: {testResult.structuredOutputValid === null ? 'not applicable' : String(testResult.structuredOutputValid)}</p>{testResult.response.startsWith('data:image/') ? <Image width={384} height={384} unoptimized className="max-w-sm" src={testResult.response} alt="Synthetic restoration test" /> : <pre className="whitespace-pre-wrap rounded bg-muted p-3">{testResult.response}</pre>}</div>}
     </CardContent></Card><div className="space-y-2">{data.health.map(h => <p key={`${h.providerId}:${h.modelId}`} className="text-sm">{h.providerId} / {h.modelId}: {h.failures} consecutive qualifying failures · {h.unavailableUntil > Date.now() ? `Circuit open until ${new Date(h.unavailableUntil).toLocaleString()}` : 'Circuit available'}</p>)}</div></TabsContent>
     </Tabs>

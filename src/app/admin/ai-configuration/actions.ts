@@ -138,6 +138,7 @@ export async function syncModels(token: string, id: ProviderId) {
 }
 export async function testModel(token: string, input: unknown) {
   const user = await caller(token);
+  try {
   const data = z.object({ target: targetSchema, feature: z.enum(features) }).strict().parse(input);
   // A fixed synthetic fixture prevents uploading private documents through the playground.
   const vision = ['extractDocumentText', 'photoAnalysis', 'enhancePhoto'].includes(data.feature);
@@ -146,4 +147,8 @@ export async function testModel(token: string, input: unknown) {
   const imageOutput = data.feature === 'enhancePhoto';
   const result = await withPlayground(user.uid, () => generate(data.feature, { prompt: imageOutput ? 'Restore this synthetic plain color image without adding objects.' : 'This is a synthetic connection test. Return JSON with a single string property result describing this test.', image, imageOutput, structured: !imageOutput, maxOutputTokens: 512 }, imageOutput ? undefined : text => { z.object({ result: z.string() }).parse(JSON.parse(text)); }, data.target));
   return { response: result.image ? `data:${result.image.mimeType};base64,${result.image.base64}` : result.text, ...result.invocation, structuredOutputValid: imageOutput ? null : true };
+  } catch (error) {
+    const allowed = ['no_eligible_model', 'feature_disabled', 'pricing_missing', 'budget_exceeded', 'budget_nonessential_disabled', 'request_cost_exceeded', 'circuit_open', 'providers_unavailable', 'authentication', 'rate_limited', 'timeout', 'provider_5xx', 'provider_outage', 'model_unavailable', 'invalid_request', 'invalid_image_response', 'invalid_response', 'invalid_structured_output', 'content_policy', 'secret_store_unavailable', 'credential_missing', 'configuration_changed'];
+    return { error: error instanceof AIError && allowed.includes(error.code) ? error.code : 'test_failed' };
+  }
 }

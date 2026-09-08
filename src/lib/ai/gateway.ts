@@ -49,15 +49,17 @@ export async function generate(feature: Feature, request: AIRequest, validate?: 
     let errorCode: string | null = null;
     try {
       const provider = await getProvider(providers.find(p => p.providerId === model.providerId)!);
-      const method = request.imageOutput ? provider.imageEdit : request.image ? provider.analyzeImage : request.structured ? provider.generateStructured : provider.generateText;
+      const method = request.imageOutput ? (request.image ? provider.imageEdit : provider.generateImage) : request.image ? provider.analyzeImage : request.structured ? provider.generateStructured : provider.generateText;
       if (!method) throw new AIError('unsupported_capability');
       result = await method(request, model.modelId);
       if (request.imageOutput && !result.image) throw new AIError('invalid_response');
       if (validate) { try { validate(result.text); } catch { throw new AIError('invalid_structured_output'); } }
     } catch (error) { errorCode = error instanceof AIError ? error.code : 'internal_error'; }
     const knownUsage = result && result.inputTokens !== null && result.outputTokens !== null && (!result.image || result.textOutputTokens != null);
-    const uncertain = !knownUsage && !['authentication', 'invalid_request', 'content_policy', 'rate_limited', 'model_unavailable', 'credential_missing', 'secret_store_unavailable', 'unsupported_capability'].includes(errorCode || '');
-    const estimatedCostUsd = knownUsage && result ? cost(model, result.inputTokens!, result.textOutputTokens ?? result.outputTokens!, result.image ? 1 : 0) : uncertain ? reservation.amount : 0;
+    const reportedCost = result?.reportedCostUsd;
+    const hasReportedCost = typeof reportedCost === 'number' && Number.isFinite(reportedCost) && reportedCost >= 0;
+    const uncertain = !hasReportedCost && !knownUsage && !['authentication', 'invalid_request', 'content_policy', 'rate_limited', 'model_unavailable', 'credential_missing', 'secret_store_unavailable', 'unsupported_capability'].includes(errorCode || '');
+    const estimatedCostUsd = hasReportedCost ? reportedCost : knownUsage && result ? cost(model, result.inputTokens!, result.textOutputTokens ?? result.outputTokens!, result.image ? 1 : 0) : uncertain ? reservation.amount : 0;
     requestSpent += estimatedCostUsd;
     const invocation = { ...billing, providerId: model.providerId, modelId: model.modelId, feature,
       timestamp: new Date().toISOString(), latencyMs: Date.now() - started, inputTokens: result?.inputTokens ?? null,

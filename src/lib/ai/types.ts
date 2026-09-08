@@ -35,7 +35,7 @@ export type ProviderConfig = { providerId: ProviderId; enabled: boolean; credent
   status: string; lastTestedAt: string | null; lastSuccessfulTest: string | null; baseUrl?: string };
 export type Control = { models: Model[]; routes: Record<Feature, Route>; budgets: Budgets };
 export type AIRequest = { prompt: string; image?: { base64: string; mimeType: string }; maxOutputTokens: number; structured?: boolean; imageOutput?: boolean };
-export type AIResponse = { text: string; image?: { base64: string; mimeType: string }; inputTokens: number | null; outputTokens: number | null; textOutputTokens?: number | null };
+export type AIResponse = { text: string; image?: { base64: string; mimeType: string }; inputTokens: number | null; outputTokens: number | null; textOutputTokens?: number | null; reportedCostUsd?: number | null };
 export interface Provider {
   testConnection(): Promise<void>;
   listModels(): Promise<Partial<Model>[]>;
