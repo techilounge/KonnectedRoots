@@ -26,6 +26,40 @@ export default function AIConfigurationPage() {
   const [customUrl, setCustomUrl] = useState('');
   const [confirmation, setConfirmation] = useState<{ title: string; run: () => Promise<void> } | null>(null);
   const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
+  const [query, setQuery] = useState('');
+  const [providerFilter, setProviderFilter] = useState('all');
+  const [capabilityFilter, setCapabilityFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [filtersReady, setFiltersReady] = useState(false);
+  const [tab, setTab] = useState('providers');
+  useEffect(() => {
+    const restore = () => {
+      const params = new URLSearchParams(window.location.search);
+      setSearch(params.get('q') || ''); setQuery(params.get('q') || '');
+      setProviderFilter(providerIds.some(p => p === params.get('provider')) ? params.get('provider')! : 'all');
+      setCapabilityFilter(capabilities.some(c => c === params.get('capability')) ? params.get('capability')! : 'all');
+      setStatusFilter(['enabled', 'disabled'].includes(params.get('status') || '') ? params.get('status')! : 'all');
+      if (params.get('tab') === 'models') setTab('models');
+      setPage(1); setFiltersReady(true);
+    };
+    const timer = window.setTimeout(restore, 0);
+    window.addEventListener('popstate', restore);
+    return () => { window.clearTimeout(timer); window.removeEventListener('popstate', restore); };
+  }, []);
+  useEffect(() => {
+    if (!filtersReady) return;
+    const timer = window.setTimeout(() => {
+      setQuery(search); setPage(1);
+      const url = new URL(window.location.href);
+      for (const [name, value] of Object.entries({ q: search, provider: providerFilter, capability: capabilityFilter, status: statusFilter })) {
+        if (value && value !== 'all') url.searchParams.set(name, value); else url.searchParams.delete(name);
+      }
+      if (tab === 'models') url.searchParams.set('tab', 'models'); else url.searchParams.delete('tab');
+      window.history.replaceState(window.history.state, '', url);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [search, providerFilter, capabilityFilter, statusFilter, filtersReady, tab]);
   const [newProvider, setNewProvider] = useState<ProviderId>('openai');
   const [newModel, setNewModel] = useState('');
   const [testFeature, setTestFeature] = useState<Feature>('suggestName');
@@ -47,6 +81,13 @@ export default function AIConfigurationPage() {
   const confirm = (title: string, work: (token: string) => Promise<unknown>) => setConfirmation({ title, run: () => perform(work) });
   if (!data) return <div role="status">{message || 'Loading AI configuration…'}</div>;
   const control = data.control;
+  const filteredModels = control.models.map((model, index) => ({ model, index })).filter(({ model }) =>
+    `${model.providerId} ${model.modelId} ${model.displayName}`.toLowerCase().includes(query.trim().toLowerCase()) &&
+    (providerFilter === 'all' || model.providerId === providerFilter) &&
+    (capabilityFilter === 'all' || model.capabilities.some(c => c === capabilityFilter)) &&
+    (statusFilter === 'all' || model.enabled === (statusFilter === 'enabled')));
+  const visiblePage = Math.min(page, Math.max(1, Math.ceil(filteredModels.length / 10)));
+  const clearFilters = () => { setSearch(''); setQuery(''); setProviderFilter('all'); setCapabilityFilter('all'); setStatusFilter('all'); setPage(1); };
   const updateModel = (index: number, patch: Partial<Model>) => setData({ ...data, control: { ...control, models: control.models.map((m, i) => i === index ? { ...m, ...patch } : m) } });
   const routeOptions = (feature: Feature) => control.models.filter(m => m.enabled && compatible(feature, m) &&
     (control.routes[feature].privacy !== 'direct_providers_only' || !['openrouter', 'custom'].includes(m.providerId)));
@@ -59,7 +100,7 @@ export default function AIConfigurationPage() {
     <div className="flex flex-wrap justify-between gap-3"><div><h1 className="text-2xl font-bold">AI Configuration</h1><p className="text-muted-foreground">Provider access, feature routing and spending controls.</p></div>
       <Button disabled={busy} onClick={() => perform(async () => reload())}>Refresh</Button></div>
     <p role="status" className="text-sm whitespace-pre-wrap">{message}</p>
-    <Tabs defaultValue="providers"><TabsList className="flex flex-wrap h-auto justify-start">
+    <Tabs value={tab} onValueChange={setTab}><TabsList className="flex flex-wrap h-auto justify-start">
       {['Providers', 'Models', 'Feature Routing', 'Cost & Budgets', 'Health & Testing'].map(tab => <TabsTrigger key={tab} value={tab.toLowerCase()}>{tab}</TabsTrigger>)}
     </TabsList>
     <TabsContent value="providers" className="space-y-4">
@@ -85,10 +126,21 @@ export default function AIConfigurationPage() {
       </CardContent></Card>)}</div>
     </TabsContent>
     <TabsContent value="models" className="space-y-4"><p className="text-sm">Newly discovered models stay disabled until capabilities and pricing are reviewed. Blank prices are unknown, never free. Prices are estimates in USD.</p>
+      <div className="rounded-lg border bg-background p-4 space-y-3">
+        <div className="relative"><Input aria-label="Search models" placeholder="Search model names, IDs or providers…" className="pr-12" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />{search && <Button variant="ghost" size="sm" className="absolute right-1 top-1 h-8" aria-label="Clear model search" onClick={() => { setSearch(''); setQuery(''); setPage(1); }}>×</Button>}</div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <label className="grid gap-1 text-sm">Provider<select className={selectClass} value={providerFilter} onChange={e => { setProviderFilter(e.target.value); setPage(1); }}><option value="all">All providers</option>{providerIds.map(p => <option key={p} value={p}>{p}</option>)}</select></label>
+          <label className="grid gap-1 text-sm">Capability<select className={selectClass} value={capabilityFilter} onChange={e => { setCapabilityFilter(e.target.value); setPage(1); }}><option value="all">All capabilities</option>{capabilities.map(c => <option key={c} value={c}>{c}</option>)}</select></label>
+          <label className="grid gap-1 text-sm">Status<select className={selectClass} value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}><option value="all">All statuses</option><option value="enabled">Enabled</option><option value="disabled">Disabled</option></select></label>
+        </div>
+        <div className="flex items-center justify-between gap-2"><p role="status" className="text-sm text-muted-foreground">{filteredModels.length} of {control.models.length} models match</p><Button variant="ghost" size="sm" onClick={clearFilters}>Clear filters</Button></div>
+      </div>
+      <p className="text-sm font-medium">Add a model manually</p>
       <div className="flex gap-2"><select aria-label="New model provider" className={selectClass} value={newProvider} onChange={e => setNewProvider(e.target.value as ProviderId)}>{providerIds.map(p => <option key={p}>{p}</option>)}</select><Input aria-label="New model ID" placeholder="Model ID" value={newModel} onChange={e => setNewModel(e.target.value)} /><Button disabled={!newModel || control.models.some(m => m.providerId === newProvider && m.modelId === newModel)} onClick={() => {
-        setData({ ...data, control: { ...control, models: [...control.models, { providerId: newProvider, modelId: newModel, displayName: newModel, capabilities: [], contextWindow: 32768, inputCostPerMillion: null, outputCostPerMillion: null, imageCost: null, quality: 50, enabled: false }] } }); setNewModel(''); setPage(Math.ceil((control.models.length + 1) / 10));
+        setData({ ...data, control: { ...control, models: [...control.models, { providerId: newProvider, modelId: newModel, displayName: newModel, capabilities: [], contextWindow: 32768, inputCostPerMillion: null, outputCostPerMillion: null, imageCost: null, quality: 50, enabled: false }] } }); clearFilters(); setSearch(newModel); setQuery(newModel); setProviderFilter(newProvider); setNewModel('');
       }}>Add model</Button></div>
-      {control.models.slice((page - 1) * 10, page * 10).map((model, offset) => { const index = (page - 1) * 10 + offset; return <Card key={modelKey(model)}><CardHeader><CardTitle className="text-base">{modelKey(model)}</CardTitle></CardHeader><CardContent className="space-y-3">
+      {filteredModels.length === 0 && <p className="rounded-lg border p-6 text-center text-muted-foreground">No models match. Try a different search or clear the filters.</p>}
+      {filteredModels.slice((visiblePage - 1) * 10, visiblePage * 10).map(({ model, index }) => { return <Card key={modelKey(model)}><CardHeader><CardTitle className="text-base">{modelKey(model)}</CardTitle></CardHeader><CardContent className="space-y-3">
         <label className="flex gap-2"><input type="checkbox" checked={model.enabled} onChange={e => updateModel(index, { enabled: e.target.checked })} />Enabled</label>
         <Input aria-label="Display name" value={model.displayName} onChange={e => updateModel(index, { displayName: e.target.value })} />
         <div className="flex flex-wrap gap-4">{capabilities.map(cap => <label key={cap} className="flex gap-1 text-sm"><input type="checkbox" checked={model.capabilities.includes(cap)} onChange={e => updateModel(index, { capabilities: e.target.checked ? [...model.capabilities, cap] : model.capabilities.filter(c => c !== cap) })} />{cap}</label>)}</div>
@@ -99,7 +151,7 @@ export default function AIConfigurationPage() {
           <NumberField label="Per image" value={model.imageCost} onChange={n => updateModel(index, { imageCost: n })} />
           <NumberField label="Quality priority (0–100)" value={model.quality} onChange={n => updateModel(index, { quality: n || 0 })} />
         </div></CardContent></Card>; })}
-      <AdminPagination currentPage={page} totalItems={control.models.length} pageSize={10} onPageChange={setPage} itemLabel="models" />
+      <AdminPagination currentPage={visiblePage} totalItems={filteredModels.length} pageSize={10} onPageChange={setPage} itemLabel="models" />
     </TabsContent>
     <TabsContent value="feature routing" className="space-y-4"><p>Relationship Finder uses the local deterministic algorithm: unlimited, zero AI credits.</p>
       {features.map(feature => { const route = control.routes[feature]; const update = (patch: Partial<typeof route>) => setData({ ...data, control: { ...control, routes: { ...control.routes, [feature]: { ...route, ...patch } } } }); return <Card key={feature}><CardHeader><CardTitle>{feature}</CardTitle></CardHeader><CardContent className="space-y-3">
