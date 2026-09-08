@@ -29,6 +29,8 @@ export default function AIConfigurationPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
+  const [testSearch, setTestSearch] = useState('');
+  const [testQuery, setTestQuery] = useState('');
   const [providerFilter, setProviderFilter] = useState('all');
   const [capabilityFilter, setCapabilityFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -38,10 +40,11 @@ export default function AIConfigurationPage() {
     const restore = () => {
       const params = new URLSearchParams(window.location.search);
       setSearch(params.get('q') || ''); setQuery(params.get('q') || '');
+      setTestSearch(params.get('testQ') || ''); setTestQuery(params.get('testQ') || '');
       setProviderFilter(providerIds.some(p => p === params.get('provider')) ? params.get('provider')! : 'all');
       setCapabilityFilter(capabilities.some(c => c === params.get('capability')) ? params.get('capability')! : 'all');
       setStatusFilter(['enabled', 'disabled'].includes(params.get('status') || '') ? params.get('status')! : 'all');
-      if (params.get('tab') === 'models') setTab('models');
+      if (['models', 'health & testing'].includes(params.get('tab') || '')) setTab(params.get('tab')!);
       setPage(1); setFiltersReady(true);
     };
     const timer = window.setTimeout(restore, 0);
@@ -52,15 +55,17 @@ export default function AIConfigurationPage() {
     if (!filtersReady) return;
     const timer = window.setTimeout(() => {
       setQuery(search); setPage(1);
+      setTestQuery(testSearch);
       const url = new URL(window.location.href);
       for (const [name, value] of Object.entries({ q: search, provider: providerFilter, capability: capabilityFilter, status: statusFilter })) {
         if (value && value !== 'all') url.searchParams.set(name, value); else url.searchParams.delete(name);
       }
-      if (tab === 'models') url.searchParams.set('tab', 'models'); else url.searchParams.delete('tab');
+      if (testSearch) url.searchParams.set('testQ', testSearch); else url.searchParams.delete('testQ');
+      if (['models', 'health & testing'].includes(tab)) url.searchParams.set('tab', tab); else url.searchParams.delete('tab');
       window.history.replaceState(window.history.state, '', url);
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [search, providerFilter, capabilityFilter, statusFilter, filtersReady, tab]);
+  }, [search, testSearch, providerFilter, capabilityFilter, statusFilter, filtersReady, tab]);
   const [newProvider, setNewProvider] = useState<ProviderId>('openai');
   const [newModel, setNewModel] = useState('');
   const [testFeature, setTestFeature] = useState<Feature>('suggestName');
@@ -95,6 +100,7 @@ export default function AIConfigurationPage() {
   const targetFromKey = (key: string): Target => { const m = control.models.find(m => modelKey(m) === key)!; return { providerId: m.providerId, modelId: m.modelId }; };
   const testOptions = control.models.map(model => ({ model, reason: modelUnavailableReason(model, testFeature, control.routes[testFeature], data.providers.find(p => p.providerId === model.providerId)) }));
   const selectedTest = testOptions.find(o => modelKey(o.model) === testTarget);
+  const matchingTests = testOptions.filter(({ model }) => `${model.providerId} ${model.modelId} ${model.displayName}`.toLowerCase().includes(testQuery.trim().toLowerCase()));
   const targets = (feature: Feature, value: Target, change: (target: Target) => void, label: string) => <label className="grid gap-1 text-sm">{label}<select className={selectClass} value={modelKey(value)} onChange={e => change(targetFromKey(e.target.value))}>
     {!routeOptions(feature).some(m => modelKey(m) === modelKey(value)) && <option value={modelKey(value)}>Incompatible: {modelKey(value)}</option>}
     {routeOptions(feature).map(m => <option key={modelKey(m)} value={modelKey(m)}>{m.providerId} / {m.displayName}</option>)}
@@ -177,7 +183,9 @@ export default function AIConfigurationPage() {
     </CardContent></Card></TabsContent>
     <TabsContent value="health & testing" className="space-y-4"><Card><CardHeader><CardTitle>Controlled model test</CardTitle></CardHeader><CardContent className="space-y-3"><p className="text-sm">Uses synthetic data and the normal privacy, budget, telemetry and circuit-breaker controls. Provider charges count toward the platform budget; no user AI credits are deducted.</p>
       <select aria-label="Test feature" className={selectClass} value={testFeature} onChange={e => { setTestFeature(e.target.value as Feature); setTestTarget(''); }}>{features.map(f => <option key={f}>{f}</option>)}</select>
-      <select aria-label="Test provider and model" className={selectClass} value={testTarget} onChange={e => { setTestTarget(e.target.value); setTestResult(null); }}><option value="">Select provider / model</option>{testOptions.map(({ model, reason }) => <option value={modelKey(model)} key={modelKey(model)}>{modelKey(model)}{reason ? ' — unavailable' : ''}</option>)}</select>
+      <div className="relative"><Input aria-label="Search test models" placeholder="Search models by name, ID or provider…" className="pr-12" value={testSearch} onChange={e => setTestSearch(e.target.value)} />{testSearch && <Button variant="ghost" size="sm" className="absolute right-1 top-1 h-8" aria-label="Clear test model search" onClick={() => { setTestSearch(''); setTestQuery(''); }}>×</Button>}</div>
+      <p role="status" className="text-sm text-muted-foreground">{matchingTests.length} matching models{matchingTests.length === 0 ? ' — try another search or clear it.' : ''}</p>
+      <select aria-label="Test provider and model" className={selectClass} value={testTarget} onChange={e => { setTestTarget(e.target.value); setTestResult(null); }}><option value="">Select provider / model</option>{selectedTest && !matchingTests.includes(selectedTest) && <option value={testTarget}>{testTarget} — current selection (outside search)</option>}{matchingTests.map(({ model, reason }) => <option value={modelKey(model)} key={modelKey(model)}>{modelKey(model)}{reason ? ' — unavailable' : ''}</option>)}</select>
       {selectedTest?.reason && <p role="status" className="text-sm text-destructive">{selectedTest.reason}</p>}
       <p className="text-xs text-muted-foreground">Save model and routing changes before testing. Tests also enforce the saved budget, request-cost limit and circuit state.</p>
       <Button disabled={busy || !selectedTest || Boolean(selectedTest.reason)} onClick={() => perform(async token => { setTestResult(null); const result = await testModel(token, { feature: testFeature, target: targetFromKey(testTarget) }); if ('error' in result) throw new Error(`Controlled test failed: ${result.error}. Check saved configuration, provider access and budget limits.`); setTestResult(result); })}>Run controlled test</Button>
