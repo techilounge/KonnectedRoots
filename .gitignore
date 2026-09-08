@@ -1,7 +1,9 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
+node_modules/
+**/node_modules/
+/functions/lib/
 /.pnp
 .pnp.js
 
@@ -31,6 +33,13 @@ pnpm-debug.log*
 .env.development.local
 .env.test.local
 .env.production.local
+.env.*
+!.env.example
+
+# Local security reports and operator-supplied history replacement files
+.security-local/
+gitleaks-report.*
+results.sarif
 
 # vercel
 .vercel

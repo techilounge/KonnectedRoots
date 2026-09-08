@@ -257,6 +257,81 @@ test('credential mutation writes only metadata and audits, pins new version and 
   assert.equal(destroyed[0],provider.secretVersion);
   assert.equal([...values.keys()].filter(k=>k.startsWith('audit_logs/')).length,2);
 });
+test('all providers deny credential save and removal to non-super-admin claims before vault access', async () => {
+  for (const role of ['admin', 'user', undefined]) {
+    for (const providerId of ['google','deepseek','openrouter','openai','anthropic','custom']) {
+      for (const operation of ['save','remove']) {
+        let accesses = 0;
+        const l = loader({
+          '@/lib/firebase/admin': {adminAuth:{verifyIdToken:async()=>({uid:'fixture',admin:role==='admin',role})}},
+          '@/lib/ai/config': {loadProviders:async()=>{accesses++;return []; }},
+          '@/lib/ai/secrets': {addSecretVersion:async()=>{accesses++;},destroySecretVersion:async()=>{accesses++;}},
+        });
+        await assert.rejects(()=>l('src/app/admin/ai-configuration/actions.ts').mutateCredential('token',{
+          providerId,operation,key:'synthetic-credential-only',
+        }),/Insufficient administrator role/);
+        assert.equal(accesses,0);
+      }
+    }
+  }
+});
+test('configuration returned to admins never includes vault payloads or version references', async () => {
+  const marker = 'synthetic-private-payload';
+  for (const role of ['admin','super_admin']) {
+    const l = loader({
+      '@/lib/firebase/admin': {adminAuth:{verifyIdToken:async()=>({uid:'fixture',role})},adminDb:{collection:()=>({get:async()=>({docs:[]})})}},
+      '@/lib/ai/config': {loadControl:async()=>config(),loadProviders:async()=>[{providerId:'openrouter',enabled:true,credentialConfigured:true,credentialFingerprint:'000000000000',credentialSource:'vault',secretVersion:'test-version',key:marker,payload:marker}]},
+      '@/lib/ai/telemetry': {readUsage:async()=>({})},
+    });
+    const result = await l('src/app/admin/ai-configuration/actions.ts').getAIConfiguration('token');
+    assert.equal(result.providers[0].secretVersion,null);
+    assert.equal(JSON.stringify(result).includes(marker),false);
+    assert.equal(JSON.stringify(result).includes('test-version'),false);
+  }
+});
+test('failed rotation preserves the previous version and destroys the unpublished version', async () => {
+  const {db,values} = fakeDb(); const destroyed = []; const auditEvents = [];
+  const provider = {providerId:'openrouter',secretVersion:'old-version',credentialConfigured:true,credentialSource:'vault'};
+  values.set('ai_providers/openrouter',provider);
+  const original = db.runTransaction; let count = 0;
+  db.runTransaction = fn => ++count === 2 ? Promise.reject(new Error('synthetic-sensitive-error')) : original(fn);
+  const l = loader({
+    '@/lib/firebase/admin': {adminDb:db,adminAuth:{verifyIdToken:async()=>({uid:'super',role:'super_admin'})}},
+    'firebase-admin/firestore': {FieldValue:{serverTimestamp:()=> 'now',delete:()=> null}},
+    '@/lib/ai/config': {loadProviders:async()=>[provider]},
+    '@/lib/ai/secrets': {addSecretVersion:async()=> 'new-version',destroySecretVersion:async(_id,v)=>destroyed.push(v),fingerprint:()=> 'fixture-digest'},
+    '@/lib/ai/telemetry': {audit:async(...args)=>auditEvents.push(args)},
+  });
+  await assert.rejects(()=>l('src/app/admin/ai-configuration/actions.ts').mutateCredential('token',{
+    providerId:'openrouter',operation:'save',key:'synthetic-private-payload',
+  }),error=>error.message==='Credential update failed. Check Secret Manager setup and IAM.');
+  assert.equal(values.get('ai_providers/openrouter').secretVersion,'old-version');
+  assert.deepEqual(destroyed,['new-version']);
+  assert.equal(JSON.stringify([...values.values(),auditEvents]).includes('synthetic-private-payload'),false);
+});
+test('connection tests return sanitized status and do not persist provider error contents', async () => {
+  const {db,values} = fakeDb(); const audits = [];
+  const provider = {providerId:'openrouter',secretVersion:null,lastSuccessfulTest:null};
+  const l = loader({
+    '@/lib/firebase/admin': {adminDb:db,adminAuth:{verifyIdToken:async()=>({uid:'admin',role:'admin'})}},
+    '@/lib/ai/config': {loadProviders:async()=>[provider]},
+    '@/lib/ai/providers': {getProvider:async()=>({testConnection:async()=>{throw new Error('synthetic-private-payload');}})},
+    '@/lib/ai/telemetry': {audit:async(...args)=>audits.push(args)},
+  });
+  const result = await l('src/app/admin/ai-configuration/actions.ts').testProvider('token','openrouter');
+  assert.deepEqual(result,{status:'connection_failed'});
+  assert.equal(JSON.stringify([result,...values.values(),audits]).includes('synthetic-private-payload'),false);
+});
+test('AI server modules and public environment references keep credential boundaries explicit', () => {
+  for (const name of ['secrets','config','gateway','telemetry']) {
+    assert.match(fs.readFileSync(`src/lib/ai/${name}.ts`,'utf8'),/^import 'server-only';/);
+  }
+  const walk = directory => fs.readdirSync(directory,{withFileTypes:true}).flatMap(entry=>entry.isDirectory()?walk(path.join(directory,entry.name)):[path.join(directory,entry.name)]);
+  for (const file of walk('src').filter(file=>/\.[jt]sx?$/.test(file))) {
+    const refs = fs.readFileSync(file,'utf8').match(/NEXT_PUBLIC_[A-Z0-9_]+/g) || [];
+    for (const ref of refs) assert.doesNotMatch(ref,/NEXT_PUBLIC_(?:GEMINI|GOOGLE_API|OPENAI|OPENROUTER|ANTHROPIC|DEEPSEEK|FIREBASE_SERVICE_ACCOUNT|STRIPE_SECRET|STRIPE_WEBHOOK|RESEND|VERCEL_TOKEN)/,file);
+  }
+});
 test('Google adapter separates generated image price from reported total tokens', async () => {
   const l=loader({'./http':{tokens:n=>typeof n==='number'?n:null,requestJson:async()=>({candidates:[{content:{parts:[{text:'Restored'},{inlineData:{data:'synthetic',mimeType:'image/png'}}]}}],usageMetadata:{promptTokenCount:30,candidatesTokenCount:1140,thoughtsTokenCount:10,candidatesTokensDetails:[{modality:'TEXT',tokenCount:20},{modality:'IMAGE',tokenCount:1120}]}})}});
   const p=l('src/lib/ai/providers/google.ts').googleProvider('synthetic');

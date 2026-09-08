@@ -11,7 +11,8 @@
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
     "set-admin": "node scripts/set-admin.mjs",
-    "test": "node --test --test-isolation=none scripts/*.test.cjs"
+    "test": "node --test --test-isolation=none scripts/*.test.cjs",
+    "security:secrets": "gitleaks git . --config=.gitleaks.toml --log-opts=--all --redact=100 --max-decode-depth=3 --no-banner"
   },
   "dependencies": {
     "@genkit-ai/googleai": "^1.27.0",

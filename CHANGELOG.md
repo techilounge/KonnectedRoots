@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — P0 security closure preparation
+
+- Added pinned Gitleaks and CodeQL workflows, decoded/redacted history scans, a local security scan command and nested dependency/environment ignores.
+- Added source/dependency audits, secure development and GitHub setup instructions, vault review, header review, manual history cleanup and private-visibility plans, and a CONTAINED incident record.
+- Expanded AI credential tests for role enforcement, response projection, failed rotation cleanup, sanitized connection errors and public environment boundaries.
+- Untracked Functions dependencies/generated output without deleting local files. Gitleaks uses tested PR/push ranges; full-history auditing is an explicit manual option while revoked historical material awaits remediation.
+- No shared history rewrite, production credential rotation, IAM changes or visibility change performed. Remote workflow activation and owner history verification remain required.
+
 ## Unreleased — Multi-provider AI control plane
 
 - Added server-only adapters for Gemini, DeepSeek, OpenRouter, OpenAI, Anthropic and custom OpenAI-compatible endpoints, with capability-aware feature routing and privacy policies.
