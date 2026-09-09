@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — P0/P1 dependency remediation
+
+- Upgraded Next.js to 16.3.4 while preserving React 18.3.1; upgraded jsPDF, Sharp, PostCSS, Firebase and Genkit parents and refreshed compatible transitive dependencies.
+- Aligned Firebase Admin on 13.10.0 and Functions on 7.3.2, preserving the declared Node 20 runtime. Replaced the deprecated unused Google Genkit plugin with its supported successor.
+- Removed all audited critical findings and all Functions high findings. Root retains 12 high findings (seven production) in current Genkit/OpenTelemetry/CLI parents; documented reachability, controls and future upgrade requirements without audit suppression or unsafe major overrides.
+- Added raster-to-PDF, GEDCOM, checkout and portal regressions and portable Functions test discovery for Node 20 on Windows. Fixed the layout-history loader declaration surfaced by updated lint rules.
+- See [dependency remediation results](docs/security/DEPENDENCY_REMEDIATION_2026-09-09.md) and [complete high/critical inventory](docs/security/DEPENDENCY_INVENTORY_2026-09-09.md). Vercel Preview, CodeQL and Gitleaks passed for the remediation commit; authenticated browser verification requires preview sign-in. No merge or history changes.
+
 ## Unreleased — P0 security closure preparation
 
 - Added pinned Gitleaks and CodeQL workflows, decoded/redacted history scans, a local security scan command and nested dependency/environment ignores.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
     Dialog,
     DialogContent,
@@ -56,13 +56,7 @@ export default function LayoutHistoryDialog({
     const [snapshotToDelete, setSnapshotToDelete] = useState<LayoutSnapshot | null>(null);
     const { toast } = useToast();
 
-    useEffect(() => {
-        if (isOpen && treeId) {
-            loadSnapshots();
-        }
-    }, [isOpen, treeId]);
-
-    const loadSnapshots = async () => {
+    const loadSnapshots = useCallback(async () => {
         setLoading(true);
         try {
             const data = await getLayoutSnapshots(treeId);
@@ -77,7 +71,13 @@ export default function LayoutHistoryDialog({
         } finally {
             setLoading(false);
         }
-    };
+    }, [treeId, toast]);
+
+    useEffect(() => {
+        if (isOpen && treeId) {
+            void loadSnapshots();
+        }
+    }, [isOpen, treeId, loadSnapshots]);
 
     const handleConfirmRestore = async () => {
         if (!snapshotToRestore) return;
