@@ -1,8 +1,28 @@
-# P0 security validation — 2026-09-08
+# Security validation — PR #3 final documentation
 
-> Superseded dependency evidence (2026-09-09): the fresh post-rewrite checkout's network-backed audits reproduced 112 root / 96 production / 29 Functions findings. The zero-audit entries below are historical and must not be used as current evidence. See [dependency remediation](DEPENDENCY_REMEDIATION_2026-09-09.md) and its complete inventory for the new results and unresolved release gates. The owner reports the history rewrite completed; this task does not rerun or modify it. A read-only scan reports three existing GCP API-key findings in public configuration locations, requiring owner reconciliation; no private-key finding was reported.
+## Current PR #3 state
 
-## Local results
+Authenticated Vercel Preview testing is complete. The owner accepts the seven documented residual production-high Genkit/OpenTelemetry findings for this release, subject to vulnerable exporters/propagators remaining unused/disabled, no public telemetry/metrics listener, no runtime preload of vulnerable auto-instrumentation, and tracking upstream patched parent releases. This is conditional risk acceptance, not a clean npm audit. No audit ignores, overrides or suppressions are added.
+
+| Audit scope | Total | High | Critical |
+| --- | --- | --- | --- |
+| Root | 67 | 12 | 0 |
+| Root production | 62 | 7 | 0 |
+| Functions | 9 | 0 | 0 |
+
+Root installation, typecheck, lint (zero errors, 48 warnings) and 50 tests passed. Functions installation/compilation and four tests passed on Node 20. Vercel Preview, CodeQL and Gitleaks passed for the tested remediation. The local Next build still requires configured Firebase Admin credentials to complete page-data collection; the configured Preview build succeeded.
+
+Authenticated dashboard/admin access, AI Configuration, the synthetic OCR controlled test, disposable tree creation, person editing/persistence and undo/redo passed. Export options rendered; PDF download/open/content confirmation has not yet been recorded. The owner reports manual deletion of the disposable regression tree. The `Tree Not Found` dynamic-route browser-title issue is a non-blocking Phase 1 metadata defect. Stripe/Functions evidence is compilation and mocked regression testing, not live payment or deployed Functions end-to-end verification.
+
+See [dependency remediation](DEPENDENCY_REMEDIATION_2026-09-09.md) for preserved test evidence, release conditions and the full inventory link. PR #3 remains unmerged. This finalization changes documentation only.
+
+The owner reports the history rewrite completed; this task does not rerun or modify it. A read-only scan reports three existing GCP API-key findings in public configuration locations, requiring owner reconciliation; no private-key finding was reported. Dependency risk acceptance does not close that separate incident record.
+
+## Historical P0 validation — 2026-09-08 (superseded)
+
+The following records describe the earlier P0 preparation task, not the current PR state. Its zero-audit reports and unexecuted-history-cleanup steps are superseded by the current results above and must not be used as current evidence or instructions to repeat the rewrite.
+
+### Historical local results
 
 | Check | Result |
 | --- | --- |
@@ -21,7 +41,7 @@
 
 Official Gitleaks 8.30.1 was downloaded to a temporary directory and verified against the official release SHA-256 checksums. Reports are redacted and stored outside the repository. A new synthetic fingerprint initially triggered the generic-key heuristic; the fixture was replaced with a clearly synthetic zero digest and re-scanned successfully. No real-key allowlist was added.
 
-## Completion and manual next steps
+### Historical completion and manual next steps
 
 P0 is **not CLOSED and not fully complete**. Current code-side controls and the manual cleanup plan are prepared, but a full configured build and historical cleanup are not yet proven. Final pre-commit cleanup is being published on `security/p0-closure`, without merging to master or rewriting history. Existing successful deployments are not evidence that these new workflow files have run.
 
