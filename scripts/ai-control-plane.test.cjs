@@ -15,7 +15,8 @@ function loader(mocks = {}, globals = {}) {
       if (name === 'server-only') return {};
       if (name.startsWith('@/') || name.startsWith('.')) {
         let target = name.startsWith('@/') ? path.resolve('src', name.slice(2)) : path.resolve(path.dirname(file), name);
-        if (!path.extname(target)) target = fs.existsSync(target + '.ts') ? target + '.ts' : path.join(target, 'index.ts');
+        if (!fs.existsSync(target)) target = fs.existsSync(target + '.ts') ? target + '.ts' : path.join(target, 'index.ts');
+        if (fs.statSync(target).isDirectory()) target = path.join(target, 'index.ts');
         return load(target);
       }
       return require(name);

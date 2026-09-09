@@ -1,3 +1,4 @@
+import { functionsEnv } from './config';
 /**
  * Stripe Checkout & Portal Session Handlers for KonnectedRoots
  * 
@@ -20,18 +21,18 @@ const db = admin.firestore();
 let _stripe: Stripe | null = null;
 function getStripe(): Stripe {
     if (!_stripe) {
-        _stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+        _stripe = new Stripe(functionsEnv.stripeSecretKey);
     }
     return _stripe;
 }
 
 // Stripe Price IDs (set via environment or secrets)
 const STRIPE_PRICES = {
-    pro_monthly: process.env.STRIPE_PRICE_PRO_MONTHLY || "",
-    pro_yearly: process.env.STRIPE_PRICE_PRO_YEARLY || "",
-    family_monthly: process.env.STRIPE_PRICE_FAMILY_MONTHLY || "",
-    family_yearly: process.env.STRIPE_PRICE_FAMILY_YEARLY || "",
-    ai_pack_monthly: process.env.STRIPE_PRICE_AI_PACK || "",
+    pro_monthly: functionsEnv.prices.pro_monthly,
+    pro_yearly: functionsEnv.prices.pro_yearly,
+    family_monthly: functionsEnv.prices.family_monthly,
+    family_yearly: functionsEnv.prices.family_yearly,
+    ai_pack_monthly: functionsEnv.prices.ai_pack_monthly,
 };
 
 interface CreateCheckoutRequest {
@@ -221,8 +222,8 @@ export const createCheckoutSession = onCall(
             client_reference_id: uid,
             mode: "subscription",
             line_items: lineItems,
-            success_url: successUrl || `${process.env.APP_URL || "https://konnectedroots.app"}/dashboard?checkout=success`,
-            cancel_url: cancelUrl || `${process.env.APP_URL || "https://konnectedroots.app"}/pricing?checkout=canceled`,
+            success_url: successUrl || `${functionsEnv.appUrl}/dashboard?checkout=success`,
+            cancel_url: cancelUrl || `${functionsEnv.appUrl}/pricing?checkout=canceled`,
             metadata: {
                 kr_uid: uid,
                 kr_plan: plan,
@@ -333,7 +334,7 @@ export const createPortalSession = onCall(
 
         try {
             // Create portal session
-            const returnUrl = `${process.env.APP_URL || "https://konnectedroots.app"}/settings/billing`;
+            const returnUrl = `${functionsEnv.appUrl}/settings/billing`;
             const session = await getStripe().billingPortal.sessions.create({
                 customer: customerId,
                 return_url: returnUrl,

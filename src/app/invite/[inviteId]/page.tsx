@@ -23,17 +23,7 @@ import { Loader2, TreeDeciduous, Check, X, LogIn } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
 
-interface Invitation {
-    id: string;
-    treeId: string;
-    treeName: string;
-    inviterUid: string;
-    inviterName: string;
-    inviteeEmail: string;
-    inviteeUid?: string;
-    role: 'viewer' | 'editor' | 'manager';
-    status: 'pending' | 'accepted' | 'declined';
-}
+import type { Invitation } from '@/types/invitations';
 
 interface InvitePageProps {
     params: Promise<{ inviteId: string }>;

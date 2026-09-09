@@ -12,7 +12,7 @@ KonnectedRoots is an enterprise-grade, full-stack genealogy platform built with 
 - **Interactive Visual Tree Builder**: Real-time family tree canvas with pan/zoom, auto-layout, node editing, relationships, and full Undo/Redo command stack.
 - **GEDCOM 5.5.1 Interoperability**: Full import and export compatible with Ancestry, MyHeritage, and FamilySearch.
 - **AI-Powered Genealogical Intelligence**: AI biography generator, ancestral handwriting/document OCR text extraction, historical photo restoration, through the server-only AI gateway. Relationship Finder is deterministic and consumes zero AI credits.
-- **Collaboration**: Invite family members via email with role-based access control (`owner`, `editor`, `viewer`).
+- **Collaboration**: Invite family members via email with role-based access control (`owner`, `manager`, `editor`, `viewer`).
 - **Platform Admin Portal (`/admin`)**: Complete command center for managing users, trees, subscriptions, Gemini AI quotas, system-wide broadcast banners, feature killswitches, and immutable security audit logs.
 
 ---
@@ -21,12 +21,12 @@ KonnectedRoots is an enterprise-grade, full-stack genealogy platform built with 
 
 | Layer | Technologies |
 |---|---|
-| **Framework** | Next.js 16.1.1 (React 18.3, App Router, Turbopack) |
+| **Framework** | Next.js 16.3.4 (React 18.3, App Router, Turbopack) |
 | **Language & Types** | TypeScript 5 (strict type-checking) |
 | **Styling & UI** | Tailwind CSS, Radix UI Primitives, Lucide React icons, `class-variance-authority`, `clsx`, `tailwind-merge` |
 | **Visualizations** | Recharts 2.15 (Area, Bar, Donut charts for executive analytics) |
-| **Client Auth & DB** | Firebase SDK v11.10 (`firebase/auth`, `firebase/firestore`, `firebase/storage`) |
-| **Server Operations** | Firebase Admin SDK v12.2 (`firebase-admin`) |
+| **Client Auth & DB** | Firebase SDK v12.18 (`firebase/auth`, `firebase/firestore`, `firebase/storage`) |
+| **Server Operations** | Firebase Admin SDK v13.10 (`firebase-admin`) |
 | **Billing & Payments** | Stripe Node SDK (Live Mode subscriptions: Free, Pro $9.99/mo, Family $19.99/mo) |
 | **GenAI Models** | Configurable Google, DeepSeek, OpenRouter, OpenAI, Anthropic and compatible-provider adapters (`src/lib/ai`) |
 | **Email Service** | Resend API with custom branded HTML email templates |
@@ -46,7 +46,7 @@ KonnectedRoots/
 │   ├── app/                      # Next.js App Router routes
 │   │   ├── page.tsx              # Public landing page
 │   │   ├── layout.tsx            # Root layout with global JSON-LD schemas & broadcast banner
-│   │   ├── sitemap.ts            # Dynamic /sitemap.xml generator (protocol 0.9)
+│   │   ├── sitemap.ts            # Deterministic public /sitemap.xml (no Admin credentials)
 │   │   ├── robots.ts             # Dynamic /robots.txt with crawl directives
 │   │   ├── actions.ts            # Public server actions (contact messages, relationships)
 │   │   ├── admin/                # Platform Admin Portal
@@ -73,13 +73,13 @@ KonnectedRoots/
 │   │   └── (auth)/               # login, signup, forgot-password, invite/[inviteId]
 │   ├── components/
 │   │   ├── admin/                # AdminSidebar, AdminHeader, AdminPagination
-│   │   ├── tree/                 # FamilyTreeCanvas, NodeEditor, ShareDialog, UndoRedo
+│   │   ├── tree/                 # FamilyTreeCanvasPlaceholder, NodeEditorDialog, ShareDialog, ExportDialog
 │   │   ├── shared/               # Header, Footer, Logo, SystemBroadcastBanner
 │   │   ├── seo/                  # JsonLd.tsx (XSS-safe structured data injector)
 │   │   └── ui/                   # Radix UI wrapper primitives (button, dialog, select, etc.)
 │   ├── hooks/
 │   │   ├── useAuth.tsx           # Context hook providing user, profile, isAdmin, isSuperAdmin
-│   │   ├── useToast.ts           # Toast notifications system
+│   │   ├── use-toast.ts           # Toast notifications system
 │   │   └── useUndoRedo.ts        # Canvas undo/redo state manager
 │   ├── lib/
 │   │   ├── firebase/
@@ -134,7 +134,7 @@ npm run set-admin your-email@example.com admin
 ## 6. SEO, Crawl Budget & Google Search Console Guide
 
 - **Canonical Domain**: `https://konnectedroots.app` (matches GSC property `sc-domain:konnectedroots.app`).
-- **Dynamic Sitemap**: [`src/app/sitemap.ts`](file:///c:/Users/Precision%207560/APPs/KonnectedRoots/src/app/sitemap.ts) serves `/sitemap.xml` with priority weighting, change frequencies, and dynamically queried public family trees.
+- **Public sitemap**: src/app/sitemap.ts lists eight deterministic marketing/legal routes without Firestore or Admin credentials; authenticated tree URLs are excluded.
 - **Crawl Directives**: [`src/app/robots.ts`](file:///c:/Users/Precision%207560/APPs/KonnectedRoots/src/app/robots.ts) serves `/robots.txt` strictly disallowing private routes (`/admin/*`, `/dashboard/*`, `/settings/*`, `/profile/*`, `/login`, `/signup`, `/forgot-password`, `/invite/*`, `/api/*`).
 - **Dynamic Public Tree Indexing**: [`src/app/tree/[treeId]/layout.tsx`](file:///c:/Users/Precision%207560/APPs/KonnectedRoots/src/app/tree/[treeId]/layout.tsx) inspects tree visibility:
   - If `visibility === 'public'`: Generates custom title, description, and canonical URL.
@@ -162,17 +162,9 @@ npm run set-admin your-email@example.com admin
    ```
    Verifies Next.js Turbopack compilation and page static optimization across all 29+ routes.
 3. **Git Branching Workflow**:
-   - `master` is the primary production branch connected to Vercel production deployments.
-   - `preview/platform-admin-portal` and `preview/confirmation-dialogs` are preview branches.
-   - When merging, fast-forward merge into `master` and keep preview branches in sync:
-     ```bash
-     git checkout master
-     git push origin master
-     git checkout preview/platform-admin-portal
-     git merge master
-     git push origin preview/platform-admin-portal
-     git checkout master
-     ```
+   - Start from current master, use a feature/fix/refactor branch, run checks, and open a draft PR.
+   - Validate Vercel Preview, CodeQL/Gitleaks and authenticated behavior, then obtain review for an owner-approved squash merge and production smoke test.
+   - Never merge automatically or force-push master. Functions/rules deployments are separate deliberate operations.
 4. **Icons**: Always verify icons exist in `lucide-react` before importing.
 5. **Confirmation Dialogs**: Any destructive action (deleting nodes, changing user plans, suspending accounts, granting credits, signing out) **must** be wrapped in an `AlertDialog` confirmation to prevent accidental clicks.
 6. **Live Search**: Search inputs should implement real-time debouncing (280–300ms), a clear button `(X)`, URL param synchronization (`?q=`), and automatic reset to Page 1.
@@ -199,6 +191,18 @@ npm run set-admin your-email@example.com admin
 - AI provider secrets are server-only. Google Secret Manager is the credential vault; Google's legacy server environment migration fallback must never become public configuration.
 - Stripe webhook signing secret is managed through Firebase Functions Secrets and bound to the webhook function. Never commit its value.
 - GitHub Secret Scanning, Push Protection and Gitleaks are required controls. Run `npm run security:secrets` with the documented Gitleaks CLI installed; review staged changes and run the staged scan in docs/security/SECURE_DEVELOPMENT.md.
-- Read docs/security/GIT_HISTORY_REMEDIATION.md before history cleanup. Never automatically force-push, delete remote branches, rotate production credentials or change visibility. Incident remains CONTAINED until owner verification closes it.
+- Read docs/security/GIT_HISTORY_REMEDIATION.md before history cleanup. Never automatically force-push, delete remote branches, rotate production credentials or change visibility. P0 is CLOSED; do not repeat history remediation.
 - See docs/security/validation-results.md for scan/build limitations. Workflow files are not evidence of active remote checks until pushed and run.
 - The root Next.js `tsconfig.json` excludes `functions/src`; Firebase Functions are compiled from `functions/tsconfig.json` with their own dependencies and predeploy build.
+
+## Phase 1 architecture guidance
+
+- Read docs/architecture/SYSTEM_ARCHITECTURE.md, ROUTE_FUNCTION_INVENTORY.md and BOUNDARY_REPORT.md for actual runtime/data boundaries and retained exceptions.
+- Public config is src/lib/config/env.client.ts; index.ts exports only public config. Server consumers explicitly import the guarded env.server.ts. Functions use their own functions/src/config.ts on Node 20.
+- See docs/configuration/ENVIRONMENT_VARIABLES.md before configuring a runtime. Browser settings must identify one project; Admin service-account project or ADC is authoritative. No hardcoded Admin project fallback remains.
+- Tree URLs can be slugs or document IDs. Anonymous private/missing/error metadata stays generic and noindex; the authenticated snapshot updates the browser title without an extra private read. Never expose private titles through anonymous metadata.
+- P0 credential remediation is CLOSED. Accepted dependency findings remain documented; do not reopen history cleanup without new evidence, weaken scanners or hide public browser-key findings.
+- Personal GEDCOM exports are ignored. Do not print family/person data in diagnostics. Only clearly synthetic fixtures belong in tests.
+- Public assets, legacy Firebase Hosting/CORS configuration and deployed inert Functions are retained pending owner confirmation; lack of a source import alone is not deletion authorization.
+- Domain Invitation is in src/types/invitations.ts; billing/AI types remain in their domains. Persisted team-plan, timestamp and entitlement drift is Phase 2 work, not a silent migration.
+- The separate full-tree PDF/PNG fix is PR #4; it was not in Phase 1's starting master. Do not duplicate it or claim large-tree exports are fixed by this cleanup.

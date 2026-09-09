@@ -37,18 +37,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { db } from '@/lib/firebase/clients';
 import { collection, addDoc, query, where, getDocs, getDoc, deleteDoc, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 
-interface Invitation {
-  id: string;
-  treeId: string;
-  treeName: string;
-  inviterUid: string;
-  inviterName: string;
-  inviteeEmail: string;
-  inviteeUid?: string | null;
-  role: 'viewer' | 'editor' | 'manager';
-  status: 'pending' | 'accepted' | 'declined';
-  createdAt: any;
-}
+import type { Invitation } from '@/types/invitations';
 
 interface ShareDialogProps {
   isOpen: boolean;

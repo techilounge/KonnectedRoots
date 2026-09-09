@@ -30,6 +30,7 @@ import { handleFindRelationship } from '@/app/actions';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { saveLayoutSnapshot } from '@/lib/layout-history';
 import { Download } from 'lucide-react';
+import { authenticatedTreeTitle } from '@/lib/trees/metadata';
 
 
 export default function TreeEditorPage() {
@@ -178,6 +179,7 @@ export default function TreeEditorPage() {
     };
 
     setIsLoading(true);
+    document.title = authenticatedTreeTitle(null);
 
     // Create refs inside useEffect to avoid dependency issues
     const treeDocRef = doc(db, 'trees', treeId);
@@ -187,11 +189,16 @@ export default function TreeEditorPage() {
     const treeUnsubscribe = onSnapshot(treeDocRef, (docSnap) => {
       if (docSnap.exists()) {
         setTreeData({ id: docSnap.id, ...docSnap.data() } as FamilyTree);
+        document.title = authenticatedTreeTitle(docSnap.data() as FamilyTree);
       } else {
+        document.title = authenticatedTreeTitle(null);
+        setTreeData(null);
         toast({ variant: "destructive", title: "Error", description: "This tree does not exist or you don't have permission to view it." });
         setIsLoading(false);
       }
     }, (error) => {
+      document.title = authenticatedTreeTitle(null);
+      setTreeData(null);
       console.error("Error fetching tree details:", error);
       toast({ variant: "destructive", title: "Error", description: "Could not load tree details." });
       setIsLoading(false);
@@ -212,6 +219,7 @@ export default function TreeEditorPage() {
     });
 
     return () => {
+      document.title = authenticatedTreeTitle(null);
       treeUnsubscribe();
       peopleUnsubscribe();
     };

@@ -20,6 +20,11 @@ node_modules/
 # misc
 .DS_Store
 *.pem
+/.modified
+# Personal genealogy exports belong outside source control.
+*.ged
+*.gedcom
+!tests/fixtures/synthetic/*.ged
 
 # debug
 npm-debug.log*

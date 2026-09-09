@@ -1,3 +1,4 @@
+import { functionsEnv } from './config';
 /**
  * Centralized Email Sending Utility for KonnectedRoots
  * 
@@ -18,6 +19,7 @@ export interface SendEmailResult {
     success: boolean;
     emailId?: string;
     error?: string;
+    retryable?: boolean;
 }
 
 // Lazy-initialize Resend client
@@ -25,7 +27,7 @@ let _resend: Resend | null = null;
 
 function getResend(): Resend | null {
     if (!_resend) {
-        const apiKey = process.env.RESEND_API_KEY;
+        const apiKey = functionsEnv.resendApiKey;
         if (!apiKey) {
             logger.error("RESEND_API_KEY is not set");
             return null;
@@ -63,26 +65,27 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
         });
 
         if (error) {
-            logger.error("Resend API error:", error);
+            logger.error("Resend delivery failed", { operation: 'send_email', code: 'provider_rejected' });
             return {
                 success: false,
-                error: error.message || "Unknown Resend error"
+                error: "Email delivery failed.",
+                retryable: !(error.message?.includes('invalid') || error.message?.includes('not found'))
             };
         }
 
-        logger.info(`Email sent successfully to ${toAddresses.join(", ")}: ${data?.id}`);
+        logger.info("Email sent successfully", { emailId: data?.id, recipientCount: toAddresses.length });
 
         return {
             success: true,
             emailId: data?.id
         };
     } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Unknown error";
-        logger.error("Error sending email:", err);
+        logger.error("Email delivery failed", { operation: 'send_email', code: 'transport_failure' });
 
         return {
             success: false,
-            error: errorMessage
+            error: "Email delivery failed.",
+            retryable: !(err instanceof Error && (err.message.includes('invalid') || err.message.includes('not found')))
         };
     }
 }
@@ -110,7 +113,7 @@ export async function sendEmailWithRetry(
         lastError = result.error;
 
         // Don't retry on permanent errors
-        if (result.error?.includes("invalid") || result.error?.includes("not found")) {
+        if (result.retryable === false) {
             break;
         }
 

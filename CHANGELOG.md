@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — Phase 1 repository and architecture cleanup
+
+- Centralized public/guarded server environment reads and standalone Node 20 Functions configuration; preserved dependency locks and credential/secret bindings.
+- Fixed slug-based tree titles: anonymous private/missing metadata stays generic, public metadata resolves IDs/slugs, and authorized snapshots update the browser title. Added privacy/failure regression tests.
+- Made the public sitemap deterministic and database-free, allowing a local production build without private Firebase Admin credentials.
+- Removed the accidental empty marker, potentially personal root GEDCOM export, unused Genkit initializer and empty auth route-group layout. Personal GEDCOM exports are ignored; no history rewrite was performed.
+- Removed genealogy debug dumps, sanitized provider-backed action/email failures, consolidated Invitation types and documented retained schema/endpoint/configuration debt.
+- Replaced the starter README, refreshed AGENTS guidance, and added architecture, environment, route/Function, baseline and remediation reports. Full-tree export remains the separate PR #4 fix.
+
 ## Unreleased — P0/P1 dependency remediation
 
 - Upgraded Next.js to 16.3.4 while preserving React 18.3.1; upgraded jsPDF, Sharp, PostCSS, Firebase and Genkit parents and refreshed compatible transitive dependencies.

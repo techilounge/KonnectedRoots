@@ -1,3 +1,4 @@
+import { functionsEnv } from './config';
 /**
  * Email Templates for KonnectedRoots
  * 
@@ -11,7 +12,7 @@ const DARK_GREEN = "#1A643F";
 const ACCENT_GREEN = "#2F855A";
 
 // Base URL for links
-const BASE_URL = "https://konnectedroots.app";
+const BASE_URL = functionsEnv.appUrl;
 
 export interface EmailContent {
     subject: string;

@@ -1,3 +1,4 @@
+import 'server-only';
 import { adminAuth, adminDb } from '@/lib/firebase/admin';
 import * as admin from 'firebase-admin';
 import { getCurrentMonthKey, getAIAllowance, AI_ACTION_WEIGHTS, PLAN_LIMITS } from './constants';

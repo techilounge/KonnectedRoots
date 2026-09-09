@@ -200,11 +200,9 @@ function parseIndividualLine(
             // Custom KonnectedRoots position tags
             case '_XPOS':
                 indi.x = parseInt(value, 10);
-                console.log('[GEDCOM Parser] Parsed _XPOS:', value, '-> x:', indi.x, 'for', indi.firstName);
                 break;
             case '_YPOS':
                 indi.y = parseInt(value, 10);
-                console.log('[GEDCOM Parser] Parsed _YPOS:', value, '-> y:', indi.y, 'for', indi.firstName);
                 break;
             case '_PHOTO':
                 indi.photoUrl = value;
@@ -261,11 +259,9 @@ function parseFamilyLine(
     if (level === 1) {
         switch (tag) {
             case 'HUSB':
-                console.log(`[GEDCOM Parser] FAM ${fam.id}: Found HUSB tag, raw value="${value}", extracted="${extractId(value)}"`);
                 fam.husbandId = extractId(value);
                 break;
             case 'WIFE':
-                console.log(`[GEDCOM Parser] FAM ${fam.id}: Found WIFE tag, raw value="${value}", extracted="${extractId(value)}"`);
                 fam.wifeId = extractId(value);
                 break;
             case 'CHIL':
@@ -374,15 +370,6 @@ export function convertToPeople(
 ): Omit<Person, 'createdAt' | 'updatedAt'>[] {
     const { individuals, families } = parseResult;
 
-    // Debug logging for import
-    console.log('=== GEDCOM IMPORT START ===');
-    console.log(`[Import] Parsed ${individuals.length} individuals, ${families.length} families`);
-
-    // Log parsed families
-    families.forEach((fam, i) => {
-        console.log(`[Import] Family ${i + 1} (${fam.id}): HUSB=${fam.husbandId || 'none'}, WIFE=${fam.wifeId || 'none'}, Children=${fam.childrenIds.join(', ') || 'none'}`);
-    });
-
     // Build a map of GEDCOM ID to Person
     const idMap = new Map<string, string>(); // gedcomId -> new firestore-style id
 
@@ -409,7 +396,6 @@ export function convertToPeople(
         // Calculate offset to shift all positions to start from (100, 100)
         offsetX = 100 - minX;
         offsetY = 100 - minY;
-        console.log('[GEDCOM Convert] Position normalization:', { minX, minY, offsetX, offsetY });
     }
 
     // First pass: create base person objects
@@ -464,7 +450,6 @@ export function convertToPeople(
     people.forEach(p => personMap.set(p.id, p));
 
     // Second pass: apply relationships from FAM records
-    console.log('[GEDCOM Convert] Processing relationships from', families.length, 'families');
     for (const fam of families) {
         const husbandNewId = fam.husbandId ? idMap.get(fam.husbandId) : undefined;
         const wifeNewId = fam.wifeId ? idMap.get(fam.wifeId) : undefined;
@@ -506,18 +491,6 @@ export function convertToPeople(
             }
         }
     }
-
-    // Log final person relationships
-    console.log('[Import] Final person relationships:');
-    people.forEach((p, i) => {
-        console.log(`[Import] Person ${i + 1}: ${p.firstName} ${p.lastName}`);
-        console.log(`  - parentId1: ${p.parentId1 || 'none'}`);
-        console.log(`  - parentId2: ${p.parentId2 || 'none'}`);
-        console.log(`  - spouseIds: ${(p.spouseIds || []).join(', ') || 'none'}`);
-        console.log(`  - childrenIds: ${(p.childrenIds || []).join(', ') || 'none'}`);
-        console.log(`  - position: x=${p.x}, y=${p.y}`);
-    });
-    console.log('=== GEDCOM IMPORT END ===');
 
     return people;
 }

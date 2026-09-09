@@ -6,19 +6,6 @@
 import type { Person } from '@/types';
 
 export function generateGedcom(people: Person[], treeName: string): string {
-    // Debug logging for export
-    console.log('=== GEDCOM EXPORT START ===');
-    console.log(`[Export] Tree: ${treeName}, People count: ${people.length}`);
-
-    // Log each person's relationships
-    people.forEach((p, i) => {
-        console.log(`[Export] Person ${i + 1}: ${p.firstName} ${p.lastName} (ID: ${p.id})`);
-        console.log(`  - parentId1: ${p.parentId1 || 'none'}`);
-        console.log(`  - parentId2: ${p.parentId2 || 'none'}`);
-        console.log(`  - spouseIds: ${(p.spouseIds || []).join(', ') || 'none'}`);
-        console.log(`  - childrenIds: ${(p.childrenIds || []).join(', ') || 'none'}`);
-        console.log(`  - position: x=${p.x}, y=${p.y}`);
-    });
 
     const lines: string[] = [];
     const today = new Date().toISOString().split('T')[0].replace(/-/g, ' ');
@@ -154,14 +141,12 @@ export function generateGedcom(people: Person[], treeName: string): string {
     // Create FAM records for families
     for (const [key, famId] of familyMap) {
         const [id1, id2] = key.split('-');
-        console.log(`[Export] Building FAM ${famId}: key="${key}", id1="${id1}", id2="${id2}"`);
 
         lines.push(`0 ${famId} FAM`);
 
         // Find parents
         const parent1 = people.find(p => p.id === id1);
         const parent2 = people.find(p => p.id === id2);
-        console.log(`[Export] FAM ${famId}: parent1=${parent1?.firstName || 'NOT FOUND'} (${id1}), parent2=${parent2?.firstName || 'NOT FOUND'} (${id2})`);
 
         // Assign HUSB/WIFE based on gender
         // Determine the roles based on available gender info
@@ -194,11 +179,9 @@ export function generateGedcom(people: Person[], treeName: string): string {
         }
 
         if (parent1 && parent1Tag) {
-            console.log(`[Export] FAM ${famId}: Writing ${parent1Tag} for ${parent1.firstName} (gender=${parent1.gender})`);
             lines.push(`1 ${parent1Tag} @I${parent1.id}@`);
         }
         if (parent2 && parent2Tag) {
-            console.log(`[Export] FAM ${famId}: Writing ${parent2Tag} for ${parent2.firstName} (gender=${parent2.gender})`);
             lines.push(`1 ${parent2Tag} @I${parent2.id}@`);
         }
 
@@ -209,8 +192,6 @@ export function generateGedcom(people: Person[], treeName: string): string {
             return parents.length > 0 && parents.join('-') === familyParents.join('-');
         });
 
-        console.log(`[Export] Family ${famId}: children=${children.map(c => c.firstName).join(', ') || 'none'}`);
-
         for (const child of children) {
             lines.push(`1 CHIL @I${child.id}@`);
         }
@@ -218,9 +199,6 @@ export function generateGedcom(people: Person[], treeName: string): string {
 
     // Trailer
     lines.push('0 TRLR');
-
-    console.log(`[Export] Generated ${familyMap.size} families`);
-    console.log('=== GEDCOM EXPORT END ===');
 
     return lines.join('\n');
 }

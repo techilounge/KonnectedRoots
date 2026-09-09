@@ -1,3 +1,4 @@
+import { clientEnv } from '@/lib/config/env.client';
 /**
  * Plan Limits & Constants for KonnectedRoots Pricing
  * 
@@ -73,11 +74,11 @@ export const MAX_FILE_SIZE_BYTES = 5 * MB;
  * These are placeholders - update after creating products in Stripe
  */
 export const STRIPE_PRICES = {
-    pro_monthly: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_MONTHLY || '',
-    pro_yearly: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_YEARLY || '',
-    family_monthly: process.env.NEXT_PUBLIC_STRIPE_PRICE_FAMILY_MONTHLY || '',
-    family_yearly: process.env.NEXT_PUBLIC_STRIPE_PRICE_FAMILY_YEARLY || '',
-    ai_pack_monthly: process.env.NEXT_PUBLIC_STRIPE_PRICE_AI_PACK || '',
+    pro_monthly: clientEnv.stripePrices.pro_monthly,
+    pro_yearly: clientEnv.stripePrices.pro_yearly,
+    family_monthly: clientEnv.stripePrices.family_monthly,
+    family_yearly: clientEnv.stripePrices.family_yearly,
+    ai_pack_monthly: clientEnv.stripePrices.ai_pack_monthly,
 };
 
 /**

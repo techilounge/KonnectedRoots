@@ -1,3 +1,4 @@
+import { functionsEnv } from './config';
 /**
  * Import function triggers from their respective submodules:
  *
@@ -228,7 +229,7 @@ export const sendInvitationEmail = onDocumentWritten(
     const treeTitle = treeDoc.exists ? treeDoc.data()?.title : 'a Family Tree';
 
     // Use production URL for email links
-    const inviteUrl = `https://konnectedroots.app/invite/${event.params.inviteId}`;
+    const inviteUrl = `${functionsEnv.appUrl}/invite/${event.params.inviteId}`;
 
     // Generate branded email using template
     const email = treeInviteEmail(

@@ -22,6 +22,7 @@ test('payment_succeeded sends the existing email once; invoice.paid sends none',
     'firebase-functions/logger': {info(){},warn(){},error(){}},
     'firebase-admin': {apps:[{}],firestore: () => db},
     stripe: Stripe,
+    './config': {functionsEnv: require('../lib/config').functionsConfig({STRIPE_SECRET_KEY:'fixture',STRIPE_WEBHOOK_SECRET:'fixture'})},
     './sendEmail': {sendEmail: async value => emails.push(value)},
     './emailTemplates': {paymentSuccessEmail: (...args) => {templates.push(args);return {subject:'Success',html:'fixture'};}},
   };
