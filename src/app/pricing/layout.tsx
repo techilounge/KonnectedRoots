@@ -47,18 +47,18 @@ const pricingSchema = {
     {
       '@type': 'Offer',
       name: 'Pro Plan',
-      price: '9.99',
+      price: '5.99',
       priceCurrency: 'USD',
       priceValidUntil: '2027-12-31',
-      description: '10 family trees, up to 1,000 members per tree, 100 monthly AI credits, full GEDCOM import/export, photo restoration.',
+      description: 'Unlimited trees and people, 200 monthly AI actions, full GEDCOM import/export, photo restoration.',
     },
     {
       '@type': 'Offer',
       name: 'Family Plan',
-      price: '19.99',
+      price: '9.99',
       priceCurrency: 'USD',
       priceValidUntil: '2027-12-31',
-      description: '50 family trees, up to 5,000 members per tree, 300 monthly AI credits, 5 family collaboration seats.',
+      description: 'Six family seats, 20 collaborators, 600 pooled monthly AI actions and 100GB shared storage.',
     },
   ],
 };

@@ -36,6 +36,24 @@ service firebase.storage {
       );
     }
 
+    // Storage quota is evaluated against the server-owned user billing/usage
+    // fields. The browser cannot raise either field through Firestore rules.
+    function quotaBytes(uid) {
+      let user = firestore.get(/databases/(default)/documents/users/$(uid)).data;
+      let hasBilling = user.keys().hasAny(['billing']);
+      let paid = hasBilling && (user.billing.status == 'active' || user.billing.status == 'trialing');
+      return paid && user.billing.plan == 'family' ? 100 * 1024 * 1024 * 1024 :
+             paid && user.billing.plan == 'pro' ? 50 * 1024 * 1024 * 1024 :
+             1 * 1024 * 1024 * 1024;
+    }
+
+    function withinQuota(uid) {
+      let user = firestore.get(/databases/(default)/documents/users/$(uid)).data;
+      let hasUsage = user.keys().hasAny(['usage']) && user.usage.keys().hasAny(['storageUsedBytes']);
+      let usedBytes = hasUsage ? user.usage.storageUsedBytes : 0;
+      return usedBytes + request.resource.size <= quotaBytes(uid);
+    }
+
     // Profile photos & media for people inside trees
     match /trees/{treeId}/people/{personId}/{fileName} {
       // SECURITY NOTE: Currently public read for shared tree previews and exports.
@@ -44,15 +62,18 @@ service firebase.storage {
       allow read: if true;
 
       // User must have edit rights to the tree
-      allow write: if canEditTree(treeId) && isImage() && under5MB();
+      allow create, update: if canEditTree(treeId) && isImage() && under5MB() && withinQuota(firestore.get(/databases/(default)/documents/trees/$(treeId)).data.ownerId);
+      allow delete: if canEditTree(treeId);
     }
 
     // (Optional but recommended) add a Storage rule for user avatars
     match /users/{uid}/profile/{fileName} {
       allow read: if true; // or authed() if you prefer private
-      allow write: if authed() && request.auth.uid == uid
+      allow create, update: if authed() && request.auth.uid == uid
                    && request.resource.size < 5 * 1024 * 1024
-                   && request.resource.contentType.matches('image/.*');
+                   && request.resource.contentType.matches('image/.*')
+                   && withinQuota(uid);
+      allow delete: if authed() && request.auth.uid == uid;
     }
   }
 }

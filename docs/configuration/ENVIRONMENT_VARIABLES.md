@@ -14,11 +14,6 @@ Use `.env.example` as a list of placeholders, not a working credential file. Loc
 | NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID | Client, public | Optional for current Auth/Firestore/Storage features; supply registered web-app value | env.client → firebase/clients |
 | NEXT_PUBLIC_FIREBASE_APP_ID | Client, public | Required for browser use | env.client → firebase/clients |
 | NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION | Client/server, public verification token | Optional; only environments intended for search verification | env.client → app/layout |
-| NEXT_PUBLIC_STRIPE_PRICE_PRO_MONTHLY | Client, public catalog ID | Optional; needed if a client catalog consumer uses it | env.client → billing/constants |
-| NEXT_PUBLIC_STRIPE_PRICE_PRO_YEARLY | Client, public catalog ID | Same | env.client → billing/constants |
-| NEXT_PUBLIC_STRIPE_PRICE_FAMILY_MONTHLY | Client, public catalog ID | Same | env.client → billing/constants |
-| NEXT_PUBLIC_STRIPE_PRICE_FAMILY_YEARLY | Client, public catalog ID | Same | env.client → billing/constants |
-| NEXT_PUBLIC_STRIPE_PRICE_AI_PACK | Client, public catalog ID | Same; not an authorization source | env.client → billing/constants |
 | FIREBASE_SERVICE_ACCOUNT | Server/CLI, private credential | Required on Vercel when Admin operations execute; raw JSON or Base64 supported by Next runtime. Omit entirely for local ADC; an explicitly empty/invalid value fails closed. Not required for static sitemap/build | env.server → firebase/admin; set-admin.mjs accepts raw JSON only |
 | GOOGLE_APPLICATION_CREDENTIALS | Server/CLI, sensitive local identity-file path | Optional explicit ADC/workload identity outside Vercel; no file contents committed | env.server → firebase/admin; Google SDK/CLI |
 | AI_SECRET_PROJECT_ID | Server, private configuration (not a key) | Required when vault-backed AI credentials are used | env.server → ai/secrets |
@@ -35,11 +30,11 @@ Use `.env.example` as a list of placeholders, not a working credential file. Loc
 | STRIPE_SECRET_KEY | Functions, secret | Required only when Stripe operations execute; existing Functions secret bindings preserved | functions/config → stripeBilling, stripeWebhook |
 | STRIPE_WEBHOOK_SECRET | Functions, secret | Required for webhook signature verification; existing secret binding preserved | functions/config → stripeWebhook |
 | RESEND_API_KEY | Functions, secret | Required for successful email delivery; missing value returns explicit failure | functions/config → sendEmail |
-| STRIPE_PRICE_PRO_MONTHLY | Functions, public catalog ID | Required to enable corresponding checkout product | functions/config → stripeBilling |
-| STRIPE_PRICE_PRO_YEARLY | Functions, public catalog ID | Same | functions/config → stripeBilling |
-| STRIPE_PRICE_FAMILY_MONTHLY | Functions, public catalog ID | Same | functions/config → stripeBilling |
-| STRIPE_PRICE_FAMILY_YEARLY | Functions, public catalog ID | Same | functions/config → stripeBilling |
-| STRIPE_PRICE_AI_PACK | Functions, public catalog ID | Required for AI-pack purchase | functions/config → stripeBilling |
+| STRIPE_PRICE_PRO_MONTHLY | Functions, server-only catalog ID | Required to enable corresponding checkout product; never expose to the browser or trust a browser price | functions/config → billingCatalog → stripeBilling |
+| STRIPE_PRICE_PRO_YEARLY | Functions, server-only catalog ID | Same | functions/config → billingCatalog → stripeBilling |
+| STRIPE_PRICE_FAMILY_MONTHLY | Functions, server-only catalog ID | Same | functions/config → billingCatalog → stripeBilling |
+| STRIPE_PRICE_FAMILY_YEARLY | Functions, server-only catalog ID | Same | functions/config → billingCatalog → stripeBilling |
+| STRIPE_PRICE_AI_PACK | Functions, server-only catalog ID | Required for AI-pack purchase; never expose to the browser | functions/config → billingCatalog → stripeBilling |
 | GITHUB_EVENT_PATH | CI, runner path | Required by secret scan range CLI | scripts/security-scan-range.cjs |
 | GITHUB_EVENT_NAME | CI, public event name | Required by secret scan range CLI | scripts/security-scan-range.cjs |
 | GITHUB_OUTPUT | CI, runner output path | Required by secret scan range CLI | scripts/security-scan-range.cjs |

@@ -5,7 +5,7 @@
 // Plan types
 export type Plan = 'free' | 'pro' | 'family';
 export type BillingInterval = 'month' | 'year' | null;
-export type BillingStatus = 'none' | 'active' | 'trialing' | 'past_due' | 'canceled';
+export type BillingStatus = 'none' | 'active' | 'trialing' | 'past_due' | 'unpaid' | 'canceled' | 'incomplete' | 'incomplete_expired' | 'paused';
 export type FamilyRole = 'owner' | 'member';
 export type SeatStatus = 'active' | 'invited';
 

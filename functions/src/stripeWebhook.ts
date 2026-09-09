@@ -1,416 +1,224 @@
 import { functionsEnv } from './config';
-/**
- * Stripe Webhook Handler for KonnectedRoots
- * 
- * Handles Stripe events and syncs subscription status to Firestore.
- * Based on Implementation_pack.md specification.
- */
+import { isSupportedWebhookType } from './billingCatalog';
+import { onRequest } from 'firebase-functions/v2/https';
+import * as logger from 'firebase-functions/logger';
+import Stripe from 'stripe';
+import * as admin from 'firebase-admin';
+import { sendEmail } from './sendEmail';
+import { paymentSuccessEmail, paymentFailedEmail } from './emailTemplates';
 
-import { onRequest } from "firebase-functions/v2/https";
-import * as logger from "firebase-functions/logger";
-import Stripe from "stripe";
-import * as admin from "firebase-admin";
-import { sendEmail } from "./sendEmail";
-import { paymentSuccessEmail, paymentFailedEmail } from "./emailTemplates";
-
-// Ensure Firebase Admin is initialized
-if (!admin.apps.length) {
-    admin.initializeApp();
-}
-
-// Lazy-initialize Firestore to avoid timeout during deployment
-function getDb() {
-    return admin.firestore();
-}
-
-// Initialize Stripe lazily (secrets not available at deploy time)
-let _stripe: Stripe | null = null;
+if (!admin.apps.length) admin.initializeApp();
+function getDb() { return admin.firestore(); }
+let stripe: Stripe | null = null;
 function getStripe(): Stripe {
-    if (!_stripe) {
-        _stripe = new Stripe(functionsEnv.stripeSecretKey);
-    }
-    return _stripe;
+  if (!stripe) stripe = new Stripe(functionsEnv.stripeSecretKey);
+  return stripe;
 }
 
-/**
- * Normalize Stripe subscription status to our billing status
- */
-function normalizeStripeStatus(status: Stripe.Subscription.Status): string {
-    switch (status) {
-        case "active":
-            return "active";
-        case "trialing":
-            return "trialing";
-        case "past_due":
-        case "unpaid":
-            return "past_due";
-        case "canceled":
-        case "incomplete_expired":
-            return "canceled";
-        default:
-            return "none";
-    }
+export function normalizeStripeStatus(status: Stripe.Subscription.Status): string {
+  switch (status) {
+    case 'active': return 'active';
+    case 'trialing': return 'trialing';
+    case 'past_due':
+    case 'unpaid': return 'past_due';
+    case 'canceled':
+    case 'incomplete_expired': return 'canceled';
+    case 'incomplete': return 'incomplete';
+    case 'paused': return 'paused';
+    default: return 'none';
+  }
 }
 
-/**
- * Extract plan and addons from subscription items
- */
-function mapSubscriptionToPlan(sub: Stripe.Subscription): {
-    plan: "free" | "pro" | "family";
-    interval: "month" | "year" | null;
-    addons: { aiPack: boolean };
-} {
-    let plan: "free" | "pro" | "family" = "free";
-    let interval: "month" | "year" | null = null;
-    let aiPack = false;
-
-    for (const item of sub.items.data) {
-        const price = item.price;
-        const md = (price.metadata || {}) as Record<string, string>;
-
-        if (md.kr_plan === "pro") {
-            plan = "pro";
-            interval = (price.recurring?.interval as "month" | "year") || null;
-        }
-        if (md.kr_plan === "family") {
-            plan = "family";
-            interval = (price.recurring?.interval as "month" | "year") || null;
-        }
-        if (md.kr_addon === "ai_pack") {
-            aiPack = true;
-        }
-    }
-
-    return { plan, interval, addons: { aiPack } };
+export function shouldApplyBillingEvent(latestProcessed: number, incomingCreated: number): boolean {
+  return incomingCreated >= latestProcessed;
 }
 
-/**
- * Update user billing in Firestore
- */
-async function upsertUserBilling(
-    uid: string,
-    billing: {
-        plan: "free" | "pro" | "family";
-        status: string;
-        interval: "month" | "year" | null;
-        addons: { aiPack: boolean };
-        stripeCustomerId: string;
-        stripeSubscriptionId: string;
-        currentPeriodEnd: number;
-        cancelAtPeriodEnd: boolean;
+export function mapSubscriptionToPlan(sub: Stripe.Subscription) {
+  let plan: 'free' | 'pro' | 'family' = 'free';
+  let interval: 'month' | 'year' | null = null;
+  let priceId: string | null = null;
+  let aiPack = false;
+  const subscriptionMetadata = (sub.metadata || {}) as Record<string, string>;
+  if (subscriptionMetadata.kr_plan === 'pro' || subscriptionMetadata.kr_plan === 'family') plan = subscriptionMetadata.kr_plan;
+  if (subscriptionMetadata.kr_interval === 'month' || subscriptionMetadata.kr_interval === 'year') interval = subscriptionMetadata.kr_interval;
+  for (const item of sub.items.data) {
+    const price = item.price;
+    const md = (price.metadata || {}) as Record<string, string>;
+    if (md.kr_plan === 'pro' || md.kr_plan === 'family') {
+      plan = md.kr_plan;
+      interval = interval || (price.recurring?.interval as 'month' | 'year') || null;
+      priceId = price.id;
     }
-) {
-    const userRef = getDb().collection("users").doc(uid);
-    await userRef.set(
-        {
-            billing: {
-                plan: billing.plan,
-                status: billing.status,
-                stripeCustomerId: billing.stripeCustomerId,
-                stripeSubscriptionId: billing.stripeSubscriptionId,
-                currentPeriodEnd: billing.currentPeriodEnd,
-                cancelAtPeriodEnd: billing.cancelAtPeriodEnd,
-                interval: billing.interval,
-                addons: billing.addons,
-                updatedAt: Date.now(),
-            },
-        },
-        { merge: true }
-    );
-
-    logger.info(`Updated billing for user ${uid}: plan=${billing.plan}, status=${billing.status}`);
+    if (md.kr_addon === 'ai_pack') aiPack = true;
+  }
+  return { plan, interval, priceId, addons: { aiPack } };
 }
 
-/**
- * Update family billing in Firestore
- */
-async function upsertFamilyBilling(
-    familyId: string,
-    billing: {
-        status: string;
-        addons: { aiPack: boolean };
-        stripeCustomerId: string;
-        stripeSubscriptionId: string;
-        currentPeriodEnd: number;
-        cancelAtPeriodEnd: boolean;
-    }
-) {
-    const famRef = getDb().collection("families").doc(familyId);
-    await famRef.set(
-        {
-            plan: {
-                status: billing.status,
-                stripeCustomerId: billing.stripeCustomerId,
-                stripeSubscriptionId: billing.stripeSubscriptionId,
-                currentPeriodEnd: billing.currentPeriodEnd,
-                seatLimit: 6,
-                addons: billing.addons,
-                updatedAt: Date.now(),
-            },
-        },
-        { merge: true }
-    );
-
-    logger.info(`Updated billing for family ${familyId}: status=${billing.status}`);
+async function claimEvent(event: Stripe.Event): Promise<boolean> {
+  const ref = getDb().collection('billing_events').doc(event.id);
+  const ledger = { eventId: event.id, eventType: event.type, stripeCreated: event.created * 1000, receivedAt: Date.now(), status: 'processing' };
+  const database = getDb() as any;
+  if (typeof database.runTransaction === 'function') {
+    let claimed = false;
+    await database.runTransaction(async (tx: any) => {
+      const existing = await tx.get(ref);
+      if (existing.exists) {
+        if (existing.data()?.status === 'failed') {
+          tx.update(ref, ledger);
+          claimed = true;
+        }
+        return;
+      }
+      tx.create(ref, ledger);
+      claimed = true;
+    });
+    return claimed;
+  }
+  const existing = await ref.get();
+  if (existing.exists) {
+    if (existing.data?.()?.status !== 'failed') return false;
+    await ref.set(ledger, { merge: true });
+    return true;
+  }
+  await ref.set(ledger);
+  return true;
 }
 
-/**
- * Stripe Webhook Handler
- * 
- * Listens for Stripe events and syncs to Firestore.
- */
-export const stripeWebhook = onRequest(
-    {
-        region: "us-central1",
-        secrets: ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"],
-    },
-    async (req, res) => {
-        // Only accept POST
-        if (req.method !== "POST") {
-            res.status(405).send("Method Not Allowed");
-            return;
-        }
+async function completeEvent(event: Stripe.Event, fields: Record<string, unknown> = {}) {
+  await getDb().collection('billing_events').doc(event.id).update({ ...fields, status: 'processed', processedAt: Date.now() });
+}
 
-        let event: Stripe.Event;
+function periodEnd(subscription: Stripe.Subscription): number {
+  const value = (subscription as any).current_period_end ?? (subscription as any).currentPeriodEnd ?? 0;
+  return Number(value) * 1000;
+}
 
-        // 1) Verify signature (must use raw body)
-        const sig = req.headers["stripe-signature"] as string;
-        try {
-            event = getStripe().webhooks.constructEvent(
-                (req as any).rawBody,
-                sig,
-                functionsEnv.stripeWebhookSecret
-            );
-        } catch (err) {
-            logger.error("Webhook signature verification failed:", err);
-            res.status(400).send(`Webhook Error: ${(err as Error).message}`);
-            return;
-        }
+async function updateBillingIfNewer(uid: string, eventCreated: number, billing: Record<string, unknown>) {
+  const ref = getDb().collection('users').doc(uid);
+  const snap = await ref.get();
+  const previous = snap.data()?.billing || {};
+  if (!shouldApplyBillingEvent(Number(previous.latestStripeEventCreated || 0), eventCreated)) return false;
+  await ref.set({ billing: { ...billing, latestStripeEventCreated: eventCreated, updatedAt: Date.now() } }, { merge: true });
+  return true;
+}
 
-        // 2) Idempotency guard
-        const eventRef = getDb().collection("billing_events").doc(event.id);
-        const existing = await eventRef.get();
-        if (existing.exists) {
-            logger.info(`Event ${event.id} already processed`);
-            res.status(200).send("Already processed");
-            return;
-        }
+async function updateFamilyIfNewer(familyId: string, eventCreated: number, plan: Record<string, unknown>) {
+  const ref = getDb().collection('families').doc(familyId);
+  const snap = await ref.get();
+  const previous = snap.data()?.plan || {};
+  if (!shouldApplyBillingEvent(Number(previous.latestStripeEventCreated || 0), eventCreated)) return false;
+  await ref.set({ plan: { ...plan, latestStripeEventCreated: eventCreated, updatedAt: Date.now() } }, { merge: true });
+  return true;
+}
 
-        // 3) Store event stub immediately
-        await eventRef.set({
-            eventId: event.id,
-            type: event.type,
-            receivedAt: Date.now(),
-            processed: false,
-        });
+async function handleSubscription(event: Stripe.Event, subscription: Stripe.Subscription) {
+  const customer = await getStripe().customers.retrieve(subscription.customer as string) as Stripe.Customer;
+  const uid = (customer.metadata?.kr_uid || '').trim();
+  const familyId = (customer.metadata?.kr_family_id || '').trim() || null;
+  if (!uid && !familyId) throw new Error('Stripe customer is not mapped to a KonnectedRoots account.');
+  const mapped = mapSubscriptionToPlan(subscription);
+  const deleted = event.type === 'customer.subscription.deleted';
+  const status = deleted ? 'canceled' : normalizeStripeStatus(subscription.status);
+  const common = {
+    status,
+    stripeCustomerId: customer.id,
+    stripeSubscriptionId: subscription.id,
+    currentPeriodEnd: periodEnd(subscription),
+    cancelAtPeriodEnd: Boolean((subscription as any).cancel_at_period_end ?? (subscription as any).cancelAtPeriodEnd),
+    interval: deleted ? null : mapped.interval,
+    priceId: deleted ? null : mapped.priceId,
+    addons: deleted ? { aiPack: false } : mapped.addons,
+    plan: deleted ? 'free' : mapped.plan,
+  };
+  const eventCreated = event.created * 1000;
+  const updated = uid ? await updateBillingIfNewer(uid, eventCreated, common) : false;
+  if (familyId) await updateFamilyIfNewer(familyId, eventCreated, { ...common, seatLimit: 6 });
+  return updated;
+}
 
-        try {
-            // 4) Handle subscription events
-            switch (event.type) {
-                case "checkout.session.completed": {
-                    const session = event.data.object as Stripe.Checkout.Session;
-                    logger.info(`Checkout completed for session ${session.id}`);
-                    // Subscription events will handle the actual billing update
-                    break;
-                }
+async function recordAIPackGrant(event: Stripe.Event, invoice: Stripe.Invoice, customerId: string) {
+  const lines = (invoice as any).lines?.data || [];
+  const hasPack = lines.some((line: any) => line.price?.metadata?.kr_addon === 'ai_pack');
+  if (!hasPack) return;
+  const customer = await getStripe().customers.retrieve(customerId) as Stripe.Customer;
+  const uid = customer.metadata?.kr_uid;
+  if (!uid) return;
+  const ref = getDb().collection('ai_pack_grants').doc(event.id);
+  const existing = await ref.get();
+  if (!existing.exists) {
+    // The active recurring add-on derives +1,000 allowance. This ledger makes the
+    // qualifying invoice grant auditable and prevents duplicate delivery effects.
+    await ref.set({ eventId: event.id, uid, invoiceId: invoice.id, actions: 1000, createdAt: Date.now() });
+    await getDb().collection('users').doc(uid).set({ billing: { aiPackLastGrantedEventId: event.id } }, { merge: true });
+  }
+}
 
-                case "customer.subscription.created":
-                case "customer.subscription.updated":
-                case "customer.subscription.deleted": {
-                    const sub = event.data.object as Stripe.Subscription;
-
-                    // Fetch customer to get kr_uid / kr_family_id
-                    const customer = (await getStripe().customers.retrieve(
-                        sub.customer as string
-                    )) as Stripe.Customer;
-
-                    const uid = (customer.metadata?.kr_uid || "").trim();
-                    const familyId = (customer.metadata?.kr_family_id || "").trim() || null;
-
-                    // Determine plan + addons from subscription items
-                    const { plan, interval, addons } = mapSubscriptionToPlan(sub);
-
-                    const status = normalizeStripeStatus(sub.status);
-                    // Cast to any to handle SDK type differences
-                    const subData = sub as any;
-                    const currentPeriodEnd = (subData.current_period_end || subData.currentPeriodEnd || 0) * 1000;
-                    const cancelAtPeriodEnd = subData.cancel_at_period_end ?? subData.cancelAtPeriodEnd ?? false;
-
-                    if (familyId) {
-                        await upsertFamilyBilling(familyId, {
-                            status,
-                            addons,
-                            stripeCustomerId: customer.id,
-                            stripeSubscriptionId: sub.id,
-                            currentPeriodEnd,
-                            cancelAtPeriodEnd: cancelAtPeriodEnd,
-                        });
-
-                        // Also update owner's user billing to reflect family membership
-                        if (uid) {
-                            await upsertUserBilling(uid, {
-                                plan: "family",
-                                status,
-                                interval,
-                                addons,
-                                stripeCustomerId: customer.id,
-                                stripeSubscriptionId: sub.id,
-                                currentPeriodEnd,
-                                cancelAtPeriodEnd: cancelAtPeriodEnd,
-                            });
-                        }
-                    } else {
-                        if (!uid) {
-                            throw new Error("Missing kr_uid for non-family subscription");
-                        }
-                        await upsertUserBilling(uid, {
-                            plan,
-                            status,
-                            interval,
-                            addons,
-                            stripeCustomerId: customer.id,
-                            stripeSubscriptionId: sub.id,
-                            currentPeriodEnd,
-                            cancelAtPeriodEnd: cancelAtPeriodEnd,
-                        });
-                    }
-
-                    break;
-                }
-
-                case "invoice.payment_failed": {
-                    const failedInvoice = event.data.object as Stripe.Invoice;
-                    logger.warn("Payment failed for invoice:", failedInvoice.id);
-
-                    // Send payment failed email
-                    try {
-                        const customerId = failedInvoice.customer as string;
-                        const customer = await getStripe().customers.retrieve(customerId) as Stripe.Customer;
-                        const uid = customer.metadata?.kr_uid;
-
-                        if (uid) {
-                            const userDoc = await getDb().collection("users").doc(uid).get();
-                            const userData = userDoc.data();
-
-                            if (userData?.email) {
-                                const amount = failedInvoice.amount_due
-                                    ? `$${(failedInvoice.amount_due / 100).toFixed(2)}`
-                                    : "your subscription";
-
-                                // Calculate retry date (typically 3-7 days)
-                                const retryDate = new Date();
-                                retryDate.setDate(retryDate.getDate() + 3);
-                                const formattedRetryDate = retryDate.toLocaleDateString("en-US", {
-                                    month: "long",
-                                    day: "numeric",
-                                    year: "numeric"
-                                });
-
-                                // Get Stripe billing portal URL
-                                const portalSession = await getStripe().billingPortal.sessions.create({
-                                    customer: customerId,
-                                    return_url: "https://konnectedroots.app/settings"
-                                });
-
-                                const email = paymentFailedEmail(
-                                    userData.displayName || userData.email,
-                                    amount,
-                                    formattedRetryDate,
-                                    portalSession.url
-                                );
-
-                                await sendEmail({
-                                    to: userData.email,
-                                    subject: email.subject,
-                                    html: email.html
-                                });
-
-                                logger.info(`Payment failed email sent to ${userData.email}`);
-                            }
-                        }
-                    } catch (emailError) {
-                        logger.error("Error sending payment failed email:", emailError);
-                    }
-                    break;
-                }
-
-                case "invoice.payment_succeeded": {
-                    const paidInvoice = event.data.object as Stripe.Invoice;
-                    logger.info("Invoice paid:", paidInvoice.id);
-
-                    // Send payment success email
-                    try {
-                        const customerId = paidInvoice.customer as string;
-                        const customer = await getStripe().customers.retrieve(customerId) as Stripe.Customer;
-                        const uid = customer.metadata?.kr_uid;
-
-                        if (uid) {
-                            const userDoc = await getDb().collection("users").doc(uid).get();
-                            const userData = userDoc.data();
-
-                            if (userData?.email) {
-                                // Determine plan name from billing
-                                let planName = "Pro";
-                                if (userData.billing?.plan === "family") {
-                                    planName = "Family";
-                                }
-                                if (userData.billing?.interval === "year") {
-                                    planName += " (Annual)";
-                                } else {
-                                    planName += " (Monthly)";
-                                }
-
-                                const amount = paidInvoice.amount_paid
-                                    ? `$${(paidInvoice.amount_paid / 100).toFixed(2)}`
-                                    : "Paid";
-
-                                // Calculate next billing date
-                                const nextBillingDate = userData.billing?.currentPeriodEnd
-                                    ? new Date(userData.billing.currentPeriodEnd).toLocaleDateString("en-US", {
-                                        month: "long",
-                                        day: "numeric",
-                                        year: "numeric"
-                                    })
-                                    : "Next billing cycle";
-
-                                const email = paymentSuccessEmail(
-                                    userData.displayName || userData.email,
-                                    planName,
-                                    amount,
-                                    nextBillingDate,
-                                    paidInvoice.hosted_invoice_url || undefined
-                                );
-
-                                await sendEmail({
-                                    to: userData.email,
-                                    subject: email.subject,
-                                    html: email.html
-                                });
-
-                                logger.info(`Payment success email sent to ${userData.email}`);
-                            }
-                        }
-                    } catch (emailError) {
-                        logger.error("Error sending payment success email:", emailError);
-                    }
-                    break;
-                }
-
-                default:
-                    logger.info(`Unhandled event type: ${event.type}`);
-                    break;
+export const stripeWebhook = onRequest({ region: 'us-central1', secrets: ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'] }, async (req, res) => {
+  if (req.method !== 'POST') { res.status(405).send('Method Not Allowed'); return; }
+  const signature = req.headers['stripe-signature'] as string | undefined;
+  let event: Stripe.Event;
+  try {
+    if (!signature || !(req as any).rawBody) throw new Error('Missing Stripe signature or raw body');
+    event = getStripe().webhooks.constructEvent((req as any).rawBody, signature, functionsEnv.stripeWebhookSecret);
+  } catch (error) {
+    logger.error('Webhook signature verification failed');
+    res.status(400).send(`Webhook Error: ${(error as Error).message}`);
+    return;
+  }
+  let claimed: boolean;
+  try { claimed = await claimEvent(event); } catch (error) { logger.error('Could not claim billing event'); res.status(500).send('Webhook ledger unavailable'); return; }
+  if (!claimed) { res.status(200).send('Already processed'); return; }
+  try {
+    if (isSupportedWebhookType(event.type)) {
+      switch (event.type) {
+        case 'customer.subscription.created':
+        case 'customer.subscription.updated':
+        case 'customer.subscription.deleted':
+          await handleSubscription(event, event.data.object as Stripe.Subscription);
+          break;
+        case 'invoice.payment_succeeded': {
+          const invoice = event.data.object as Stripe.Invoice;
+          await recordAIPackGrant(event, invoice, invoice.customer as string);
+          const customer = await getStripe().customers.retrieve(invoice.customer as string) as Stripe.Customer;
+          const uid = customer.metadata?.kr_uid;
+          if (uid) {
+            const user = await getDb().collection('users').doc(uid).get();
+            const data = user.data();
+            if (data?.email) {
+              const plan = data.billing?.plan === 'family' ? 'Family' : 'Pro';
+              const interval = data.billing?.interval === 'year' ? 'Annual' : 'Monthly';
+              const amount = (invoice as any).amount_paid ? `$${((invoice as any).amount_paid / 100).toFixed(2)}` : 'Paid';
+              const email = paymentSuccessEmail(data.displayName || data.email, `${plan} (${interval})`, amount, 'Next billing cycle', (invoice as any).hosted_invoice_url || undefined);
+              await sendEmail({ to: data.email, subject: email.subject, html: email.html });
             }
-
-            await eventRef.update({ processed: true, processedAt: Date.now() });
-            res.status(200).send("OK");
-        } catch (err) {
-            logger.error("Webhook handler error:", err);
-            await eventRef.update({
-                processed: false,
-                error: String(err),
-                processedAt: Date.now(),
-            });
-            res.status(500).send("Webhook handler error");
+          }
+          break;
         }
+        case 'invoice.payment_failed': {
+          const invoice = event.data.object as Stripe.Invoice;
+          const customer = await getStripe().customers.retrieve(invoice.customer as string) as Stripe.Customer;
+          const uid = customer.metadata?.kr_uid;
+          if (uid) {
+            const user = await getDb().collection('users').doc(uid).get();
+            const data = user.data();
+            if (data?.email) {
+              const amount = (invoice as any).amount_due ? `$${((invoice as any).amount_due / 100).toFixed(2)}` : 'your subscription';
+              const email = paymentFailedEmail(data.displayName || data.email, amount, new Date(Date.now() + 3 * 86400000).toLocaleDateString('en-US'), `${functionsEnv.appUrl}/settings/billing`);
+              await sendEmail({ to: data.email, subject: email.subject, html: email.html });
+            }
+          }
+          break;
+        }
+        case 'checkout.session.completed':
+          logger.info(`Checkout completed for session ${(event.data.object as Stripe.Checkout.Session).id}`);
+          break;
+      }
     }
-);
+    await completeEvent(event, { supported: isSupportedWebhookType(event.type) });
+    res.status(200).send('OK');
+  } catch (error) {
+    logger.error('Webhook handler error');
+    await getDb().collection('billing_events').doc(event.id).update({ status: 'failed', errorCode: 'processing_error', processedAt: Date.now() });
+    res.status(500).send('Webhook handler error');
+  }
+});

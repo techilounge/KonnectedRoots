@@ -53,21 +53,12 @@ const createUserProfileDocument = async (user: FirebaseUser, displayNameOverride
     const displayName = displayNameOverride || user.displayName;
     const createdAt = serverTimestamp();
 
-    const defaultEntitlements = {
-      maxTrees: 1,
-      maxPeoplePerTree: 50,
-      aiCreditsMonthly: 0,
-      exports: { pdf: false, png: false, gedcom: false }
-    };
-
     try {
       await setDoc(userRef, {
         uid,
         displayName: displayName ?? '',
         email: email ?? '',
         photoURL: photoURL ?? '',
-        plan: "free",
-        entitlements: defaultEntitlements,
         createdAt: createdAt,
         updatedAt: createdAt,
         lastActivityAt: createdAt,

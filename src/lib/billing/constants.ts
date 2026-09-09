@@ -1,4 +1,3 @@
-import { clientEnv } from '@/lib/config/env.client';
 /**
  * Plan Limits & Constants for KonnectedRoots Pricing
  * 
@@ -70,18 +69,6 @@ export const FAMILY_SEAT_LIMIT = 6; // owner + 5 members
 export const MAX_FILE_SIZE_BYTES = 5 * MB;
 
 /**
- * Stripe Price IDs (to be replaced with actual IDs after Stripe setup)
- * These are placeholders - update after creating products in Stripe
- */
-export const STRIPE_PRICES = {
-    pro_monthly: clientEnv.stripePrices.pro_monthly,
-    pro_yearly: clientEnv.stripePrices.pro_yearly,
-    family_monthly: clientEnv.stripePrices.family_monthly,
-    family_yearly: clientEnv.stripePrices.family_yearly,
-    ai_pack_monthly: clientEnv.stripePrices.ai_pack_monthly,
-};
-
-/**
  * Pricing display values (USD)
  */
 export const PRICING = {
@@ -92,7 +79,7 @@ export const PRICING = {
     },
     family: {
         monthly: 9.99,
-        yearly: 99.99,
+        yearly: 99,
         yearlySavings: '17%',
         seats: 6,
     },

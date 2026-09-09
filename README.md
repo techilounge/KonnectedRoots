@@ -12,7 +12,7 @@ Next.js 16.3.4, React 18.3.1 and TypeScript power the web app. Firebase provides
 | src/components, src/hooks | UI and browser subscriptions |
 | src/lib/config, src/lib/firebase | Public/private configuration and Firebase runtime boundaries |
 | src/lib/ai, src/ai/flows | Server gateway, adapters and feature wrappers |
-| src/lib/billing, src/types | Billing helpers and domain models |
+| src/lib/billing, src/types | Canonical plan limits, server-resolved billing view and domain models |
 | functions/src | Separate Node 20 backend; generated lib is ignored |
 | scripts, functions/tests | Regression tests and operator scripts |
 | docs/architecture, docs/configuration, docs/security | System map, setup and evidence |
@@ -59,3 +59,4 @@ Use exact Preview hostnames for temporary Firebase website/Auth authorization, n
 - [Boundary review](docs/architecture/BOUNDARY_REPORT.md)
 - [Phase 1 baseline](docs/architecture/PHASE1_BASELINE_2026-09-09.md) and [remediation report](docs/architecture/PHASE1_REMEDIATION_REPORT.md)
 - [AI control plane](docs/AI_CONTROL_PLANE.md) and [agent guide](AGENTS.md)
+- [Billing architecture](docs/billing/BILLING_ARCHITECTURE.md), [entitlement matrix](docs/billing/ENTITLEMENT_MATRIX.md) and [Phase 2 remediation report](docs/billing/PHASE2_REMEDIATION_REPORT.md)

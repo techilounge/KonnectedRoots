@@ -26,9 +26,7 @@ service cloud.firestore {
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['billing', 'usage', 'family', 'entitlements', 'plan', 'role', 'isPlatformAdmin'])
       );
       allow create: if request.auth != null && request.auth.uid == userId
-                    && (!request.resource.data.keys().hasAny(['billing']) || request.resource.data.billing.plan == 'free')
-                    && (!request.resource.data.keys().hasAny(['plan']) || request.resource.data.plan == 'free')
-                    && (!request.resource.data.keys().hasAny(['role']) || request.resource.data.role == 'user');
+                    && !request.resource.data.keys().hasAny(['billing', 'usage', 'family', 'entitlements', 'plan', 'role', 'isPlatformAdmin']);
     }
 
     // Rules for the 'trees' collection and its 'people' subcollection.
@@ -147,7 +145,10 @@ service cloud.firestore {
       }
       
       allow read: if isPlatformAdmin() || isFamilyOwner() || isFamilyMember();
-      allow update: if isPlatformAdmin() || isFamilyOwner();
+      // Stripe-synchronized plan/usage fields are server-owned. Owners may not
+      // self-upgrade or grant seats by editing the family billing document.
+      allow update: if isPlatformAdmin() || (isFamilyOwner() &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['plan', 'usage', 'ownerUid', 'createdAt']));
       allow create, delete: if isPlatformAdmin();
       
       match /seats/{seatId} {

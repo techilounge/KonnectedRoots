@@ -287,7 +287,8 @@ export default function ExportDialog({
 
             if (user) {
                 const token = await user.getIdToken();
-                await handleRecordExport(token);
+                const recorded = await handleRecordExport(token, 'png');
+                if (!recorded.success) throw new Error(recorded.error || 'Export is not available for this account.');
                 await refreshUserProfile();
             }
 
@@ -440,7 +441,8 @@ export default function ExportDialog({
 
             if (user) {
                 const token = await user.getIdToken();
-                await handleRecordExport(token);
+                const recorded = await handleRecordExport(token, 'pdf');
+                if (!recorded.success) throw new Error(recorded.error || 'Export is not available for this account.');
                 await refreshUserProfile();
             }
 
@@ -489,12 +491,13 @@ export default function ExportDialog({
         setExportStatus(prev => ({ ...prev, gedcom: 'loading' }));
 
         try {
-            downloadGedcom(people, treeName);
             if (user) {
                 const token = await user.getIdToken();
-                await handleRecordExport(token);
+                const authorized = await handleRecordExport(token, 'gedcom');
+                if (!authorized.success) throw new Error(authorized.error || 'GEDCOM export is not available for this account.');
                 await refreshUserProfile();
             }
+            downloadGedcom(people, treeName);
             setExportStatus(prev => ({ ...prev, gedcom: 'success' }));
             setTimeout(() => setExportStatus(prev => ({ ...prev, gedcom: 'idle' })), 2000);
             setShowWarningsDialog(false);
