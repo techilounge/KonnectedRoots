@@ -52,13 +52,13 @@ The separate full-tree PDF/PNG clipping fix remains PR #4. This branch does not 
 | Gitleaks current source | PASS, no findings; no scanner suppressions changed |
 | Remote CodeQL / PR secret scan / Vercel | PASS on implementation commit `a0d232a05f71cff3f37f623c9643273ea9d44a6a` in [draft PR #5](https://github.com/techilounge/KonnectedRoots/pull/5) |
 | Public Preview browser smoke | PASS: landing page, pricing, email/password and Google login controls render; signed-out admin displays Access Restricted. Actual login not yet exercised |
-| Authenticated Preview regression | Pending owner sign-in on the new Preview; no live charge or synthetic production mutation performed |
+| Authenticated Preview regression | PASS on owner-confirmed sign-in: synthetic tree add/edit/persistence, undo/redo, exports, admin, AI Configuration, OCR and signed-out admin restriction; no live charge |
 
 Added tests cover private/missing metadata equivalence, public slug/canonical resolution, ambiguity, transient failures, authorized title selection, database-free deterministic sitemap, public config isolation, safe logging, and lazy Functions settings. Existing provider/credential/Stripe tests remain. The test loader now supports dotted TypeScript filenames and directory entry points; security assertions were preserved.
 
 The initial Functions verification request was blocked by an automatic approval usage-limit error. After approval-backed commands became available again, the required Node 20 install/build/audit and seven tests completed. Sandbox-only child-process failures were rerun through the normal approval path; neither those failures nor the initial block is represented as a pass.
 
-Preview: https://konnectedroots-git-refactor-phase1-6f3faf-techilounges-projects.vercel.app. The owner has been asked to sign in for remaining authenticated regression. No hostname authorization was changed by this task. Current and staged Gitleaks scans passed; the routine existing full-history command retains three known public Firebase browser-key findings without suppression.
+Preview: https://konnectedroots-git-refactor-phase1-6f3faf-techilounges-projects.vercel.app. Owner-authenticated regression completed 2026-09-09. The browser title was `KonnectedRoots - Build & Share your Family Tree Online`; it did not show the false `Tree Not Found` title while the tree loaded. No hostname authorization was changed by this task. Current and staged Gitleaks scans passed; the routine existing full-history command retains three known public Firebase browser-key findings without suppression.
 
 The accepted seven production-high Genkit/OpenTelemetry findings remain under the same controls: unused/disabled exporters and propagators, no public telemetry listener, no runtime auto-instrumentation preload, and tracking patched parent releases. No new high/critical package or expanded telemetry reachability was introduced. npm audit is not clean.
 
@@ -76,6 +76,6 @@ The accepted seven production-high Genkit/OpenTelemetry findings remain under th
 
 ## Preview and production regression checklist
 
-On the draft Preview, verify Google login, email/password login, dashboard, tree open/title, add/edit/save, undo/redo, deterministic relationship finder, PDF and GEDCOM export, admin/users, admin/ai-configuration, synthetic OCR, pricing, and signed-out protected routes. Use a disposable synthetic tree and delete it afterward. Do not perform live charges. Record actual results separately from build status; only owner-authorized exact Preview hostnames may be temporarily added, with removal after testing.
+Owner-authenticated Preview verification passed: email/password session, dashboard, slug tree open, add/edit/save/reload, undo/redo, PDF and GEDCOM export, admin, AI Configuration/synthetic OCR, pricing, and signed-out protected-route behavior. The disposable `Phase1 Synthetic Regression 2026-09-09` tree was deleted after testing. Google login controls rendered; no new social-login session was initiated. No live charge was performed. The browser title remained the generic app title shown above, but the false `Tree Not Found` title was not observed.
 
 After owner review and squash merge, repeat production sign-in, dashboard/tree/title and admin/AI smoke checks. Functions deployment remains a separate deliberate operation. Outstanding Preview/production checks are release gates, not assumed successes.
