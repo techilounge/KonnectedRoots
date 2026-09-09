@@ -50,12 +50,15 @@ The separate full-tree PDF/PNG clipping fix remains PR #4. This branch does not 
 | Root production audit | Unchanged: 62 total, 55 moderate, 7 high, 0 critical; exit 1 |
 | Functions audit | Unchanged: 9 total, 9 moderate, 0 high, 0 critical; exit 1 |
 | Gitleaks current source | PASS, no findings; no scanner suppressions changed |
-| Remote CodeQL / PR secret scan / Vercel | To be checked on the published draft PR; do not infer remote results from local commands |
+| Remote CodeQL / PR secret scan / Vercel | PASS on implementation commit `a0d232a05f71cff3f37f623c9643273ea9d44a6a` in [draft PR #5](https://github.com/techilounge/KonnectedRoots/pull/5) |
+| Public Preview browser smoke | PASS: landing page, pricing, email/password and Google login controls render; signed-out admin displays Access Restricted. Actual login not yet exercised |
 | Authenticated Preview regression | Pending owner sign-in on the new Preview; no live charge or synthetic production mutation performed |
 
 Added tests cover private/missing metadata equivalence, public slug/canonical resolution, ambiguity, transient failures, authorized title selection, database-free deterministic sitemap, public config isolation, safe logging, and lazy Functions settings. Existing provider/credential/Stripe tests remain. The test loader now supports dotted TypeScript filenames and directory entry points; security assertions were preserved.
 
 The initial Functions verification request was blocked by an automatic approval usage-limit error. After approval-backed commands became available again, the required Node 20 install/build/audit and seven tests completed. Sandbox-only child-process failures were rerun through the normal approval path; neither those failures nor the initial block is represented as a pass.
+
+Preview: https://konnectedroots-git-refactor-phase1-6f3faf-techilounges-projects.vercel.app. The owner has been asked to sign in for remaining authenticated regression. No hostname authorization was changed by this task. Current and staged Gitleaks scans passed; the routine existing full-history command retains three known public Firebase browser-key findings without suppression.
 
 The accepted seven production-high Genkit/OpenTelemetry findings remain under the same controls: unused/disabled exporters and propagators, no public telemetry listener, no runtime auto-instrumentation preload, and tracking patched parent releases. No new high/critical package or expanded telemetry reachability was introduced. npm audit is not clean.
 

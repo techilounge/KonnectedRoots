@@ -27,7 +27,7 @@ KonnectedRoots is an enterprise-grade, full-stack genealogy platform built with 
 | **Visualizations** | Recharts 2.15 (Area, Bar, Donut charts for executive analytics) |
 | **Client Auth & DB** | Firebase SDK v12.18 (`firebase/auth`, `firebase/firestore`, `firebase/storage`) |
 | **Server Operations** | Firebase Admin SDK v13.10 (`firebase-admin`) |
-| **Billing & Payments** | Stripe Node SDK (Live Mode subscriptions: Free, Pro $9.99/mo, Family $19.99/mo) |
+| **Billing & Payments** | Stripe Node SDK in Functions; plan display/catalog constants in src/lib/billing/constants.ts |
 | **GenAI Models** | Configurable Google, DeepSeek, OpenRouter, OpenAI, Anthropic and compatible-provider adapters (`src/lib/ai`) |
 | **Email Service** | Resend API with custom branded HTML email templates |
 | **Hosting & Analytics** | Vercel (Production & Preview environments) + `@vercel/analytics` |
@@ -70,7 +70,7 @@ KonnectedRoots/
 │   │   ├── contact/              # Inbound customer contact form + ContactPage schema
 │   │   ├── profile/              # User account settings & AI credit monitor
 │   │   ├── settings/             # User settings & billing portal deep links
-│   │   └── (auth)/               # login, signup, forgot-password, invite/[inviteId]
+│   │   └── login/, signup/      # Auth pages; forgot-password/ and invite/[inviteId]/ are siblings
 │   ├── components/
 │   │   ├── admin/                # AdminSidebar, AdminHeader, AdminPagination
 │   │   ├── tree/                 # FamilyTreeCanvasPlaceholder, NodeEditorDialog, ShareDialog, ExportDialog
