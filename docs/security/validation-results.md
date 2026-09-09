@@ -1,5 +1,7 @@
 # P0 security validation — 2026-09-08
 
+> Superseded dependency evidence (2026-09-09): the fresh post-rewrite checkout's network-backed audits reproduced 112 root / 96 production / 29 Functions findings. The zero-audit entries below are historical and must not be used as current evidence. See [dependency remediation](DEPENDENCY_REMEDIATION_2026-09-09.md) and its complete inventory for the new results and unresolved release gates. The owner reports the history rewrite completed; this task does not rerun or modify it. A read-only scan reports three existing GCP API-key findings in public configuration locations, requiring owner reconciliation; no private-key finding was reported.
+
 ## Local results
 
 | Check | Result |
