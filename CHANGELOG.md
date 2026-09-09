@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — Full-tree export
+
+- PDF and PNG exports capture the complete tree bounds, including off-screen and negative-coordinate people and relationships, independently of the current pan, zoom or scroll position. Export transforms apply only to the cloned canvas.
+- Added geometry and real Chrome/html2canvas regression checks with distant people, two pan/zoom settings, preserved live scroll and a jsPDF download. Large exports cap raster resolution to stay within canvas memory/dimension limits.
+- The earlier security-remediation PDF check established successful download/opening and expected content for a small tree; it did not establish completeness for trees extending beyond the viewport. This fix addresses that subsequently reported defect.
+
 ## Unreleased — P0/P1 dependency remediation
 
 - Upgraded Next.js to 16.3.4 while preserving React 18.3.1; upgraded jsPDF, Sharp, PostCSS, Firebase and Genkit parents and refreshed compatible transitive dependencies.

@@ -13,6 +13,7 @@ import { useState } from 'react';
 import type { Person, FamilyTree } from '@/types';
 import { downloadGedcom, validateTreeForExport, type ExportValidationResult } from '@/lib/gedcom-generator';
 import html2canvas from 'html2canvas';
+import { prepareTreeExport } from '@/lib/tree-export';
 import { jsPDF } from 'jspdf';
 import ExportWarningsDialog from './ExportWarningsDialog';
 import { Badge } from '@/components/ui/badge';
@@ -156,13 +157,15 @@ export default function ExportDialog({
             // Preload images to convert them to base64
             const cleanup = await preloadImages(canvasRef.current);
 
+            const exportFrame = prepareTreeExport(canvasRef.current);
             const canvas = await html2canvas(canvasRef.current, {
+                ...exportFrame,
                 backgroundColor: '#ffffff',
-                scale: 2, // Higher quality
                 logging: false,
                 useCORS: true,
                 allowTaint: false,
-                onclone: (clonedDoc) => {
+                onclone: (clonedDoc, clonedContainer) => {
+                    exportFrame.onclone(clonedDoc, clonedContainer);
                     // Helper to inline ALL computed styles for an element
                     const inlineStyles = (el: Element) => {
                         const computed = getComputedStyle(el);
@@ -262,10 +265,7 @@ export default function ExportDialog({
                         (el as HTMLElement).style.fill = computed.fill;
                     });
                 },
-            });
-
-            // Restore original image srcs
-            cleanup();
+            }).finally(cleanup);
 
             // Apply watermark for Free tier
             if (watermarkExportsActive) {
@@ -317,13 +317,15 @@ export default function ExportDialog({
             // Preload images to convert them to base64
             const cleanup = await preloadImages(canvasRef.current);
 
+            const exportFrame = prepareTreeExport(canvasRef.current);
             const canvas = await html2canvas(canvasRef.current, {
+                ...exportFrame,
                 backgroundColor: '#ffffff',
-                scale: 2,
                 logging: false,
                 useCORS: true,
                 allowTaint: false,
-                onclone: (clonedDoc) => {
+                onclone: (clonedDoc, clonedContainer) => {
+                    exportFrame.onclone(clonedDoc, clonedContainer);
                     const inlineStyles = (el: Element) => {
                         const computed = getComputedStyle(el);
                         const htmlEl = el as HTMLElement;
@@ -405,10 +407,7 @@ export default function ExportDialog({
                         (el as HTMLElement).style.fill = computed.fill;
                     });
                 },
-            });
-
-            // Restore original image srcs
-            cleanup();
+            }).finally(cleanup);
 
             // Apply watermark for Free tier
             if (watermarkExportsActive) {
