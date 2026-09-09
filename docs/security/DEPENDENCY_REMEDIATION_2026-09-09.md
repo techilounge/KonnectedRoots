@@ -1,6 +1,6 @@
 # Dependency remediation — 2026-09-09
 
-Status: **review required; residual high findings and preview verification remain open**. Work started from `c264c23019be9295b3443aa102c1782f0e650308`, matching remote master, in the fresh post-rewrite checkout on `security/dependency-remediation`. No history rewrite, old-object import, credential change, backup restoration, merge, or production deployment was performed.
+Status: **draft PR; Vercel Preview build passed; residual high findings and authenticated regression verification remain open**. Work started from `c264c23019be9295b3443aa102c1782f0e650308`, matching remote master, in the fresh post-rewrite checkout on `security/dependency-remediation`. No history rewrite, old-object import, credential change, backup restoration, merge, or production deployment was performed.
 
 ## Before / after
 
@@ -75,6 +75,9 @@ Root findings additionally inherit vulnerable OTel core, `uuid` and `qs`; Functi
 | Functions audit | Completed; no high/critical, nine moderate |
 | Full rewritten-history Gitleaks | Reports three existing GCP API-key findings in public Firebase configuration locations; no private-key finding. Restrictions/owner reconciliation remain unverified. No history or scanner ignores changed. |
 | Gitleaks staged changes / current directory | PASS. Temporary public npm registry metadata triggered a generic-key heuristic; the untracked downloaded metadata was removed after inventory generation, then the directory scan passed. No scanner exception added. |
+| Vercel Preview | PASS for remediation commit `58aba6e02176ba7b31f8d29af4dcd09660b7a5a8`; GitHub deployment 6343739916 reports success / “Deployment has completed”. |
+| GitHub CodeQL / Gitleaks | PASS on PR #3 for the remediation commit. |
+| Authenticated browser regression | BLOCKED: available browser redirects the protected preview to Vercel login and has no signed-in session. User sign-in requested; no protection bypass attempted. |
 
 Root tests exercise credential fail-closed behavior, admin claim enforcement, AI configuration, OCR schemas, provider adapters, real raster normalization, quotas, deterministic relationships and the new Sharp/jsPDF and GEDCOM regressions. Functions tests mock external Stripe/Firestore boundaries and cover authenticated checkout/portal construction, unauthenticated rejection, active-subscription rejection and webhook email deduplication. No live charge, email or AI request was made.
 
@@ -83,3 +86,5 @@ The only app source change memoizes and declares the layout-history loader befor
 ## Preview / reviewer gate
 
 Do not merge automatically. Confirm the PR commit reaches **Ready** in Vercel Preview using existing trusted Preview credentials. Then sign in with a test user and test admin, load/edit a disposable family tree, undo/redo, export PNG/PDF/GEDCOM, run OCR and AI configuration checks with approved test providers, and exercise Stripe test-mode checkout/portal plus Functions in an emulator/test project. Record the deployment URL, commit and results here. Do not use production transactions or substitute fabricated build credentials.
+
+Published [draft PR #3](https://github.com/techilounge/KonnectedRoots/pull/3). The remediation commit's successful [Vercel deployment](https://vercel.com/techilounges-projects/konnectedroots/8jrs6g1gCkwMzbogJiWR1bDxMbnP) serves [this immutable preview](https://konnectedroots-fj31xn2b0-techilounges-projects.vercel.app). A subsequent documentation-only commit records these results. Browser smoke tests could not pass the Vercel authentication gate, so login, admin pages, canvas interaction, downloads and live OCR/billing/Functions behavior are not claimed as verified.
