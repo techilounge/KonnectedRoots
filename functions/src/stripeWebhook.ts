@@ -1,3 +1,4 @@
+import { functionsEnv } from './config';
 /**
  * Stripe Webhook Handler for KonnectedRoots
  * 
@@ -26,7 +27,7 @@ function getDb() {
 let _stripe: Stripe | null = null;
 function getStripe(): Stripe {
     if (!_stripe) {
-        _stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+        _stripe = new Stripe(functionsEnv.stripeSecretKey);
     }
     return _stripe;
 }
@@ -178,7 +179,7 @@ export const stripeWebhook = onRequest(
             event = getStripe().webhooks.constructEvent(
                 (req as any).rawBody,
                 sig,
-                process.env.STRIPE_WEBHOOK_SECRET!
+                functionsEnv.stripeWebhookSecret
             );
         } catch (err) {
             logger.error("Webhook signature verification failed:", err);

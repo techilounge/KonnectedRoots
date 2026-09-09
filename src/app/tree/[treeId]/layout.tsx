@@ -1,64 +1,30 @@
 import type { Metadata } from 'next';
-import { adminDb } from '@/lib/firebase/admin';
+import { cache } from 'react';
+import { clientEnv } from '@/lib/config/env.client';
+import { treeMetadata, type MetadataTree } from '@/lib/trees/metadata';
 
-interface TreeLayoutProps {
-  children: React.ReactNode;
-  params: Promise<{ treeId: string }>;
-}
+// Per-request memoization; never cache private tree contents across users.
+const publicMetadataTree = cache(async (routeValue: string): Promise<MetadataTree | null> => {
+  const { adminDb } = await import('@/lib/firebase/admin');
+  const trees = adminDb.collection('trees');
+  const direct = await trees.doc(routeValue).get();
+  if (direct.exists) {
+    const data = direct.data();
+    return data?.visibility === 'public' ? { ...data, id: direct.id } : null;
+  }
+  // The browser accepts slugs as well as document IDs. Only public slugs may
+  // contribute anonymous metadata; private names never leave the server.
+  const matches = await trees.where('slug', '==', routeValue).where('visibility', '==', 'public').limit(2).get();
+  if (matches.size !== 1) return null;
+  return { ...matches.docs[0].data(), id: matches.docs[0].id };
+});
 
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ treeId: string }>;
-}): Promise<Metadata> {
-  const { treeId } = await params;
-  const siteUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://konnectedroots.app';
-
+export async function generateMetadata({ params }: { params: Promise<{ treeId: string }> }): Promise<Metadata> {
   try {
-    const docSnap = await adminDb.collection('trees').doc(treeId).get();
-    if (!docSnap.exists) {
-      return {
-        title: 'Tree Not Found | KonnectedRoots',
-        robots: { index: false, follow: false },
-      };
-    }
-
-    const tree = docSnap.data();
-    if (!tree || tree.visibility !== 'public') {
-      // Private or unlisted tree - do not index
-      return {
-        title: 'Family Tree | KonnectedRoots',
-        robots: { index: false, follow: false },
-      };
-    }
-
-    const title = `${tree.title || 'Untitled'} - Family Tree | KonnectedRoots`;
-    const memberCount = tree.memberCount || 0;
-    const description = `Explore the ${tree.title || 'Family'} lineage featuring ${memberCount} family members on KonnectedRoots. Discover ancestral roots and family connections.`;
-
-    return {
-      title,
-      description,
-      alternates: {
-        canonical: `${siteUrl}/tree/${treeId}`,
-      },
-      openGraph: {
-        title,
-        description,
-        url: `${siteUrl}/tree/${treeId}`,
-        type: 'website',
-      },
-      twitter: {
-        card: 'summary_large_image',
-        title,
-        description,
-      },
-    };
-  } catch (err) {
-    return {
-      title: 'Family Tree | KonnectedRoots',
-      robots: { index: false, follow: false },
-    };
+    return treeMetadata(await publicMetadataTree((await params).treeId), clientEnv.appUrl);
+  } catch {
+    console.warn('[tree_metadata] Public metadata lookup unavailable');
+    return treeMetadata(null, clientEnv.appUrl);
   }
 }
 

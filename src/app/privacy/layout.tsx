@@ -1,6 +1,7 @@
+import { clientEnv } from '@/lib/config/env.client';
 import type { Metadata } from 'next';
 
-const siteUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://konnectedroots.app';
+const siteUrl = clientEnv.appUrl;
 
 export const metadata: Metadata = {
   title: 'Privacy Policy | KonnectedRoots',

@@ -1,4 +1,6 @@
 import 'server-only';
+import { serverEnv } from '@/lib/config/env.server';
+
 import * as admin from 'firebase-admin';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -40,22 +42,22 @@ function initializeFirebaseAdmin(): admin.app.App {
     return admin.apps[0]!;
   }
 
-  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'konnectedroots-u5xtb';
-  const storageBucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'konnectedroots-u5xtb.firebasestorage.app';
+  const projectId = serverEnv.firebaseProjectId;
+  const storageBucket = serverEnv.firebaseStorageBucket;
 
-  if (process.env.FIREBASE_SERVICE_ACCOUNT !== undefined) {
+  if (serverEnv.firebaseServiceAccount !== undefined) {
     return admin.initializeApp({
-      ...parseCredential(process.env.FIREBASE_SERVICE_ACCOUNT, 'FIREBASE_SERVICE_ACCOUNT'),
+      ...parseCredential(serverEnv.firebaseServiceAccount, 'FIREBASE_SERVICE_ACCOUNT'),
       storageBucket,
     });
   }
 
-  const isVercel = process.env.VERCEL === '1' || Boolean(process.env.VERCEL_ENV);
+  const isVercel = serverEnv.isVercel;
   if (isVercel) {
     throw new Error('Firebase Admin requires the server-only FIREBASE_SERVICE_ACCOUNT environment variable on Vercel. Local files and implicit Application Default Credentials are disabled.');
   }
 
-  const isLocalDevelopment = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
+  const isLocalDevelopment = serverEnv.isLocalDevelopment;
   if (isLocalDevelopment) {
     const serviceAccountPath = path.resolve(process.cwd(), 'service-account.json');
     if (fs.existsSync(serviceAccountPath)) {
@@ -74,8 +76,7 @@ function initializeFirebaseAdmin(): admin.app.App {
 
   // ADC is appropriate for local gcloud credentials, explicitly configured
   // credentials/workload identity, or Google-hosted attached service identities.
-  const hasAdcEnvironment = Boolean(process.env.GOOGLE_APPLICATION_CREDENTIALS ||
-    process.env.K_SERVICE || process.env.FUNCTION_NAME || process.env.GAE_ENV);
+  const hasAdcEnvironment = serverEnv.hasAdcEnvironment;
   if (!isLocalDevelopment && !hasAdcEnvironment) {
     throw new Error('Firebase Admin credentials are missing. Set server-only FIREBASE_SERVICE_ACCOUNT or configure Application Default Credentials through workload identity (GOOGLE_APPLICATION_CREDENTIALS) or a Google-hosted service identity.');
   }

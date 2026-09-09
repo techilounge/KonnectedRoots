@@ -2,7 +2,7 @@
 export type Relationship = 'parent' | 'child' | 'spouse';
 
 // Added RelationshipType for clarity in the new implementation
-export type RelationshipType = 'spouse' | 'parent' | 'child';
+export type RelationshipType = Relationship;
 
 
 export type PlatformRole = 'user' | 'admin' | 'super_admin';

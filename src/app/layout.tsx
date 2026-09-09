@@ -1,3 +1,4 @@
+import { clientEnv } from '@/lib/config/env.client';
 import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
@@ -9,7 +10,7 @@ import { AuthProvider } from '@/hooks/useAuth';
 import { Analytics } from "@vercel/analytics/next";
 import JsonLd from '@/components/seo/JsonLd';
 
-const siteUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://konnectedroots.app';
+const siteUrl = clientEnv.appUrl;
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -67,7 +68,7 @@ export const metadata: Metadata = {
     creator: '@konnectedroots',
   },
   verification: {
-    google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION,
+    google: clientEnv.googleSiteVerification,
   },
 };
 

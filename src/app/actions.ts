@@ -1,4 +1,5 @@
 "use server";
+import { logServerFailure } from '@/lib/server-log';
 
 import { withAIContext } from '@/lib/ai/gateway';
 
@@ -43,7 +44,7 @@ export async function handleSuggestName(input: SuggestNameInput & { authToken?: 
     const result = await withAIContext(deductResult.uid!, () => suggestNameFlow(parsedInput.data));
     return result;
   } catch (error) {
-    console.error("Error in handleSuggestName:", error);
+    logServerFailure("Error in handleSuggestName:", error);
     if (deductResult.uid && deductResult.cost) {
       await refundAICredits(deductResult.uid, deductResult.cost);
     }
@@ -86,12 +87,11 @@ export async function handleGenerateBiography(input: GenerateBiographyInput & { 
     const result = await withAIContext(deductResult.uid!, () => generateBiographyFlow(parsedInput.data));
     return result;
   } catch (error) {
-    console.error("Error in handleGenerateBiography:", error);
+    logServerFailure("Error in handleGenerateBiography:", error);
     if (deductResult.uid && deductResult.cost) {
       await refundAICredits(deductResult.uid, deductResult.cost);
     }
-    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
-    return { error: `Failed to generate biography: ${errorMessage}. Please try again.` };
+    return { error: `Failed to generate biography: Please try again.` };
   }
 }
 
@@ -147,12 +147,11 @@ export async function handleTranslateDocument(input: TranslateDocumentInput & { 
     const result = await withAIContext(deductResult.uid!, () => translateDocumentFlow(parsedInput.data));
     return result;
   } catch (error) {
-    console.error("Error in handleTranslateDocument:", error);
+    logServerFailure("Error in handleTranslateDocument:", error);
     if (deductResult.uid && deductResult.cost) {
       await refundAICredits(deductResult.uid, deductResult.cost);
     }
-    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
-    return { error: `Failed to translate: ${errorMessage}. Please try again.` };
+    return { error: `Failed to translate: Please try again.` };
   }
 }
 
@@ -183,12 +182,11 @@ export async function handleExtractDocumentText(input: ExtractDocumentTextInput 
     const result = await withAIContext(deductResult.uid!, () => extractDocumentTextFlow(parsedInput.data));
     return result;
   } catch (error) {
-    console.error("Error in handleExtractDocumentText:", error);
+    logServerFailure("Error in handleExtractDocumentText:", error);
     if (deductResult.uid && deductResult.cost) {
       await refundAICredits(deductResult.uid, deductResult.cost);
     }
-    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
-    return { error: `Failed to extract text: ${errorMessage}. Please try again.` };
+    return { error: `Failed to extract text: Please try again.` };
   }
 }
 
@@ -224,12 +222,11 @@ export async function handleEnhancePhoto(input: EnhancePhotoInput & { authToken?
     const result = await withAIContext(deductResult.uid!, () => enhancePhotoFlow(parsedInput.data));
     return result;
   } catch (error) {
-    console.error("Error in handleEnhancePhoto:", error);
+    logServerFailure("Error in handleEnhancePhoto:", error);
     if (deductResult.uid && deductResult.cost) {
       await refundAICredits(deductResult.uid, deductResult.cost);
     }
-    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
-    return { error: `Failed to enhance photo: ${errorMessage}. Please try again.` };
+    return { error: `Failed to enhance photo: Please try again.` };
   }
 }
 
@@ -251,9 +248,8 @@ export async function handleUploadProfilePicture(formData: FormData): Promise<{ 
 
     return { downloadURL };
   } catch (error) {
-    console.error("Error uploading profile picture:", error);
-    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
-    return { error: `File upload failed: ${errorMessage}` };
+    logServerFailure("Error uploading profile picture:", error);
+    return { error: `File upload failed. Please try again.` };
   }
 }
 
@@ -297,7 +293,7 @@ export async function handleContactMessage(input: ContactMessageInput): Promise<
 
     return { success: true };
   } catch (error) {
-    console.error("Error saving contact message to Firestore:", error);
+    logServerFailure("Error saving contact message to Firestore:", error);
     return {
       success: false,
       error: "Failed to send your message. Please try again later.",

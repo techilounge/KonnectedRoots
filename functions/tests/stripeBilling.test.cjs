@@ -19,6 +19,7 @@ function billing() {
     'firebase-functions/v2':{logger:{info(){},warn(){},error(){}}},
     'firebase-admin':{apps:[{}],firestore:() => ({collection:() => ({doc:() => ({get:async () => ({exists:true,data:() => user})})})})},
     stripe:Stripe,
+    './config': {functionsEnv: require('../lib/config').functionsConfig({STRIPE_SECRET_KEY:'fixture',STRIPE_PRICE_PRO_MONTHLY:'price_fixture',APP_URL:'https://example.test'})},
   };
   const mod = {exports:{}};
   new Function('require','module','exports','process',fs.readFileSync(path.join(__dirname,'../lib/stripeBilling.js'),'utf8'))(

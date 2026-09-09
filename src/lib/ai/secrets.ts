@@ -1,11 +1,13 @@
 import 'server-only';
+import { serverEnv } from '@/lib/config/env.server';
+
 import { createHash } from 'node:crypto';
 import { adminApp } from '@/lib/firebase/admin';
 import { AIError, type ProviderConfig, type ProviderId } from './types';
 
 export const fingerprint = (value: string) => createHash('sha256').update(value).digest('hex').slice(0, 12);
 function secretName(provider: ProviderId) {
-  const project = process.env.AI_SECRET_PROJECT_ID;
+  const project = serverEnv.aiSecretProjectId;
   if (!project || !/^[a-zA-Z0-9-]+$/.test(project)) throw new AIError('secret_project_missing');
   return `projects/${project}/secrets/konnectedroots-ai-${provider}`;
 }
@@ -43,7 +45,7 @@ async function verifiedVersion(provider: ProviderId, version: string): Promise<s
 export async function providerSecret(config: ProviderConfig): Promise<string> {
   if (!config.credentialConfigured) throw new AIError('credential_missing');
   if (config.credentialSource === 'environment' && config.providerId === 'google') {
-    const key = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    const key = serverEnv.legacyGoogleKey;
     if (key) return key;
   }
   if (config.credentialSource !== 'vault' || !config.secretVersion) throw new AIError('credential_missing');

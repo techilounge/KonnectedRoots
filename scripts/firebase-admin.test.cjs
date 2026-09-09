@@ -27,6 +27,14 @@ function run(env = {}, file, certError = false, existing = false) {
     exports: {}, Buffer, process: { env, cwd: () => '/local' },
     require: name => {
       if (name === 'server-only') return {};
+      if (name === '@/lib/config/env.server') {
+        const configExports = {};
+        const configCode = ts.transpileModule(fs.readFileSync('src/lib/config/env.server.ts', 'utf8'), {
+          compilerOptions: { module: ts.ModuleKind.CommonJS },
+        }).outputText;
+        vm.runInNewContext(configCode, { exports: configExports, process: { env }, require: () => ({}) });
+        return configExports;
+      }
       if (name === 'firebase-admin') return admin;
       if (name === 'path') return require('node:path');
       if (name === 'fs') return {
