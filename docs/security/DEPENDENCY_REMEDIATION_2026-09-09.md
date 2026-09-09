@@ -101,3 +101,16 @@ The user authenticated to Vercel. Latest tested commit `302c2d3` also passed Ver
 Required owner configuration for the browser key used by this Preview: add only `https://konnectedroots-git-security-depend-dd4f14-techilounges-projects.vercel.app/*` to its existing website restrictions. Preserve every existing approved entry and Firebase-only API restrictions; do not allow `*.vercel.app` or remove restrictions. Also verify the exact hostname is in Firebase Authentication's authorized domains for Google sign-in. The HTTP-referrer rejection is confirmed; the Auth authorized-domain setting has not been inspected. See [Firebase key management](https://firebase.google.com/docs/projects/api-keys) and [the existing browser-key runbook](FIREBASE_BROWSER_KEY.md).
 
 No cloud restriction, key, credential, or authorized-domain configuration was changed. Authenticated admin/tree/export/OCR/billing/Functions browser checks remain pending until this origin is approved and application sign-in succeeds.
+
+### Authenticated preview regression results — 2026-09-09
+
+After the owner approved the preview origin and signed in, the following checks passed in the live Preview:
+
+- Dashboard loaded the authenticated TechiLounge account and existing trees.
+- Admin overview loaded with live Firestore/Stripe/Functions status cards.
+- AI Configuration loaded provider metadata and model health; the synthetic `extractDocumentText` controlled test completed successfully with valid JSON, 1,109 input tokens, 100 output tokens and reported cost `$0.001207`. No user credits were deducted.
+- A disposable tree named `Dependency Regression 2026-09-09` was created. A person was added, edited to `Synthetic Regression`, saved, and the change persisted after reload.
+- Canvas undo changed the person back to `New Person`; redo restored `Synthetic Regression`.
+- Export dialog rendered PNG, PDF and GEDCOM options with the expected Pro/Family unlimited allowance. Clicking PDF began the export flow, but the browser download event was not captured before timeout; the pure package regression test still verifies Sharp raster data embeds into jsPDF. No payment or external upload was initiated.
+
+The disposable test tree remains in the owner account for manual cleanup because deletion is a destructive action and was not performed automatically. The browser title for the dynamic tree route displayed `Tree Not Found` while the authenticated canvas and data loaded normally; this appears to be a metadata/title defect and is outside dependency remediation scope. Recheck before production release.
