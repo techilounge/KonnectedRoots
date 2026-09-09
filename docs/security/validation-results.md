@@ -12,11 +12,29 @@ Authenticated Vercel Preview testing is complete. The owner accepts the seven do
 
 Root installation, typecheck, lint (zero errors, 48 warnings) and 50 tests passed. Functions installation/compilation and four tests passed on Node 20. Vercel Preview, CodeQL and Gitleaks passed for the tested remediation. The local Next build still requires configured Firebase Admin credentials to complete page-data collection; the configured Preview build succeeded.
 
-Authenticated dashboard/admin access, AI Configuration, the synthetic OCR controlled test, disposable tree creation, person editing/persistence and undo/redo passed. Export options rendered; PDF download/open/content confirmation has not yet been recorded. The owner reports manual deletion of the disposable regression tree. The `Tree Not Found` dynamic-route browser-title issue is a non-blocking Phase 1 metadata defect. Stripe/Functions evidence is compilation and mocked regression testing, not live payment or deployed Functions end-to-end verification.
+Authenticated dashboard/admin access, AI Configuration, the synthetic OCR controlled test, disposable tree creation, person editing/persistence and undo/redo passed. The owner confirms authenticated Vercel Preview PDF export completed: Chrome downloaded `Dependency_Regression_2026_09_09 (1).pdf`, the downloaded PDF opened successfully, and expected family-tree/person content was visible. This resolves the earlier automation download-event timeout. The owner reports manual deletion of the disposable regression tree after testing. The `Tree Not Found` dynamic-route browser-title issue is a non-blocking Phase 1 metadata defect. Stripe/Functions evidence is compilation and mocked regression testing, not live payment or deployed Functions end-to-end verification.
 
 See [dependency remediation](DEPENDENCY_REMEDIATION_2026-09-09.md) for preserved test evidence, release conditions and the full inventory link. PR #3 remains unmerged. This finalization changes documentation only.
 
-The owner reports the history rewrite completed; this task does not rerun or modify it. A read-only scan reports three existing GCP API-key findings in public configuration locations, requiring owner reconciliation; no private-key finding was reported. Dependency risk acceptance does not close that separate incident record.
+The [P0 credential incident](incidents/2026-09-public-credential-exposure.md) is **CLOSED** on the separate credential-revocation, history-rewrite, GitHub Support purge and fresh remote verification evidence below. Dependency risk acceptance is independent of that closure. PR #3 remains draft; it has not been marked ready or merged.
+
+## Post-GitHub-purge verification — 2026-09-09
+
+A new temporary HTTPS mirror was cloned directly from `https://github.com/techilounge/KonnectedRoots.git`, without local reference repositories or stale pre-rewrite objects. Verification was read-only. The snapshot has remediation head `970908be01a120f1ff268f3a13b0ec99a7842962` and master `c264c23019be9295b3443aa102c1782f0e650308`.
+
+- Remote `git ls-remote` and mirror ref enumeration agree: nine normal branches, no tags, and only `refs/pull/3/head` and `refs/pull/3/merge`. No older PR refs are advertised. Authenticated GitHub API requests for historical PRs #1 and #2 return HTTP 404; current PR #3 remains accessible and open/draft.
+- `git fsck --full` passed. `git rev-list --all --count` reports 204 reachable commits; Gitleaks reports 200 commits scanned in its history/diff traversal, approximately 187.66 MB.
+- Gitleaks 8.30.1 full-history scanning used `git`, `--log-opts=--all`, `--redact=100` and `--max-decode-depth=3`. A second full-history scan used a temporary configuration extending all default rules with explicit Stripe webhook signing-secret detection (`whsec_` followed by at least 16 alphanumeric characters), with no added allowlists. Both scans returned exactly the same three findings below and exit code 1; neither scan was clean. No private-key or Stripe webhook signing-secret finding was detected. Redacted reports remain outside the repository.
+
+| Remaining rule/category | Historical file and line | Commit |
+| --- | --- | --- |
+| `gcp-api-key` — public Firebase browser configuration | `apphosting.yaml:13` | `1ddf5094e1da6d32a711893829cf6723f78c44cb` |
+| `gcp-api-key` — public Firebase browser configuration | `.env.example:2` | `2c1f2f7e86fc374f31a28999a84151680c316345` |
+| `gcp-api-key` — public Firebase browser configuration | `src/lib/firebase/clients.ts:7` | `28c8b60ebe8c508e2dcac7d4a45c57c55df2ea3a` |
+
+These are known public Firebase browser API-key occurrences, not Firebase Admin private credentials, AI provider secrets or Stripe webhook secrets. They remain reported without suppression. Browser-key restrictions were previously owner-confirmed; this verification did not inspect or change cloud restrictions.
+
+The owner confirms GitHub Support ticket **#4741386** completed deletion of the affected historical pull requests and clearing of associated unreferenced commits. Fresh reachable remote history contains no detected revoked Firebase Admin private credential or rotated Stripe webhook secret. Together with prior owner-confirmed credential revocation/replacement, Stripe rotation and git-filter-repo cleanup, this supports P0 closure. Remote ref/API checks and scans are independently observed; Support's unreferenced-object purge and credential lifecycle actions are owner-confirmed. Git cannot enumerate GitHub's unreferenced storage, and scanning does not establish the contents of third-party forks or stale external clones. No old credential values or objects were retrieved for comparison. No history, scanner suppressions or production configuration were changed.
 
 ## Historical P0 validation — 2026-09-08 (superseded)
 

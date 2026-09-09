@@ -80,7 +80,7 @@ Root findings additionally inherit vulnerable OTel core, `uuid` and `qs`; Functi
 | Functions `npm run build` / Node 20 tsc | PASS |
 | Functions tests on Node 20 | PASS, four tests; fixed Windows glob expansion with portable test discovery |
 | Functions audit | Completed; no high/critical, nine moderate |
-| Full rewritten-history Gitleaks | Reports three existing GCP API-key findings in public Firebase configuration locations; no private-key finding. Restrictions/owner reconciliation remain unverified. No history or scanner ignores changed. |
+| Fresh remote full-history Gitleaks, post-Support purge | Three `gcp-api-key` findings, all known public Firebase browser configuration; no Firebase Admin private credential or Stripe webhook signing secret detected. See [post-purge verification](validation-results.md#post-github-purge-verification--2026-09-09) for scope, refs and scanner details. No finding suppression or history change. |
 | Gitleaks staged changes / current directory | PASS. Temporary public npm registry metadata triggered a generic-key heuristic; the untracked downloaded metadata was removed after inventory generation, then the directory scan passed. No scanner exception added. |
 | Vercel Preview | PASS for remediation commit `58aba6e02176ba7b31f8d29af4dcd09660b7a5a8`; GitHub deployment 6343739916 reports success / “Deployment has completed”. |
 | GitHub CodeQL / Gitleaks | PASS on PR #3 for the remediation commit. |
@@ -92,7 +92,7 @@ The only app source change in the remediation memoizes and declares the layout-h
 
 ## Preview / reviewer gate
 
-Vercel Preview build and authenticated Preview testing are complete. The owner accepts the documented residual production-high Genkit/OpenTelemetry risk for this release under the four controls above. The disposable regression tree was manually deleted after testing. The dynamic-route browser-title defect is a **non-blocking Phase 1 metadata defect**. PDF download/content confirmation is recorded separately below; do not infer it from export-dialog rendering or the package test. These results do not claim live Stripe payment or deployed Functions end-to-end verification. PR #3 remains subject to review and must not be merged automatically.
+Vercel Preview build and authenticated Preview testing are complete, including owner-confirmed PDF download, successful opening and expected family-tree/person content. The owner accepts the documented residual production-high Genkit/OpenTelemetry risk for this release under the four controls above. The disposable regression tree was manually deleted after testing. The dynamic-route browser-title defect is a **non-blocking Phase 1 metadata defect**. The separate [P0 credential incident](incidents/2026-09-public-credential-exposure.md) is CLOSED on the post-purge evidence; dependency findings remain as reported above. These results do not claim live Stripe payment or deployed Functions end-to-end verification. PR #3 remains draft and subject to review; it has not been marked ready or merged.
 
 Published [draft PR #3](https://github.com/techilounge/KonnectedRoots/pull/3). The remediation commit's successful [Vercel deployment](https://vercel.com/techilounges-projects/konnectedroots/8jrs6g1gCkwMzbogJiWR1bDxMbnP) serves [this immutable preview](https://konnectedroots-fj31xn2b0-techilounges-projects.vercel.app). Authenticated tests subsequently ran on the branch Preview after the owner resolved access. Documentation-only follow-ups record those results; the initial authentication blockers below are historical, not current release gates.
 
@@ -124,4 +124,4 @@ Owner-reported cleanup: the disposable `Dependency Regression 2026-09-09` tree w
 
 The browser title for the dynamic tree route displayed `Tree Not Found` while the authenticated canvas and data loaded normally. Track this as a **non-blocking Phase 1 metadata defect**; no application code is changed in this documentation finalization.
 
-PDF owner confirmation: not yet recorded. The browser automation's download-event timeout remains the observed result; successful download, opening and expected content must only be recorded after explicit owner confirmation.
+PDF owner confirmation — 2026-09-09: PDF export downloaded successfully from the authenticated Vercel Preview. Chrome downloaded `Dependency_Regression_2026_09_09 (1).pdf`; the downloaded PDF opened successfully and contained the expected exported family-tree/person content. This explicit owner confirmation completes browser PDF validation; the earlier automation timeout above is retained as historical test evidence, not an outstanding PDF release gate.
