@@ -77,7 +77,7 @@ Root findings additionally inherit vulnerable OTel core, `uuid` and `qs`; Functi
 | Gitleaks staged changes / current directory | PASS. Temporary public npm registry metadata triggered a generic-key heuristic; the untracked downloaded metadata was removed after inventory generation, then the directory scan passed. No scanner exception added. |
 | Vercel Preview | PASS for remediation commit `58aba6e02176ba7b31f8d29af4dcd09660b7a5a8`; GitHub deployment 6343739916 reports success / “Deployment has completed”. |
 | GitHub CodeQL / Gitleaks | PASS on PR #3 for the remediation commit. |
-| Authenticated browser regression | BLOCKED: available browser redirects the protected preview to Vercel login and has no signed-in session. User sign-in requested; no protection bypass attempted. |
+| Authenticated browser regression | BLOCKED by Firebase browser-key HTTP referrer restriction after Vercel sign-in; exact preview origin rejected. See follow-up below. |
 
 Root tests exercise credential fail-closed behavior, admin claim enforcement, AI configuration, OCR schemas, provider adapters, real raster normalization, quotas, deterministic relationships and the new Sharp/jsPDF and GEDCOM regressions. Functions tests mock external Stripe/Firestore boundaries and cover authenticated checkout/portal construction, unauthenticated rejection, active-subscription rejection and webhook email deduplication. No live charge, email or AI request was made.
 
@@ -88,3 +88,16 @@ The only app source change memoizes and declares the layout-history loader befor
 Do not merge automatically. Confirm the PR commit reaches **Ready** in Vercel Preview using existing trusted Preview credentials. Then sign in with a test user and test admin, load/edit a disposable family tree, undo/redo, export PNG/PDF/GEDCOM, run OCR and AI configuration checks with approved test providers, and exercise Stripe test-mode checkout/portal plus Functions in an emulator/test project. Record the deployment URL, commit and results here. Do not use production transactions or substitute fabricated build credentials.
 
 Published [draft PR #3](https://github.com/techilounge/KonnectedRoots/pull/3). The remediation commit's successful [Vercel deployment](https://vercel.com/techilounges-projects/konnectedroots/8jrs6g1gCkwMzbogJiWR1bDxMbnP) serves [this immutable preview](https://konnectedroots-fj31xn2b0-techilounges-projects.vercel.app). A subsequent documentation-only commit records these results. Browser smoke tests could not pass the Vercel authentication gate, so login, admin pages, canvas interaction, downloads and live OCR/billing/Functions behavior are not claimed as verified.
+
+### Browser follow-up after Vercel sign-in
+
+The user authenticated to Vercel. Latest tested commit `302c2d3` also passed Vercel, CodeQL and Gitleaks. Browser verification on the branch preview confirmed:
+
+- Landing and Login pages render; email/password and Google sign-in controls are present.
+- Signed-out `/admin` displays restricted access and redirects to `/login?redirect=/admin`.
+- Pricing renders correctly; monthly/yearly switching updates Pro and Family prices. No checkout session or payment was initiated.
+- The application login attempt displays `auth/requests-from-referer-https://konnectedroots-git-security-depend-dd4f14-techilounges-projects.vercel.app/-are-blocked.` This is an environment HTTP-referrer rejection, not evidence that authenticated SDK behavior passed or failed after the upgrade.
+
+Required owner configuration for the browser key used by this Preview: add only `https://konnectedroots-git-security-depend-dd4f14-techilounges-projects.vercel.app/*` to its existing website restrictions. Preserve every existing approved entry and Firebase-only API restrictions; do not allow `*.vercel.app` or remove restrictions. Also verify the exact hostname is in Firebase Authentication's authorized domains for Google sign-in. The HTTP-referrer rejection is confirmed; the Auth authorized-domain setting has not been inspected. See [Firebase key management](https://firebase.google.com/docs/projects/api-keys) and [the existing browser-key runbook](FIREBASE_BROWSER_KEY.md).
+
+No cloud restriction, key, credential, or authorized-domain configuration was changed. Authenticated admin/tree/export/OCR/billing/Functions browser checks remain pending until this origin is approved and application sign-in succeeds.
