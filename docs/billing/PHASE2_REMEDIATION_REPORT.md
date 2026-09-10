@@ -19,9 +19,11 @@
 - Tightened user and family Firestore rules so clients cannot write billing,
   usage, plan, family billing or entitlement authority fields. Profile edits
   remain allowed.
-- Kept AI debit and export metering server-side. GEDCOM eligibility is checked
-  by the server action. Browser-generated export bytes remain a documented
-  portability/UX boundary until a server export service is approved.
+- Kept AI debit and visual export metering server-side. GEDCOM is authenticated
+  server-side for every plan and is treated as data portability: it does not
+  consume `exportsUsed`, require a paid plan, or add premium formatting.
+  Browser-generated export bytes remain a documented portability/UX boundary
+  until a server export service is approved.
 - Family AI usage is debited from the server-owned Family workspace pool, and
   missing billing period data fails closed rather than granting stale paid access.
 - Updated Storage Rules to select the server-owned Family or user counter and
@@ -34,17 +36,21 @@
 
 ## Policy decisions
 
-- Free collaboration remains limited to viewer roles; tree role and billing
-  entitlement are combined, never substituted for one another.
+- Free collaboration allows two non-owner collaborators, with at most one
+  Editor and the remaining collaborator(s) as Viewers. Trusted invitation
+  creation and acceptance transactions enforce the policy; existing tree role
+  controls continue to govern read and edit access.
 - Family seats are six account seats and are distinct from tree collaborators.
 - Downgrades preserve data and block new usage beyond Free limits.
 - Storage Rules use server-owned user or Family counters and upload checks are
   server-authorized where available, but the current counters are not
   atomically maintained by every upload/replacement/delete path; full byte
   reconciliation remains a Phase 3/4 data-integrity item.
-- Owner decisions pending: GEDCOM remains Free-disabled and Pro/Family-enabled;
-  Free collaboration remains limited to two viewer-only collaborators. This
-  pass does not change either policy.
+- Owner-approved policy decisions are implemented: GEDCOM import/export is
+  available on Free, Pro and Family without consuming visual export allowance;
+  Free collaboration permits one Editor plus one Viewer, or two Viewers, per
+  tree. GEDCOM and tree collaboration remain independent of Family account
+  seats.
 - No live production charges are part of this change. Test-mode lifecycle
   validation is required before approval.
 
@@ -68,9 +74,10 @@ override or broad suppression was added.
 
 - Root `npm run typecheck`: passed.
 - Root `npm run lint`: completed with the repository's existing warnings and no errors.
-- Root `npm test`: 61 tests passed.
+- Root `npm test`: 67 tests passed, including six GEDCOM accounting tests.
 - Functions `npm run build`: passed under the compiled Node 20-targeted source.
-- Functions billing regression suite: 15 tests passed when invoked directly with
+- Functions billing regression suite: 25 tests passed, including ten
+  collaboration policy and Firestore-rule tests.
   Node's test runner. The package `npm test` wrapper cannot spawn its child test
   process in this restricted Windows session (`spawn EPERM`).
 - Webhook ordering regression coverage includes sequential newer-then-older,

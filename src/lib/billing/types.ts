@@ -111,6 +111,7 @@ export interface PlanLimits {
     maxTrees: number | null; // null = unlimited
     maxPeoplePerTree: number | null;
     maxCollaboratorsPerTree: number;
+    maxEditorsPerTree: number | null;
     allowedCollaboratorRoles: ('viewer' | 'editor' | 'manager')[];
     exportLimitPerMonth: number | null;
     watermarkExports: boolean;

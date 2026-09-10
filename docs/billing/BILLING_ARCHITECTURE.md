@@ -62,4 +62,14 @@ including the shared Family 100 GB limit, are deferred to Phase 3/4.
 Family AI actions are a workspace-scoped pool. Storage Rules resolve the Family
 document when its membership and synchronized state are available, but exact
 storage accounting remains deferred as described above. Tree collaborators remain
-a separate role-based concept.
+a separate role-based concept. Free trees allow two non-owner collaborators,
+with at most one Editor and the remaining collaborator(s) as Viewers. Pro and
+Family limits remain unchanged, and Family account seats are not tree
+collaborator seats. Invitation creation and acceptance run through trusted
+Functions transactions; client rules cannot directly create invitations or
+mutate the collaborator map.
+
+GEDCOM import/export is available on every plan as data portability. The server
+authenticates the export request but does not increment `exportsUsed` for
+GEDCOM; PNG/PDF continue to use the resolved visual allowance and watermark
+rules.

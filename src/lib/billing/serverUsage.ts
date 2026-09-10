@@ -205,8 +205,14 @@ export async function recordExportOnServer(idToken: string | undefined, exportTy
             }
             const limit = PLAN_LIMITS[plan]?.exportLimitPerMonth ?? 2;
 
-            if (exportType === 'gedcom' && !PLAN_LIMITS[plan].allowGedcomExport) {
-                return { success: false, error: 'GEDCOM export is available on Pro and Family plans.' };
+            // GEDCOM is data portability on every plan. It must never consume
+            // the visual PNG/PDF allowance or mutate export usage.
+            if (exportType === 'gedcom') {
+                return {
+                    success: true,
+                    exportsUsed: usage.exportsUsed || 0,
+                    limit,
+                };
             }
 
             // Monthly reset if needed

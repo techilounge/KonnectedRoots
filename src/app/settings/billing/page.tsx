@@ -294,7 +294,7 @@ export default function BillingSettingsPage() {
                         <div className="flex items-center gap-2">
                             <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
                             <span>
-                                {limits.allowGedcomExport ? "GEDCOM Export & Import" : "No GEDCOM Support"}
+                                GEDCOM Import & Export (all plans)
                             </span>
                         </div>
                         <div className="flex items-center gap-2">

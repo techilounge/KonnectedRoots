@@ -20,8 +20,14 @@ Downgrade behavior is restrictive and preserves data:
 - existing storage above the Free quota is retained, while additional uploads
   are blocked until usage is below quota or the account upgrades;
 - Family membership and tree collaborators are not deleted automatically;
-- GEDCOM remains a paid export in the current product policy; users retain the
-  data already stored in the account and can upgrade to export it.
+- GEDCOM import/export remains available as data portability on every plan and
+  does not consume the visual PNG/PDF allowance. It has no paid-plan gate or
+  premium formatting requirement after downgrade.
+
+Free collaboration after downgrade allows up to two non-owner collaborators,
+with at most one Editor and the remaining collaborator(s) as Viewers. Existing
+membership is preserved; new invitations and invitation acceptance are checked
+against the resolved Free policy by trusted server transactions.
 
 Failed payments trigger the existing transactional notification and rely on
 Stripe subscription events for the authoritative status. The application does

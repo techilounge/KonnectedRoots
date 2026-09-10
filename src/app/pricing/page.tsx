@@ -20,7 +20,8 @@ const features = {
     free: [
         'Up to 3 family trees',
         'Up to 500 people per tree',
-        '2 collaborators per tree (Viewer only)',
+        '2 collaborators per tree (up to 1 Editor, remaining Viewers)',
+        'GEDCOM import/export',
         '10 AI actions/month',
         '1 GB storage',
         '2 exports/month (with watermark)',

@@ -49,10 +49,13 @@ service cloud.firestore {
       // A user can create a tree for themselves.
       allow create: if request.auth != null && request.resource.data.ownerId == request.auth.uid;
       
-      // Owner can do anything. Collaborators can read. Managers can update.
-      // Platform admins have full administrative oversight.
+      // Owner can update tree content, but collaborator membership is
+      // server-owned and may only be changed by Functions/Admin SDK.
       allow read: if isPlatformAdmin() || isOwner() || isCollaborator();
-      allow update: if isPlatformAdmin() || isOwner() || hasRole('manager');
+      allow update: if isPlatformAdmin() || (
+        (isOwner() || hasRole('manager')) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['collaborators'])
+      );
       allow delete: if isPlatformAdmin() || isOwner();
 
       // Rules for the 'people' subcollection within a tree.
@@ -101,24 +104,17 @@ service cloud.firestore {
 
     // Invitations collection for tree collaboration
     match /invitations/{invitationId} {
-      function canInviteToTree(targetTreeId) {
-        let tree = get(/databases/$(database)/documents/trees/$(targetTreeId)).data;
-        return isPlatformAdmin() || tree.ownerId == request.auth.uid || 
-               (request.auth.uid in tree.collaborators && tree.collaborators[request.auth.uid] == 'manager');
-      }
+      // Invitation creation and membership checks run in the trusted
+      // createInvitation/acceptInvitation Functions.
+      allow create: if isPlatformAdmin();
 
-      allow create: if request.auth != null 
-                    && (isPlatformAdmin() || request.resource.data.inviterUid == request.auth.uid)
-                    && canInviteToTree(request.resource.data.treeId);
-      
       allow read: if true;
       
-      allow update, delete: if isPlatformAdmin() || (request.auth != null && resource.data.inviterUid == request.auth.uid);
-      
-      allow update: if request.auth != null && (
-        request.auth.token.email == resource.data.inviteeEmail || 
-        resource.data.inviteeUid == request.auth.uid
+      allow update: if isPlatformAdmin() || (
+        request.auth != null && resource.data.inviterUid == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['resendTrigger'])
       );
+      allow delete: if isPlatformAdmin() || (request.auth != null && resource.data.inviterUid == request.auth.uid);
       allow delete: if request.auth != null && (
         request.auth.token.email == resource.data.inviteeEmail || 
         resource.data.inviteeUid == request.auth.uid

@@ -208,13 +208,13 @@ export async function canInviteCollaborator(
     roleAllowed?: boolean;
 }> {
     const entitlements = await getEntitlements(uid);
-    const { maxCollaboratorsPerTree, allowedCollaboratorRoles } = entitlements.limits;
+    const { maxCollaboratorsPerTree, maxEditorsPerTree, allowedCollaboratorRoles } = entitlements.limits;
 
     // Check if role is allowed on this plan
     if (!allowedCollaboratorRoles.includes(role)) {
         return {
             allowed: false,
-            reason: `${role.charAt(0).toUpperCase() + role.slice(1)} role is not available on the Free plan. Upgrade to Pro to invite Editors and Managers.`,
+            reason: `${role.charAt(0).toUpperCase() + role.slice(1)} role is not available on this plan.`,
             roleAllowed: false,
         };
     }
@@ -226,13 +226,26 @@ export async function canInviteCollaborator(
     }
 
     const collaborators = treeDoc.data().collaborators || {};
-    const currentCount = Object.keys(collaborators).length;
+    const currentCount = Object.keys(collaborators).filter(uid => uid !== treeDoc.data().ownerId).length;
 
     if (currentCount >= maxCollaboratorsPerTree) {
         return {
             allowed: false,
             reason: `You've reached the maximum of ${maxCollaboratorsPerTree} collaborators on your plan. Upgrade for more collaboration.`,
         };
+    }
+
+    if (role === 'editor' && maxEditorsPerTree !== null) {
+        const editorCount = Object.entries(collaborators)
+            .filter(([uid, value]) => uid !== treeDoc.data().ownerId && value === 'editor')
+            .length;
+        if (editorCount >= maxEditorsPerTree) {
+            return {
+                allowed: false,
+                reason: `This plan allows up to ${maxEditorsPerTree} Editor per tree.`,
+                roleAllowed: false,
+            };
+        }
     }
 
     return { allowed: true, roleAllowed: true };
@@ -251,14 +264,11 @@ export async function canExport(
     remaining?: number | null;
 }> {
     const entitlements = await getEntitlements(uid);
-    const { exportLimitPerMonth, watermarkExports, allowGedcomExport } = entitlements.limits;
+    const { exportLimitPerMonth, watermarkExports } = entitlements.limits;
 
-    // Check GEDCOM permission
-    if (exportType === 'gedcom' && !allowGedcomExport) {
-        return {
-            allowed: false,
-            reason: 'GEDCOM export is only available on Pro and Family plans.',
-        };
+    // GEDCOM is portability and does not consume visual export allowance.
+    if (exportType === 'gedcom') {
+        return { allowed: true, watermark: false, remaining: null };
     }
 
     // Unlimited exports

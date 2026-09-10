@@ -48,7 +48,7 @@ const faqSchema = {
       name: 'Is KonnectedRoots free to use?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'Yes! Our free plan lets you create family trees, invite collaborators, use monthly AI actions, and export your lineage. You can upgrade to Pro or Family for expanded limits, GEDCOM import/export, and premium features.',
+        text: 'Yes! Our free plan lets you create family trees, invite collaborators, use monthly AI actions, and export your lineage, including GEDCOM portability. You can upgrade to Pro or Family for expanded limits and premium visual features.',
       },
     },
     {

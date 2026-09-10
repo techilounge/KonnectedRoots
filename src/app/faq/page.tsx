@@ -46,11 +46,11 @@ const faqCategories: FAQCategory[] = [
             },
             {
                 question: 'Is KonnectedRoots free to use?',
-                answer: 'Yes! Our free plan lets you create up to 3 family trees with 500 people per tree, invite 2 collaborators (as viewers), use 10 AI actions per month, and export with our watermark. Upgrade to Pro or Family for unlimited trees, more collaborators, and premium features.',
+                answer: 'Yes! Our free plan lets you create up to 3 family trees with 500 people per tree, invite up to 2 collaborators (one Editor and one Viewer, or two Viewers), use 10 AI actions per month, and export with our watermark. Upgrade to Pro or Family for unlimited trees, more collaborators, and premium features.',
             },
             {
                 question: 'Can I import my existing family tree from another platform?',
-                answer: 'Yes! Pro and Family plan users can import GEDCOM files, which is the standard format used by most genealogy software. Go to your tree settings and click "Import GEDCOM" to upload your file.',
+                answer: 'Yes! Every plan can import and export GEDCOM files, which is the standard format used by most genealogy software. Go to your tree settings and click "Import GEDCOM" to upload your file.',
             },
             {
                 question: 'What devices can I use KonnectedRoots on?',
@@ -65,7 +65,7 @@ const faqCategories: FAQCategory[] = [
         questions: [
             {
                 question: 'What are the differences between Free, Pro, and Family plans?',
-                answer: 'Free: 3 trees, 500 people/tree, 2 viewer collaborators, 10 AI actions/month, watermarked exports. Pro ($5.99/mo): Unlimited trees & people, 10 collaborators with all roles, 200 AI actions, GEDCOM import/export, no watermarks. Family ($9.99/mo): Everything in Pro plus 6 family member accounts, 20 collaborators, 600 pooled AI actions, and 100GB shared storage.',
+                answer: 'Free: 3 trees, 500 people/tree, 2 collaborators with up to 1 Editor, 10 AI actions/month, watermarked visual exports, and GEDCOM portability. Pro ($5.99/mo): Unlimited trees & people, 10 collaborators with all roles, 200 AI actions, unlimited visual exports, and GEDCOM import/export. Family ($9.99/mo): Everything in Pro plus 6 family member accounts, 20 collaborators, 600 pooled AI actions, and 100GB shared storage.',
             },
             {
                 question: 'Can I cancel my subscription anytime?',
@@ -111,7 +111,7 @@ const faqCategories: FAQCategory[] = [
         questions: [
             {
                 question: 'How do I export my family tree?',
-                answer: 'From your tree, click the "Export" button. Choose PDF for a printable document, PNG/JPG for images, or GEDCOM (Pro/Family only) for backup or transfer to other platforms.',
+                answer: 'From your tree, click the "Export" button. Choose PDF for a printable document, PNG/JPG for images, or GEDCOM for backup or transfer to other platforms. GEDCOM portability is available on every plan; PNG/PDF remain subject to the visual allowance.',
             },
             {
                 question: 'What is GEDCOM and why should I care?',

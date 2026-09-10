@@ -19,11 +19,12 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
         maxTrees: 3,
         maxPeoplePerTree: 500,
         maxCollaboratorsPerTree: 2,
-        allowedCollaboratorRoles: ['viewer'], // Free tier: Viewer only
+        maxEditorsPerTree: 1,
+        allowedCollaboratorRoles: ['viewer', 'editor'], // Free tier: one Editor; remaining collaborators are Viewers
         exportLimitPerMonth: 2, // PNG + PDF combined
         watermarkExports: true,
-        allowGedcomExport: false,
-        allowGedcomImport: false,
+        allowGedcomExport: true,
+        allowGedcomImport: true,
         storageQuotaBytes: 1 * GB,
         aiActionsAllowance: 10,
     },
@@ -31,6 +32,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
         maxTrees: null, // unlimited
         maxPeoplePerTree: null, // unlimited
         maxCollaboratorsPerTree: 10,
+        maxEditorsPerTree: null,
         allowedCollaboratorRoles: ['viewer', 'editor', 'manager'],
         exportLimitPerMonth: null, // unlimited
         watermarkExports: false,
@@ -43,6 +45,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
         maxTrees: null, // unlimited
         maxPeoplePerTree: null, // unlimited
         maxCollaboratorsPerTree: 20,
+        maxEditorsPerTree: null,
         allowedCollaboratorRoles: ['viewer', 'editor', 'manager'],
         exportLimitPerMonth: null, // unlimited
         watermarkExports: false,

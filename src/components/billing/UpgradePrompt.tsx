@@ -35,7 +35,7 @@ const featureMessages: Record<string, { title: string; description: string; icon
     },
     collaborators: {
         title: 'Collaborator Limit Reached',
-        description: 'You\'ve invited the maximum 2 collaborators on Free. Upgrade to Pro for up to 10 collaborators.',
+        description: 'Free allows up to 2 collaborators per tree, including one Editor. Upgrade to Pro for up to 10 collaborators and all roles.',
         icon: <Lock className="h-6 w-6" />,
     },
     exports: {
@@ -54,13 +54,13 @@ const featureMessages: Record<string, { title: string; description: string; icon
         icon: <Lock className="h-6 w-6" />,
     },
     gedcom: {
-        title: 'GEDCOM Export - Pro Feature',
-        description: 'GEDCOM export is available on Pro and Family plans. Upgrade to backup and transfer your family tree.',
+        title: 'GEDCOM Data Portability',
+        description: 'Import and export GEDCOM files on every plan to back up or transfer your family tree.',
         icon: <Sparkles className="h-6 w-6 text-primary" />,
     },
     roles: {
         title: 'Role Upgrade Required',
-        description: 'Editor and Manager roles are Pro features. Free users can only invite Viewers. Upgrade for full collaboration.',
+        description: 'Free permits one Editor and one Viewer per tree. Upgrade to Pro for Managers and expanded collaboration.',
         icon: <Lock className="h-6 w-6" />,
     },
 };
