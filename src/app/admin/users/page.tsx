@@ -513,8 +513,8 @@ export default function AdminUsersPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="free">Free Tier</SelectItem>
-                <SelectItem value="pro">Pro ($9.99/mo)</SelectItem>
-                <SelectItem value="family">Family ($19.99/mo)</SelectItem>
+                <SelectItem value="pro">Pro ($5.99/mo)</SelectItem>
+                <SelectItem value="family">Family ($9.99/mo)</SelectItem>
               </SelectContent>
             </Select>
           </div>

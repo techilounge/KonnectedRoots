@@ -8,14 +8,13 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { FileImage, FileText, FileCode, Loader2, Download, CheckCircle2, Lock } from 'lucide-react';
+import { FileImage, FileText, FileCode, Loader2, Download, CheckCircle2 } from 'lucide-react';
 import { useState } from 'react';
 import type { Person, FamilyTree } from '@/types';
 import { downloadGedcom, validateTreeForExport, type ExportValidationResult } from '@/lib/gedcom-generator';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import ExportWarningsDialog from './ExportWarningsDialog';
-import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
 import { useEntitlements } from '@/hooks/useEntitlements';
 import { handleRecordExport } from '@/app/actions';
@@ -44,10 +43,9 @@ export default function ExportDialog({
     onFixOrphanedReferences,
 }: ExportDialogProps) {
     const { user, refreshUserProfile } = useAuth();
-    const { entitlements, limits, canExportGedcom, shouldWatermark } = useEntitlements();
+    const { entitlements, limits, shouldWatermark } = useEntitlements();
     const usage = entitlements?.usage;
     const exportLimitPerMonth = limits.exportLimitPerMonth;
-    const canExportGedcomActive = canExportGedcom();
     const watermarkExportsActive = shouldWatermark();
     const { toast } = useToast();
 
@@ -287,7 +285,8 @@ export default function ExportDialog({
 
             if (user) {
                 const token = await user.getIdToken();
-                await handleRecordExport(token);
+                const recorded = await handleRecordExport(token, 'png');
+                if (!recorded.success) throw new Error(recorded.error || 'Export is not available for this account.');
                 await refreshUserProfile();
             }
 
@@ -440,7 +439,8 @@ export default function ExportDialog({
 
             if (user) {
                 const token = await user.getIdToken();
-                await handleRecordExport(token);
+                const recorded = await handleRecordExport(token, 'pdf');
+                if (!recorded.success) throw new Error(recorded.error || 'Export is not available for this account.');
                 await refreshUserProfile();
             }
 
@@ -453,24 +453,6 @@ export default function ExportDialog({
     };
 
     const handleExportGEDCOM = async () => {
-        if (!canExportGedcomActive) {
-            toast({
-                variant: "destructive",
-                title: "Pro Feature",
-                description: "GEDCOM file export is available on Pro and Family plans. Please upgrade to export standard genealogy files.",
-            });
-            return;
-        }
-
-        if (exportLimitPerMonth !== null && (usage?.exportsUsed || 0) >= exportLimitPerMonth) {
-            toast({
-                variant: "destructive",
-                title: "Monthly Export Limit Reached",
-                description: `You have reached your limit of ${exportLimitPerMonth} exports this month.`,
-            });
-            return;
-        }
-
         // Run pre-export validation
         const validation = validateTreeForExport(people);
 
@@ -489,12 +471,13 @@ export default function ExportDialog({
         setExportStatus(prev => ({ ...prev, gedcom: 'loading' }));
 
         try {
-            downloadGedcom(people, treeName);
             if (user) {
                 const token = await user.getIdToken();
-                await handleRecordExport(token);
+                const authorized = await handleRecordExport(token, 'gedcom');
+                if (!authorized.success) throw new Error(authorized.error || 'GEDCOM export is not available for this account.');
                 await refreshUserProfile();
             }
+            downloadGedcom(people, treeName);
             setExportStatus(prev => ({ ...prev, gedcom: 'success' }));
             setTimeout(() => setExportStatus(prev => ({ ...prev, gedcom: 'idle' })), 2000);
             setShowWarningsDialog(false);
@@ -578,18 +561,13 @@ export default function ExportDialog({
                                     <div>
                                         <div className="flex items-center gap-2">
                                             <h4 className="font-medium">{option.title}</h4>
-                                            {option.type === 'gedcom' && !canExportGedcomActive && (
-                                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 gap-1 font-semibold">
-                                                    <Lock className="h-3 w-3" /> PRO
-                                                </Badge>
-                                            )}
                                         </div>
                                         <p className="text-xs text-muted-foreground">{option.description}</p>
                                     </div>
                                 </div>
                                 <Button
                                     size="sm"
-                                    variant={option.type === 'gedcom' && !canExportGedcomActive ? "secondary" : "outline"}
+                                    variant="outline"
                                     onClick={option.handler}
                                     disabled={exportStatus[option.type] === 'loading'}
                                 >
@@ -597,7 +575,7 @@ export default function ExportDialog({
                                     <span className="ml-2">
                                         {exportStatus[option.type] === 'loading' ? 'Exporting...' :
                                             exportStatus[option.type] === 'success' ? 'Done!' :
-                                            option.type === 'gedcom' && !canExportGedcomActive ? 'Upgrade' : 'Export'}
+                                            'Export'}
                                     </span>
                                 </Button>
                             </div>

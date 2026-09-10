@@ -25,15 +25,14 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app } from '@/lib/firebase/clients';
 
 export default function BillingSettingsPage() {
-    const { user, userProfile, loading: authLoading } = useAuth();
-    const { entitlements, plan, limits, isPro, isFamily, isFree, aiRemaining, exportsRemaining } = useEntitlements();
+    const { user, loading: authLoading } = useAuth();
+    const { entitlements, plan, limits, isPro, isFamily, isFree, aiRemaining, exportsRemaining, subscriptionStatus, billingInterval, renewsAt, cancelAtPeriodEnd, hasAIPack, hasStripeCustomer } = useEntitlements();
     const { toast } = useToast();
     const [isOpeningPortal, setIsOpeningPortal] = useState(false);
 
-    const billing = (userProfile as any)?.billing;
+    const billing = { status: subscriptionStatus, interval: billingInterval, currentPeriodEnd: renewsAt, cancelAtPeriodEnd };
     const usage = entitlements?.usage;
-    const hasStripeCustomer = Boolean(billing?.stripeCustomerId);
-    const isSubscriptionActive = billing?.status === 'active' || billing?.status === 'trialing';
+    const isSubscriptionActive = subscriptionStatus === 'active' || subscriptionStatus === 'trialing';
 
     const handleOpenPortal = async () => {
         if (!user) return;
@@ -295,7 +294,7 @@ export default function BillingSettingsPage() {
                         <div className="flex items-center gap-2">
                             <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
                             <span>
-                                {limits.allowGedcomExport ? "GEDCOM Export & Import" : "No GEDCOM Support"}
+                                GEDCOM Import & Export (all plans)
                             </span>
                         </div>
                         <div className="flex items-center gap-2">

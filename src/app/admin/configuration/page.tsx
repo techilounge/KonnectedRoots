@@ -564,7 +564,7 @@ export default function AdminConfigurationPage() {
               {/* Pro Tier */}
               <div className="p-4 rounded-xl border border-primary/30 bg-primary/5 space-y-4">
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold text-sm text-primary">Pro Tier Defaults ($9.99/mo)</span>
+                  <span className="font-semibold text-sm text-primary">Pro Tier Defaults ($5.99/mo)</span>
                   <Badge className="bg-primary/20 text-primary border-primary/30 text-xs">Pro</Badge>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
@@ -642,7 +642,7 @@ export default function AdminConfigurationPage() {
               {/* Family Tier */}
               <div className="p-4 rounded-xl border border-blue-500/30 bg-blue-500/5 space-y-4">
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold text-sm text-blue-600 dark:text-blue-400">Family Tier Defaults ($19.99/mo)</span>
+                  <span className="font-semibold text-sm text-blue-600 dark:text-blue-400">Family Tier Defaults ($9.99/mo)</span>
                   <Badge className="bg-blue-500/20 text-blue-600 dark:text-blue-400 border-blue-500/30 text-xs">Family</Badge>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">

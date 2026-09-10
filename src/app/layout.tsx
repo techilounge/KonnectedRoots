@@ -118,14 +118,14 @@ const softwareAppSchema = {
     },
     {
       '@type': 'Offer',
-      price: '9.99',
+      price: '5.99',
       priceCurrency: 'USD',
       name: 'Pro Plan',
       billingDuration: 'P1M',
     },
     {
       '@type': 'Offer',
-      price: '19.99',
+      price: '9.99',
       priceCurrency: 'USD',
       name: 'Family Plan',
       billingDuration: 'P1M',

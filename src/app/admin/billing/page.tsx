@@ -117,8 +117,8 @@ export default function AdminBillingPage() {
 
   const pieData = data ? [
     { name: 'Free Users', value: data.freeCount, color: '#3E7D3B' },
-    { name: 'Pro ($9.99/mo)', value: data.proCount, color: '#C8A265' },
-    { name: 'Family ($19.99/mo)', value: data.familyCount, color: '#2563EB' },
+    { name: 'Pro ($5.99/mo)', value: data.proCount, color: '#C8A265' },
+    { name: 'Family ($9.99/mo)', value: data.familyCount, color: '#2563EB' },
   ] : [];
 
   return (
@@ -160,6 +160,18 @@ export default function AdminBillingPage() {
           </a>
         </div>
       </div>
+
+      <Card className="border-border/50 bg-card/60 backdrop-blur-sm shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Billing reconciliation health</CardTitle>
+          <CardDescription className="text-xs">Stripe remains the source of truth; this view reports synchronized Firestore state.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid grid-cols-2 md:grid-cols-6 gap-3 text-xs">
+          {data ? Object.entries({ Synced: data.reconciliation.synced, Mismatch: data.reconciliation.mismatch, 'Pending webhook': data.reconciliation.pendingWebhook, 'Past due': data.reconciliation.pastDue, Canceled: data.reconciliation.canceled, 'Missing customer': data.reconciliation.missingCustomer }).map(([label, value]) => (
+            <div key={label} className="rounded-lg border border-border/50 p-3"><div className="text-muted-foreground">{label}</div><div className="text-lg font-semibold">{value}</div></div>
+          )) : <Skeleton className="h-14 w-full col-span-6" />}
+        </CardContent>
+      </Card>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -335,7 +347,7 @@ export default function AdminBillingPage() {
                     <Badge variant="outline" className="bg-muted text-xs">Free</Badge>
                   </div>
                   <div className="text-2xl font-bold mt-2">$0.00</div>
-                  <p className="text-xs text-muted-foreground mt-1">10 AI credits/mo, 1 tree, 50 people</p>
+                  <p className="text-xs text-muted-foreground mt-1">10 AI actions/mo, 3 trees, 1 GB storage</p>
                 </div>
                 <div className="mt-4 pt-3 border-t border-border/40 flex items-center justify-between text-xs">
                   <span className="text-muted-foreground">Accounts:</span>
@@ -350,12 +362,12 @@ export default function AdminBillingPage() {
                     <span className="font-semibold text-sm text-primary">Pro Tier</span>
                     <Badge className="bg-primary/20 text-primary border-primary/30 text-xs">Most Popular</Badge>
                   </div>
-                  <div className="text-2xl font-bold mt-2">$9.99<span className="text-xs font-normal text-muted-foreground">/mo</span></div>
-                  <p className="text-xs text-muted-foreground mt-1">100 AI credits/mo, 10 trees, 1,000 people</p>
+                  <div className="text-2xl font-bold mt-2">$5.99<span className="text-xs font-normal text-muted-foreground">/mo</span></div>
+                  <p className="text-xs text-muted-foreground mt-1">200 AI actions/mo, unlimited trees, 50 GB storage</p>
                 </div>
                 <div className="mt-4 pt-3 border-t border-primary/20 flex items-center justify-between text-xs">
                   <span className="text-muted-foreground">Subtotal:</span>
-                  <span className="font-semibold text-primary">${((data?.proCount || 0) * 9.99).toFixed(2)}/mo</span>
+                  <span className="font-semibold text-primary">${((data?.proCount || 0) * 5.99).toFixed(2)}/mo</span>
                 </div>
               </div>
 
@@ -366,12 +378,12 @@ export default function AdminBillingPage() {
                     <span className="font-semibold text-sm text-blue-600 dark:text-blue-400">Family Tier</span>
                     <Badge className="bg-blue-500/20 text-blue-600 dark:text-blue-400 border-blue-500/30 text-xs">High LTV</Badge>
                   </div>
-                  <div className="text-2xl font-bold mt-2">$19.99<span className="text-xs font-normal text-muted-foreground">/mo</span></div>
-                  <p className="text-xs text-muted-foreground mt-1">300 AI credits/mo, 50 trees, 5 family seats</p>
+                  <div className="text-2xl font-bold mt-2">$9.99<span className="text-xs font-normal text-muted-foreground">/mo</span></div>
+                  <p className="text-xs text-muted-foreground mt-1">600 pooled AI actions/mo, 6 family seats, 100 GB</p>
                 </div>
                 <div className="mt-4 pt-3 border-t border-blue-500/20 flex items-center justify-between text-xs">
                   <span className="text-muted-foreground">Subtotal:</span>
-                  <span className="font-semibold text-blue-600 dark:text-blue-400">${((data?.familyCount || 0) * 19.99).toFixed(2)}/mo</span>
+                  <span className="font-semibold text-blue-600 dark:text-blue-400">${((data?.familyCount || 0) * 9.99).toFixed(2)}/mo</span>
                 </div>
               </div>
             </div>

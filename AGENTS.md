@@ -195,6 +195,15 @@ npm run set-admin your-email@example.com admin
 - See docs/security/validation-results.md for scan/build limitations. Workflow files are not evidence of active remote checks until pushed and run.
 - The root Next.js `tsconfig.json` excludes `functions/src`; Firebase Functions are compiled from `functions/tsconfig.json` with their own dependencies and predeploy build.
 
+## 10. Billing and entitlement controls
+
+- Stripe is the commercial source of truth. Browser requests contain logical plan/interval selections only; Functions resolve the server-side price catalog and generate redirect URLs.
+- Never trust a browser price ID, UID, email, customer ID, plan, status, credit balance, seat limit or entitlement flag. Checkout, Portal, AI Pack changes and webhook synchronization are server-authenticated.
+- `active` and `trialing` grant paid access. `past_due`, `unpaid`, `incomplete`, `paused`, `canceled` and expired periods resolve to Free; `cancel_at_period_end` retains access until the paid period ends.
+- Billing webhook event IDs are idempotent and subscription state carries an event-created ordering marker. Do not remove the ledger or process unsigned raw bodies.
+- Client UI may display the server billing view, but Firestore billing/usage fields are server-owned. AI debits are transactional; Relationship Finder remains deterministic and free.
+- Read [docs/billing/BILLING_ARCHITECTURE.md](docs/billing/BILLING_ARCHITECTURE.md), [docs/billing/STRIPE_WEBHOOKS.md](docs/billing/STRIPE_WEBHOOKS.md) and [docs/billing/DOWNGRADE_POLICY.md](docs/billing/DOWNGRADE_POLICY.md) before changing billing.
+
 ## Phase 1 architecture guidance
 
 - Read docs/architecture/SYSTEM_ARCHITECTURE.md, ROUTE_FUNCTION_INVENTORY.md and BOUNDARY_REPORT.md for actual runtime/data boundaries and retained exceptions.

@@ -10,13 +10,6 @@ export const clientEnv = {
     messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
     appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
   },
-  stripePrices: {
-    pro_monthly: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_MONTHLY || '',
-    pro_yearly: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_YEARLY || '',
-    family_monthly: process.env.NEXT_PUBLIC_STRIPE_PRICE_FAMILY_MONTHLY || '',
-    family_yearly: process.env.NEXT_PUBLIC_STRIPE_PRICE_FAMILY_YEARLY || '',
-    ai_pack_monthly: process.env.NEXT_PUBLIC_STRIPE_PRICE_AI_PACK || '',
-  },
 } as const;
 
 export function firebaseBrowserOptions() {

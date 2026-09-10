@@ -1,4 +1,3 @@
-import { clientEnv } from '@/lib/config/env.client';
 /**
  * Plan Limits & Constants for KonnectedRoots Pricing
  * 
@@ -20,11 +19,12 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
         maxTrees: 3,
         maxPeoplePerTree: 500,
         maxCollaboratorsPerTree: 2,
-        allowedCollaboratorRoles: ['viewer'], // Free tier: Viewer only
+        maxEditorsPerTree: 1,
+        allowedCollaboratorRoles: ['viewer', 'editor'], // Free tier: one Editor; remaining collaborators are Viewers
         exportLimitPerMonth: 2, // PNG + PDF combined
         watermarkExports: true,
-        allowGedcomExport: false,
-        allowGedcomImport: false,
+        allowGedcomExport: true,
+        allowGedcomImport: true,
         storageQuotaBytes: 1 * GB,
         aiActionsAllowance: 10,
     },
@@ -32,6 +32,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
         maxTrees: null, // unlimited
         maxPeoplePerTree: null, // unlimited
         maxCollaboratorsPerTree: 10,
+        maxEditorsPerTree: null,
         allowedCollaboratorRoles: ['viewer', 'editor', 'manager'],
         exportLimitPerMonth: null, // unlimited
         watermarkExports: false,
@@ -44,6 +45,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
         maxTrees: null, // unlimited
         maxPeoplePerTree: null, // unlimited
         maxCollaboratorsPerTree: 20,
+        maxEditorsPerTree: null,
         allowedCollaboratorRoles: ['viewer', 'editor', 'manager'],
         exportLimitPerMonth: null, // unlimited
         watermarkExports: false,
@@ -70,18 +72,6 @@ export const FAMILY_SEAT_LIMIT = 6; // owner + 5 members
 export const MAX_FILE_SIZE_BYTES = 5 * MB;
 
 /**
- * Stripe Price IDs (to be replaced with actual IDs after Stripe setup)
- * These are placeholders - update after creating products in Stripe
- */
-export const STRIPE_PRICES = {
-    pro_monthly: clientEnv.stripePrices.pro_monthly,
-    pro_yearly: clientEnv.stripePrices.pro_yearly,
-    family_monthly: clientEnv.stripePrices.family_monthly,
-    family_yearly: clientEnv.stripePrices.family_yearly,
-    ai_pack_monthly: clientEnv.stripePrices.ai_pack_monthly,
-};
-
-/**
  * Pricing display values (USD)
  */
 export const PRICING = {
@@ -92,7 +82,7 @@ export const PRICING = {
     },
     family: {
         monthly: 9.99,
-        yearly: 99.99,
+        yearly: 99,
         yearlySavings: '17%',
         seats: 6,
     },

@@ -5,7 +5,7 @@
 // Plan types
 export type Plan = 'free' | 'pro' | 'family';
 export type BillingInterval = 'month' | 'year' | null;
-export type BillingStatus = 'none' | 'active' | 'trialing' | 'past_due' | 'canceled';
+export type BillingStatus = 'none' | 'active' | 'trialing' | 'past_due' | 'unpaid' | 'canceled' | 'incomplete' | 'incomplete_expired' | 'paused';
 export type FamilyRole = 'owner' | 'member';
 export type SeatStatus = 'active' | 'invited';
 
@@ -111,6 +111,7 @@ export interface PlanLimits {
     maxTrees: number | null; // null = unlimited
     maxPeoplePerTree: number | null;
     maxCollaboratorsPerTree: number;
+    maxEditorsPerTree: number | null;
     allowedCollaboratorRoles: ('viewer' | 'editor' | 'manager')[];
     exportLimitPerMonth: number | null;
     watermarkExports: boolean;

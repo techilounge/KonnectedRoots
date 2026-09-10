@@ -9,12 +9,14 @@ import { candidates, qualifyingFailure } from './router';
 import { budgetState, cost, estimate } from './cost-engine';
 import { getProvider } from './providers';
 import { readUsage, reserve, settle } from './telemetry';
+import { effectivePlan } from '@/lib/billing/plan';
 const context = new AsyncLocalStorage<BillingContext>();
 export async function withAIContext<T>(uid: string, run: () => Promise<T>) {
   const doc = await adminDb.collection('users').doc(uid).get();
   const user = doc.data();
   if (!user || user.disabled) throw new AIError('authentication');
-  return context.run({ uid, familyId: user.family?.familyId || null, plan: user.billing?.plan || user.plan || 'free' }, run);
+  const billing = user.billing || { plan: user.plan || 'free', status: 'none', currentPeriodEnd: 0 };
+  return context.run({ uid, familyId: user.family?.familyId || null, plan: effectivePlan({ plan: billing.plan || 'free', status: billing.status || 'none', currentPeriodEnd: Number(billing.currentPeriodEnd || 0) }) }, run);
 }
 export async function withPlayground<T>(uid: string, run: () => Promise<T>) {
   return context.run({ uid, familyId: null, plan: 'admin', playground: true }, run);
