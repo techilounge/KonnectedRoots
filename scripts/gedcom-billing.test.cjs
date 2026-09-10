@@ -14,7 +14,7 @@ function fixture(userData) {
     async runTransaction(callback) {
       const transaction = {
         async get(ref) {
-          if (ref.collection === 'users' && ref.id === 'fixture') return { exists: true, data: () => userData };
+          if (ref.collection === 'users' && ref.id === 'fixture') return { exists: userData !== null, data: () => userData || {} };
           return { exists: false, data: () => ({}) };
         },
         update(ref, data) { updates.push({ ref, data }); },
@@ -93,4 +93,11 @@ test('Unauthenticated or invalid sessions cannot record GEDCOM exports', async (
   const f = fixture(freeUser());
   assert.equal((await f.usage.recordExportOnServer(undefined, 'gedcom')).success, false);
   assert.equal((await f.usage.recordExportOnServer('invalid-token', 'gedcom')).success, false);
+});
+
+test('A valid session without a server profile cannot export private data', async () => {
+  const f = fixture(null);
+  const result = await f.usage.recordExportOnServer('valid-token', 'gedcom');
+  assert.equal(result.success, false);
+  assert.match(result.error, /profile/i);
 });

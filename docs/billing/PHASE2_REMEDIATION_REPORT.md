@@ -74,7 +74,7 @@ override or broad suppression was added.
 
 - Root `npm run typecheck`: passed.
 - Root `npm run lint`: completed with the repository's existing warnings and no errors.
-- Root `npm test`: 67 tests passed, including six GEDCOM accounting tests.
+- Root `npm test`: 68 tests passed, including seven GEDCOM accounting tests.
 - Functions `npm run build`: passed under the compiled Node 20-targeted source.
 - Functions billing regression suite: 25 tests passed, including ten
   collaboration policy and Firestore-rule tests.
