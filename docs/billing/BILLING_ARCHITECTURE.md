@@ -50,11 +50,16 @@ markers, past-due/canceled accounts and missing customer mappings. It is a
 read-only reconciliation view; repairing a mismatch is an explicit support or
 admin operation and is not performed broadly or destructively by a page load.
 
-Storage create/update rules use the server-owned billing status and usage fields
-to apply the 1 GB/50 GB/100 GB quota. Authorized deletes remain available so a
-downgraded account can reduce usage; exact byte reconciliation after deletes and
-replacements remains a later data-integrity phase.
+Storage Rules resolve an active Family owner's workspace and select its
+server-owned `families/{familyId}.usage.storageUsedBytes` counter; Free/Pro
+accounts use the owner's user counter. Replacement writes charge only the
+positive size delta, and authorized deletes remain available. The current
+upload paths do not atomically maintain either counter for every create,
+replacement, or delete, so these Rules are a safe foundation rather than a
+complete quota security boundary. Exact accounting and reconciliation,
+including the shared Family 100 GB limit, are deferred to Phase 3/4.
 
-Family AI actions and storage are workspace-scoped pools. Server metering resolves
-the Family document before debiting usage, while tree collaborators remain a
-separate role-based concept.
+Family AI actions are a workspace-scoped pool. Storage Rules resolve the Family
+document when its membership and synchronized state are available, but exact
+storage accounting remains deferred as described above. Tree collaborators remain
+a separate role-based concept.

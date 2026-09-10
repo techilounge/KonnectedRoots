@@ -12,7 +12,7 @@ resources.
 | Family billing seats | 0 | 0 | 6 (owner + 5) | 0 | 6 (owner + 5) |
 | Visual exports | 2/month, watermark | Unlimited, no watermark | Unlimited, no watermark | Unlimited, no watermark | Unlimited, no watermark |
 | GEDCOM import/export | No | Yes | Yes | Yes | Yes |
-| Storage quota | 1 GB | 50 GB | 100 GB shared | 50 GB | 100 GB shared |
+| Storage quota target | 1 GB (counter reconciliation pending) | 50 GB (counter reconciliation pending) | 100 GB shared (Family enforcement deferred) | 50 GB (counter reconciliation pending) | 100 GB shared (Family enforcement deferred) |
 | Base AI actions/month | 10 | 200 | 600 pooled | 200 | 600 pooled |
 | AI Pack allowance | N/A | N/A | N/A | +1,000 | +1,000 |
 | Relationship Finder | Deterministic/local, free | Deterministic/local, free | Deterministic/local, free | Deterministic/local, free | Deterministic/local, free |
@@ -22,6 +22,16 @@ separate concepts; an editor does not automatically consume a Family seat.
 Every collaboration decision still requires both the tree role and the
 resolved account/workspace entitlement.
 
+The storage values above are product targets. Storage Rules select the
+server-owned user or Family counter and handle replacement deltas, but current
+upload/delete paths do not maintain those counters atomically. Full quota
+enforcement and reconciliation therefore remain Phase 3/4 work.
+
+Two product policies remain owner decisions for Phase 2: GEDCOM is currently
+Free-disabled and Pro/Family-enabled; Free collaboration currently allows up
+to two viewer-only collaborators. Neither policy is changed by this pass.
+
 The server preserves existing trees, people and files after downgrade. It
-blocks new paid-capability usage when the new limits are exceeded. It does not
-delete data to enforce a quota.
+blocks new paid-capability usage when the new limits are exceeded; exact
+storage blocking remains deferred until counters are maintained atomically. It
+does not delete data to enforce a quota.

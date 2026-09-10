@@ -24,8 +24,11 @@
   portability/UX boundary until a server export service is approved.
 - Family AI usage is debited from the server-owned Family workspace pool, and
   missing billing period data fails closed rather than granting stale paid access.
-- Added server-owned quota checks to Storage create/update rules while keeping
-  deletes available to authorized tree editors and profile owners.
+- Updated Storage Rules to select the server-owned Family or user counter and
+  charge only positive replacement deltas while keeping deletes available.
+  Current upload/delete paths do not atomically maintain those counters, so
+  exact quota enforcement and reconciliation—including the shared Family
+  100 GB pool—remain deferred to Phase 3/4.
 - Added an admin billing reconciliation-health view and updated pricing values
   to the current product structure.
 
@@ -35,8 +38,13 @@
   entitlement are combined, never substituted for one another.
 - Family seats are six account seats and are distinct from tree collaborators.
 - Downgrades preserve data and block new usage beyond Free limits.
-- Storage reporting is canonical and upload checks are server-authorized where
-  available; full byte reconciliation remains a Phase 3/4 data-integrity item.
+- Storage Rules use server-owned user or Family counters and upload checks are
+  server-authorized where available, but the current counters are not
+  atomically maintained by every upload/replacement/delete path; full byte
+  reconciliation remains a Phase 3/4 data-integrity item.
+- Owner decisions pending: GEDCOM remains Free-disabled and Pro/Family-enabled;
+  Free collaboration remains limited to two viewer-only collaborators. This
+  pass does not change either policy.
 - No live production charges are part of this change. Test-mode lifecycle
   validation is required before approval.
 
@@ -62,9 +70,12 @@ override or broad suppression was added.
 - Root `npm run lint`: completed with the repository's existing warnings and no errors.
 - Root `npm test`: 61 tests passed.
 - Functions `npm run build`: passed under the compiled Node 20-targeted source.
-- Functions billing regression suite: 11 tests passed when invoked directly with
+- Functions billing regression suite: 15 tests passed when invoked directly with
   Node's test runner. The package `npm test` wrapper cannot spawn its child test
   process in this restricted Windows session (`spawn EPERM`).
+- Webhook ordering regression coverage includes sequential newer-then-older,
+  concurrent older/newer, equal timestamps, user billing, and Family billing;
+  all persisted-state assertions pass.
 - Current-source Gitleaks scan: passed. The full-history scan still reports the
   three documented public Firebase browser-key findings; no private billing or
   AI credential was added.

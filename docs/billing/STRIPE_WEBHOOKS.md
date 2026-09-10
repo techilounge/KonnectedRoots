@@ -16,10 +16,15 @@ Firestore transaction. A duplicate delivery receives 2xx without repeating
 subscription writes, AI Pack grants, or payment email. A processing failure is
 marked failed and returns 500 so Stripe can retry.
 
-Subscription state carries `latestStripeEventCreated`. An incoming event older
-than the stored marker is ignored for state mutation. This protects against
-`subscription.updated(newer)` followed by `subscription.updated(older)` while
-allowing the event ledger to record both deliveries.
+Subscription state carries `latestStripeEventCreated`. For both
+`users/{uid}.billing` and `families/{familyId}.plan`, the handler reads the
+target and compares timestamps inside the same Firestore transaction that
+writes the billing mutation. An incoming event older than the stored marker is
+ignored for state mutation. Equal timestamps are accepted as not older. This
+protects against `subscription.updated(newer)` followed by
+`subscription.updated(older)`, including concurrent deliveries, while allowing
+the event ledger to record both deliveries. Each target document is
+transactional independently; unrelated customers are not globally serialized.
 
 Only safe identifiers and timestamps are logged/stored: event ID/type, Stripe
 created time, customer/subscription IDs, account ID, status, and error code.

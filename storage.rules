@@ -36,22 +36,35 @@ service firebase.storage {
       );
     }
 
-    // Storage quota is evaluated against the server-owned user billing/usage
-    // fields. The browser cannot raise either field through Firestore rules.
+    // Storage quota is evaluated against server-owned billing/usage fields. A
+    // paid Family workspace uses its shared family counter; otherwise the
+    // owner's user counter is used. Clients cannot raise either counter.
     function quotaBytes(uid) {
       let user = firestore.get(/databases/(default)/documents/users/$(uid)).data;
       let hasBilling = user.keys().hasAny(['billing']);
+      let hasFamily = user.keys().hasAny(['family']) && user.family.keys().hasAny(['familyId']) && user.family.familyId != null;
+      let family = hasFamily ? firestore.get(/databases/(default)/documents/families/$(user.family.familyId)).data : null;
+      let familyPaid = hasFamily && family != null && family.keys().hasAny(['plan']) &&
+        (family.plan.status == 'active' || family.plan.status == 'trialing');
       let paid = hasBilling && (user.billing.status == 'active' || user.billing.status == 'trialing');
-      return paid && user.billing.plan == 'family' ? 100 * 1024 * 1024 * 1024 :
+      return familyPaid ? 100 * 1024 * 1024 * 1024 :
              paid && user.billing.plan == 'pro' ? 50 * 1024 * 1024 * 1024 :
              1 * 1024 * 1024 * 1024;
     }
 
-    function withinQuota(uid) {
+    function storageUsedBytes(uid) {
       let user = firestore.get(/databases/(default)/documents/users/$(uid)).data;
+      let hasFamily = user.keys().hasAny(['family']) && user.family.keys().hasAny(['familyId']) && user.family.familyId != null;
+      let family = hasFamily ? firestore.get(/databases/(default)/documents/families/$(user.family.familyId)).data : null;
+      let familyPaid = hasFamily && family != null && family.keys().hasAny(['plan']) &&
+        (family.plan.status == 'active' || family.plan.status == 'trialing');
+      let hasFamilyUsage = familyPaid && family.keys().hasAny(['usage']) && family.usage.keys().hasAny(['storageUsedBytes']);
       let hasUsage = user.keys().hasAny(['usage']) && user.usage.keys().hasAny(['storageUsedBytes']);
-      let usedBytes = hasUsage ? user.usage.storageUsedBytes : 0;
-      return usedBytes + request.resource.size <= quotaBytes(uid);
+      return hasFamilyUsage ? family.usage.storageUsedBytes : hasUsage ? user.usage.storageUsedBytes : 0;
+    }
+
+    function withinQuota(uid, additionalBytes) {
+      return storageUsedBytes(uid) + additionalBytes <= quotaBytes(uid);
     }
 
     // Profile photos & media for people inside trees
@@ -62,17 +75,27 @@ service firebase.storage {
       allow read: if true;
 
       // User must have edit rights to the tree
-      allow create, update: if canEditTree(treeId) && isImage() && under5MB() && withinQuota(firestore.get(/databases/(default)/documents/trees/$(treeId)).data.ownerId);
+      allow create: if canEditTree(treeId) && isImage() && under5MB() && withinQuota(firestore.get(/databases/(default)/documents/trees/$(treeId)).data.ownerId, request.resource.size);
+      // On replacement, only the positive size delta consumes quota. The
+      // existing object is available as `resource` for update requests.
+      allow update: if canEditTree(treeId) && isImage() && under5MB() && withinQuota(
+        firestore.get(/databases/(default)/documents/trees/$(treeId)).data.ownerId,
+        request.resource.size > resource.size ? request.resource.size - resource.size : 0
+      );
       allow delete: if canEditTree(treeId);
     }
 
     // (Optional but recommended) add a Storage rule for user avatars
     match /users/{uid}/profile/{fileName} {
       allow read: if true; // or authed() if you prefer private
-      allow create, update: if authed() && request.auth.uid == uid
+      allow create: if authed() && request.auth.uid == uid
                    && request.resource.size < 5 * 1024 * 1024
                    && request.resource.contentType.matches('image/.*')
-                   && withinQuota(uid);
+                   && withinQuota(uid, request.resource.size);
+      allow update: if authed() && request.auth.uid == uid
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*')
+                   && withinQuota(uid, request.resource.size > resource.size ? request.resource.size - resource.size : 0);
       allow delete: if authed() && request.auth.uid == uid;
     }
   }

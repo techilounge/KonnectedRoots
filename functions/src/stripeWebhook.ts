@@ -93,22 +93,30 @@ function periodEnd(subscription: Stripe.Subscription): number {
   return Number(value) * 1000;
 }
 
-async function updateBillingIfNewer(uid: string, eventCreated: number, billing: Record<string, unknown>) {
+export async function updateBillingIfNewer(uid: string, eventCreated: number, billing: Record<string, unknown>) {
   const ref = getDb().collection('users').doc(uid);
-  const snap = await ref.get();
-  const previous = snap.data()?.billing || {};
-  if (!shouldApplyBillingEvent(Number(previous.latestStripeEventCreated || 0), eventCreated)) return false;
-  await ref.set({ billing: { ...billing, latestStripeEventCreated: eventCreated, updatedAt: Date.now() } }, { merge: true });
-  return true;
+  const database = getDb() as any;
+  if (typeof database.runTransaction !== 'function') throw new Error('Billing state transaction unavailable.');
+  return database.runTransaction(async (transaction: any) => {
+    const snap = await transaction.get(ref);
+    const previous = snap.data()?.billing || {};
+    if (!shouldApplyBillingEvent(Number(previous.latestStripeEventCreated || 0), eventCreated)) return false;
+    transaction.set(ref, { billing: { ...billing, latestStripeEventCreated: eventCreated, updatedAt: Date.now() } }, { merge: true });
+    return true;
+  });
 }
 
-async function updateFamilyIfNewer(familyId: string, eventCreated: number, plan: Record<string, unknown>) {
+export async function updateFamilyIfNewer(familyId: string, eventCreated: number, plan: Record<string, unknown>) {
   const ref = getDb().collection('families').doc(familyId);
-  const snap = await ref.get();
-  const previous = snap.data()?.plan || {};
-  if (!shouldApplyBillingEvent(Number(previous.latestStripeEventCreated || 0), eventCreated)) return false;
-  await ref.set({ plan: { ...plan, latestStripeEventCreated: eventCreated, updatedAt: Date.now() } }, { merge: true });
-  return true;
+  const database = getDb() as any;
+  if (typeof database.runTransaction !== 'function') throw new Error('Billing state transaction unavailable.');
+  return database.runTransaction(async (transaction: any) => {
+    const snap = await transaction.get(ref);
+    const previous = snap.data()?.plan || {};
+    if (!shouldApplyBillingEvent(Number(previous.latestStripeEventCreated || 0), eventCreated)) return false;
+    transaction.set(ref, { plan: { ...plan, latestStripeEventCreated: eventCreated, updatedAt: Date.now() } }, { merge: true });
+    return true;
+  });
 }
 
 async function handleSubscription(event: Stripe.Event, subscription: Stripe.Subscription) {
