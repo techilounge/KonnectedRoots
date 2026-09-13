@@ -190,7 +190,6 @@ test('Family authority requires the paid Family plan marker across server usage 
     'src/app/billing/actions.ts',
     'src/lib/billing/entitlements.ts',
     'src/lib/billing/serverUsage.ts',
-    'storage.rules',
   ]) {
     const source = fs.readFileSync(file,'utf8');
     assert.equal(source.includes("plan === 'family'") || source.includes("plan == 'family'"),true,file);

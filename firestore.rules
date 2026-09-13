@@ -23,10 +23,10 @@ service cloud.firestore {
       // Platform admins can update any user profile; users can update their own non-privileged fields
       allow update: if isPlatformAdmin() || (
         request.auth != null && request.auth.uid == userId
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['billing', 'usage', 'family', 'entitlements', 'plan', 'role', 'isPlatformAdmin'])
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['billing', 'usage', 'family', 'entitlements', 'storageAuthority', 'plan', 'role', 'isPlatformAdmin'])
       );
       allow create: if request.auth != null && request.auth.uid == userId
-                    && !request.resource.data.keys().hasAny(['billing', 'usage', 'family', 'entitlements', 'plan', 'role', 'isPlatformAdmin']);
+                    && !request.resource.data.keys().hasAny(['billing', 'usage', 'family', 'entitlements', 'storageAuthority', 'plan', 'role', 'isPlatformAdmin']);
     }
 
     // Rules for the 'trees' collection and its 'people' subcollection.

@@ -63,6 +63,7 @@ function loadIndex(emailResult) {
     './stripeBilling': {createCheckoutSession: {}, createPortalSession: {}, upgradeToFamily: {}, addAIPack: {}, removeAIPack: {}, resumeAIPack: {}},
     './familyDowngrade': {scheduleDowngradeToPro: {}, cancelScheduledDowngrade: {}, reconcileScheduledBilling: {}},
     './scheduledTasks': {weeklyActivityDigest: {}, inactivityReminder: {}, planExpirationReminder: {}},
+    './storageAuthority': {},
   };
   const mod = {exports: {}};
   new Function('require', 'module', 'exports', fs.readFileSync(path.join(__dirname, '../lib/index.js'), 'utf8'))(

@@ -7,6 +7,7 @@ import * as admin from 'firebase-admin';
 import { sendEmail } from './sendEmail';
 import { paymentSuccessEmail, paymentFailedEmail } from './emailTemplates';
 import { inspectDowngradeSchedule, ownsAppliedScheduleReceipt, verifyPartialScheduleOwnership, scheduledDowngradeState, stripeId } from './billingSchedules';
+import { applyStorageWrites, deriveStorageAuthority, familyStorageWrites } from './storageAuthority';
 
 if (!admin.apps.length) admin.initializeApp();
 function getDb() { return admin.firestore(); }
@@ -356,7 +357,14 @@ export async function updateBillingIfNewer(
       planChangeOperationId: null,
       planChangeFailure: 'payment_expired',
     } : {};
-    transaction.set(ref, { billing: { ...previous, ...next, ...planChangeState, latestStripeEventCreated: eventCreated, updatedAt: Date.now() } }, { merge: true });
+    const user = { ...snap.data(), billing: { ...previous, ...next, ...planChangeState, latestStripeEventCreated: eventCreated, updatedAt: Date.now() } };
+    const familyId = user.family?.familyId || previous.planChangeFamilyId;
+    const family = typeof familyId === 'string' && familyId
+      ? (await transaction.get(database.collection('families').doc(familyId))).data() || {} : {};
+    const storageWrites = family.ownerUid === uid
+      ? await familyStorageWrites(transaction, database, familyId, family, user, now) : [];
+    transaction.set(ref, { billing: user.billing }, { merge: true });
+    applyStorageWrites(transaction, storageWrites);
     return true;
   });
 }
@@ -385,7 +393,11 @@ export async function updateFamilyIfNewer(
       { ...previous, ...next },
       ownerSnap?.exists ? ownerSnap.data()?.billing : null,
     );
-    transaction.set(ref, { plan: { ...derived, latestStripeEventCreated: eventCreated, updatedAt: Date.now() } }, { merge: true });
+    const projectedFamily = { ...familyData, plan: { ...derived, latestStripeEventCreated: eventCreated, updatedAt: Date.now() } };
+    const storageOwner = familyData.ownerUid === resolvedOwnerUid ? ownerSnap?.data() || {} : {};
+    const storageWrites = await familyStorageWrites(transaction, database, familyId, projectedFamily, storageOwner, now);
+    transaction.set(ref, { plan: projectedFamily.plan }, { merge: true });
+    applyStorageWrites(transaction, storageWrites);
     return true;
   });
 }
@@ -480,7 +492,12 @@ export async function reconcileStripeSubscription(uid: string, subscriptionId: s
     const storageFloor = previous.plan === 'family' && next.plan === 'pro' && familySnap?.exists
       ? { usage: { storageUsedBytes: Math.max(Number(userData.usage?.storageUsedBytes || 0), Number(familySnap.data()?.usage?.storageUsedBytes || 0)) } }
       : {};
+    const projectedUser = { ...userData, billing, usage: { ...userData.usage, ...storageFloor.usage } };
+    const projectedFamily = { ...familySnap?.data(), plan: { ...familySnap?.data()?.plan, ...next } };
+    const storageWrites = familyId && familySnap?.exists
+      ? await familyStorageWrites(transaction, database, familyId, projectedFamily, projectedUser, now) : [];
     transaction.set(userRef, { billing, ...storageFloor }, { merge: true });
+    applyStorageWrites(transaction, storageWrites);
     if (familyRef && familySnap?.exists) {
       const oldPlan = familySnap.data()?.plan || {};
       const paidSeatsActive = next.plan === 'family' && ['active', 'trialing'].includes(String(next.status)) && Number(next.currentPeriodEnd) > now;
@@ -532,12 +549,14 @@ export async function activateFamilyOwnerMembership(uid: string, familyId: strin
     if (linkedFamilyId && linkedFamilyId !== familyId) {
       throw new Error('User is already linked to a different Family workspace.');
     }
+    const membership = {
+      familyId,
+      role: 'owner',
+      joinedAt: Number(userData.family?.joinedAt || 0) || Date.now(),
+    };
     transaction.set(userRef, {
-      family: {
-        familyId,
-        role: 'owner',
-        joinedAt: Number(userData.family?.joinedAt || 0) || Date.now(),
-      },
+      family: membership,
+      storageAuthority: deriveStorageAuthority({ ...userData, family: membership }, familyData, userData),
     }, { merge: true });
     if (!seatSnap.exists) {
       transaction.set(seatRef, {

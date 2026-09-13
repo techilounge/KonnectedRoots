@@ -45,7 +45,7 @@ function fixture(options = {}) {
     for(let attempt=0;attempt<20;attempt++) {
       const reads=new Map();const writes=[];
       if(options.transactionFailure?.()) {const error=new Error('Synthetic lock contention');error.code=10;throw error;}
-      const result=await callback({get:async r=>{if(r.query){const matching=[...docs].filter(([key,e])=>key.startsWith(r.name+'/') && e.value[r.field]===r.value);for(const [key,e]of matching)reads.set(key,e.version);return {empty:!matching.length};}const snap=await r.get();reads.set(r.key,snap.version);return snap;},set:(...args)=>writes.push(args),update:(r,v)=>writes.push([r,v,{merge:true}]),create:(...args)=>writes.push(args)});
+      const result=await callback({get:async r=>{if(r.query){const matching=[...docs].filter(([key,e])=>key.startsWith(r.name+'/') && r.field.split('.').reduce((v,k)=>v?.[k],e.value)===r.value);for(const [key,e]of matching)if(!reads.has(key))reads.set(key,e.version);return {empty:!matching.length,size:matching.length,docs:matching.map(([key,e])=>({id:key.split('/').at(-1),ref:ref(key),data:()=>clone(e.value)}))};}const snap=await r.get();if(!reads.has(r.key))reads.set(r.key,snap.version);return snap;},set:(...args)=>writes.push(args),update:(r,v)=>writes.push([r,v,{merge:true}]),create:(...args)=>writes.push(args)});
       if([...reads].some(([key,version])=>docs.get(key)?.version!==version)){retries++;continue;}
       // Commit synchronously as a unit.
       for(const [r,v,o] of writes){const old=docs.get(r.key);docs.set(r.key,{value:o?.merge?merge(old?.value,v):clone(v),version:(old?.version || 0)+1});}

@@ -8,6 +8,7 @@ function loadSubscriptionPolicy(logs = [], env = process.env) {
   const mocks = {
     './config': {functionsEnv: require('../lib/config').functionsConfig({STRIPE_SECRET_KEY:env.STRIPE_SECRET_KEY || 'fixture',STRIPE_WEBHOOK_SECRET:'fixture'})},
     './billingSchedules': require('../lib/billingSchedules'),
+    './storageAuthority': require('../lib/storageAuthority'),
     './billingCatalog': {isSupportedWebhookType: () => false},
     'firebase-functions/v2/https': {onRequest: (_options, handler) => handler},
     'firebase-functions/logger': {
@@ -273,6 +274,7 @@ test('payment_succeeded sends the existing email once; invoice.paid sends none',
     'firebase-admin': {apps:[{}],firestore: () => db},
     stripe: Stripe,
     './billingSchedules': require('../lib/billingSchedules'),
+    './storageAuthority': require('../lib/storageAuthority'),
     './billingCatalog': {isSupportedWebhookType: type => ['invoice.payment_succeeded'].includes(type)},
     './config': {functionsEnv: require('../lib/config').functionsConfig({STRIPE_SECRET_KEY:'fixture',STRIPE_WEBHOOK_SECRET:'fixture'})},
     './sendEmail': {sendEmail: async value => emails.push(value)},
@@ -305,6 +307,7 @@ test('webhook policy rejects stale subscription state and unsupported aliases', 
   const mocks = {
     './config': {functionsEnv: require('../lib/config').functionsConfig({STRIPE_SECRET_KEY:'fixture',STRIPE_WEBHOOK_SECRET:'fixture'})},
     './billingSchedules': require('../lib/billingSchedules'),
+    './storageAuthority': require('../lib/storageAuthority'),
     './billingCatalog': {isSupportedWebhookType: type => ['invoice.payment_succeeded'].includes(type)},
     'firebase-functions/v2/https': {onRequest: (_options, handler) => handler},
     'firebase-functions/logger': {info(){},warn(){},error(){}},
@@ -360,12 +363,12 @@ function transactionalStore(initial, barrierReads = 0) {
         const transaction = {
           get: async ref => {
             if (ref.query) {
-              const matches = [...docs].filter(([key, entry]) => key.startsWith(ref.collection + '/') && entry.value[ref.field] === ref.value);
-              for (const [key, entry] of matches) reads.set(key, entry.version);
-              return {empty: !matches.length};
+              const matches = [...docs].filter(([key, entry]) => key.startsWith(ref.collection + '/') && ref.field.split('.').reduce((v, k) => v?.[k], entry.value) === ref.value);
+              for (const [key, entry] of matches) if (!reads.has(key)) reads.set(key, entry.version);
+              return {empty: !matches.length, size: matches.length, docs: matches.map(([key, entry]) => ({id: key.slice(ref.collection.length + 1), ref: refFor(ref.collection, key.slice(ref.collection.length + 1)), data: () => clone(entry.value)}))};
             }
             const entry = docs.get(ref.key);
-            reads.set(ref.key, entry?.version ?? -1);
+            if (!reads.has(ref.key)) reads.set(ref.key, entry?.version ?? -1);
             waitingReads += 1;
             if (barrierReads && waitingReads >= barrierReads) releaseReads();
             if (barrierReads && waitingReads < barrierReads) await readsReleased;
@@ -398,6 +401,7 @@ function loadOrderingModule(store) {
   const mocks = {
     './config': {functionsEnv: require('../lib/config').functionsConfig({STRIPE_SECRET_KEY:'fixture',STRIPE_WEBHOOK_SECRET:'fixture'})},
     './billingSchedules': require('../lib/billingSchedules'),
+    './storageAuthority': require('../lib/storageAuthority'),
     './billingCatalog': {isSupportedWebhookType: () => false},
     'firebase-functions/v2/https': {onRequest: (_options, handler) => handler},
     'firebase-functions/logger': {info(){},warn(){},error(){}},
@@ -428,6 +432,7 @@ function loadBillingWebhookModule(store, state) {
       STRIPE_PRICE_AI_PACK:'price_ai_pack',
     })},
     './billingSchedules': require('../lib/billingSchedules'),
+    './storageAuthority': require('../lib/storageAuthority'),
     './billingCatalog': {isSupportedWebhookType: type => [
       'customer.subscription.updated',
       'customer.subscription.deleted',

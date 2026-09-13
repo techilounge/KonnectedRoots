@@ -85,6 +85,18 @@ export interface UserUsage {
     storageUsedBytes: number;
 }
 
+// Server-owned storage-only Family projection; exact byte accounting is deferred.
+export interface StorageAuthority {
+    familyId: string | null;
+    ownerUid: string | null;
+    plan: 'free' | 'family';
+    status: 'active' | 'none';
+    paidUntil: number;
+    stripeCustomerId: string | null;
+    stripeSubscriptionId: string | null;
+    storageUsedBytes: number;
+}
+
 // Complete user document with billing
 export interface UserWithBilling {
     uid: string;
@@ -95,6 +107,7 @@ export interface UserWithBilling {
     billing: UserBilling;
     family: UserFamily;
     usage: UserUsage;
+    storageAuthority?: StorageAuthority;
 }
 
 // Family plan structure (stored in families/{familyId})

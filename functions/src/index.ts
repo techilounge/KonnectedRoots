@@ -32,6 +32,7 @@ export { scheduleDowngradeToPro, cancelScheduledDowngrade, reconcileScheduledBil
 
 // Export scheduled tasks
 export { weeklyActivityDigest, inactivityReminder, planExpirationReminder } from "./scheduledTasks";
+export { prepareStorageUpload, onStorageUserWritten, onStorageFamilyWritten } from "./storageAuthority";
 
 // Create invitations through a trusted server transaction. Firestore rules do
 // not permit clients to create invitation documents or mutate collaborator
