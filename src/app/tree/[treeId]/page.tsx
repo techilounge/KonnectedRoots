@@ -23,7 +23,7 @@ import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { db } from '@/lib/firebase/clients';
-import { collection, doc, getDocs, setDoc, deleteDoc, writeBatch, serverTimestamp, getDoc, updateDoc, query, where, onSnapshot, increment, deleteField } from 'firebase/firestore';
+import { collection, doc, getDocs, deleteDoc, writeBatch, serverTimestamp, getDoc, updateDoc, query, where, onSnapshot, deleteField } from 'firebase/firestore';
 import { useAuth } from '@/hooks/useAuth';
 import { useUndoRedo } from '@/hooks/useUndoRedo';
 import { handleFindRelationship } from '@/app/actions';
@@ -249,8 +249,12 @@ export default function TreeEditorPage() {
 
     try {
       const personDocRef = doc(peopleCol, newPersonId);
+      // Commit the person and tree timestamp together. updateTreeMemberCount owns the count.
+      const batch = writeBatch(db);
+      batch.set(personDocRef, personWithDefaults);
+      batch.update(getTreeDocRef(), { lastUpdated: serverTimestamp() });
       // The real-time listener will handle updating the local state (setPeople)
-      await setDoc(personDocRef, personWithDefaults);
+      await batch.commit();
 
       // Push undo command
       pushCommand({
@@ -263,21 +267,23 @@ export default function TreeEditorPage() {
       // Note: Don't auto-open editor - user can double-click to edit
       // This prevents duplicate undo commands (add + save)
       toast({ title: "Person Added", description: "Double-click to edit details." });
-      // Also update the parent tree's lastUpdated timestamp to trigger UI refreshes elsewhere if needed
-      await updateDoc(getTreeDocRef(), { lastUpdated: serverTimestamp(), memberCount: increment(1) });
-
       // Save layout snapshot to capture initial position
       if (resolvedTreeId && user) {
         // Use updated list including new person to ensure they are in the snapshot
-        await saveLayoutSnapshot(
-          resolvedTreeId,
-          [...people, personWithDefaults],
-          user.uid,
-          'auto',
-          { x: 0, y: 0 },
-          1,
-          'Added New Person'
-        );
+        try {
+          await saveLayoutSnapshot(
+            resolvedTreeId,
+            [...people, personWithDefaults],
+            user.uid,
+            'auto',
+            { x: 0, y: 0 },
+            1,
+            'Added New Person'
+          );
+        } catch {
+          // The person is already saved; optional history failure must not suggest retrying Add.
+          console.warn('Person added, but layout snapshot could not be saved.');
+        }
       }
     } catch (error) {
       console.error("Error adding person to Firestore:", error);
@@ -449,8 +455,8 @@ export default function TreeEditorPage() {
         }
       }
 
-      // Update tree metadata
-      batch.update(getTreeDocRef(), { lastUpdated: serverTimestamp(), memberCount: increment(-1) });
+      // updateTreeMemberCount maintains the count after the person deletion.
+      batch.update(getTreeDocRef(), { lastUpdated: serverTimestamp() });
 
       // Close dialog BEFORE commit to prevent state conflicts
       handleCloseDeleteDialog();
@@ -612,11 +618,8 @@ export default function TreeEditorPage() {
       const removeRef = doc(getPeopleColRef(), removeId);
       batch.delete(removeRef);
 
-      // Update member count
-      batch.update(getTreeDocRef(), {
-        memberCount: increment(-1),
-        lastUpdated: serverTimestamp()
-      });
+      // updateTreeMemberCount maintains the count after removing the duplicate.
+      batch.update(getTreeDocRef(), { lastUpdated: serverTimestamp() });
 
       await batch.commit();
 

@@ -471,9 +471,98 @@ for (const role of ['owner', 'editor', 'manager', 'viewer', 'anonymous']) test(`
     assert.equal((await reference.get()).data().profilePictureUrl, undefined);
   } else {await assertFails(batch.commit()); assert.equal((await reference.get()).data().profilePictureUrl, 'synthetic-old-photo');}
 });
-test('real Rules Editor timestamp permission cannot edit tree metadata or collaborator membership', async () => {
+for (const mutation of [{memberCount: 999}, {title: 'Unauthorized'}, {ownerId: 'editor'},
+  {collaborators: {editor: 'manager'}}, {slug: 'unauthorized'}, {lastUpdated: new Date(0)}])
+test(`real Rules Editor cannot write protected parent field ${Object.keys(mutation)[0]}`, async () => {
   const a = await account(); const client = env.authenticatedContext('editor').firestore();
-  await assertFails(client.doc(`trees/${a.treeId}`).update({title: 'Unauthorized'}));
-  await assertFails(client.doc(`trees/${a.treeId}`).update({collaborators: {editor: 'manager'}}));
-  await assertFails(client.doc(`trees/${a.treeId}`).update({lastUpdated: new Date(0)}));
+  const ref = database.doc(`trees/${a.treeId}`); const before = (await ref.get()).data();
+  await assertFails(client.doc(ref.path).update(mutation));
+  assert.deepEqual((await ref.get()).data(), before);
+});
+
+// Execute the actual Editor page handlers against real Rules, then invoke the
+// unchanged compiled count Function with the real Admin database. This verifies
+// server recount persistence, without claiming deployed trigger delivery.
+const {treeHandlers} = require('../helpers/tree-editor.cjs');
+const browserFirestore = require('firebase/firestore');
+for (const role of ['owner', 'manager', 'editor']) for (const action of ['add', 'delete', 'merge'])
+test(`real Rules actual tree ${action} handler: ${role}, timestamp-only parent and server recount`, async () => {
+  const a = await account(); const actor = role === 'owner' ? a.uid : role;
+  const treeRef = database.doc(`trees/${a.treeId}`);
+  await treeRef.update({memberCount: 5, lastUpdated: new Date(0), title: 'Synthetic Count Regression', slug: 'synthetic-count'});
+  const metadata = (await treeRef.get()).data();
+  const people = [
+    {id: 'remove', firstName: 'Synthetic Duplicate', spouseIds: ['partner'], parentId1: 'parent', childrenIds: ['child'], biography: 'Synthetic biography'},
+    {id: 'keep', firstName: 'Synthetic Kept', spouseIds: [], childrenIds: []},
+    {id: 'partner', firstName: 'Synthetic Partner', spouseIds: ['remove']},
+    {id: 'parent', firstName: 'Synthetic Parent', childrenIds: ['remove']},
+    {id: 'child', firstName: 'Synthetic Child', parentId1: 'remove'},
+  ];
+  for (const person of people) await treeRef.collection('people').doc(person.id).set(person);
+  const client = env.authenticatedContext(actor).firestore(); const db = client._delegate;
+  assert.ok(db, 'Rules context must expose the real modular browser Firestore');
+  const toasts = [], commands = [];
+  const handlers = treeHandlers({...browserFirestore, db, treeId: a.treeId, resolvedTreeId: a.treeId,
+    user: {uid: actor}, people, personToDelete: people[0], selectedPerson: people[0],
+    getPeopleColRef: () => browserFirestore.collection(db, 'trees', a.treeId, 'people'),
+    getTreeDocRef: () => browserFirestore.doc(db, 'trees', a.treeId),
+    toast: value => toasts.push(value), pushCommand: value => commands.push(value),
+  });
+  if (action === 'add') await handlers.handleAddPerson({firstName: 'Synthetic Added'});
+  if (action === 'delete') await handlers.handleConfirmDelete();
+  if (action === 'merge') await handlers.handleMergeDuplicates('keep', 'remove');
+  assert.equal(toasts.length, 1);
+  assert.equal(toasts[0].title, {add: 'Person Added', delete: 'Person Deleted', merge: 'Merged Successfully'}[action]);
+  const expectedCount = action === 'add' ? 6 : 4;
+  const savedPeople = await treeRef.collection('people').get();
+  assert.equal(savedPeople.size, expectedCount);
+  const parent = (await treeRef.get()).data();
+  assert.equal(parent.memberCount, 5, 'Browser leaves authoritative count untouched');
+  assert.ok(parent.lastUpdated.toMillis() > 0, 'serverTimestamp accepted by real Rules');
+  for (const key of ['title', 'slug', 'ownerId', 'collaborators']) assert.deepEqual(parent[key], metadata[key]);
+  const read = async id => (await treeRef.collection('people').doc(id).get()).data();
+  if (action === 'add') {
+    assert.equal(commands.length, 1);
+    assert.equal((await read(commands[0].personId)).firstName, 'Synthetic Added');
+  } else {
+    assert.equal(await read('remove'), undefined);
+    assert.deepEqual((await read('partner')).spouseIds, action === 'merge' ? ['keep'] : []);
+    assert.deepEqual((await read('parent')).childrenIds, action === 'merge' ? ['keep'] : []);
+    assert.equal((await read('child')).parentId1, action === 'merge' ? 'keep' : undefined);
+    if (action === 'merge') {
+      const keep = await read('keep'); assert.deepEqual(keep.spouseIds, ['partner']);
+      assert.deepEqual(keep.childrenIds, ['child']); assert.equal(keep.parentId1, 'parent');
+      assert.equal(keep.biography, 'Synthetic biography');
+    }
+  }
+  await loadInvitations(database, {}, require('firebase-admin/firestore')).updateTreeMemberCount({params: {treeId: a.treeId, personId: 'synthetic-trigger'}});
+  assert.equal((await treeRef.get()).data().memberCount, expectedCount, 'Unchanged backend aggregation persists actual count');
+});
+for (const action of ['add', 'edit', 'delete']) test(`real Rules Viewer cannot ${action} people`, async () => {
+  const a = await account(); const ref = database.doc(`trees/${a.treeId}/people/viewer-target`);
+  await ref.set({firstName: 'Synthetic Unchanged'});
+  const client = env.authenticatedContext('viewer').firestore();
+  if (action === 'add') await assertFails(client.doc(`trees/${a.treeId}/people/viewer-added`).set({firstName: 'Synthetic Denied'}));
+  if (action === 'edit') await assertFails(client.doc(ref.path).update({firstName: 'Synthetic Denied'}));
+  if (action === 'delete') await assertFails(client.doc(ref.path).delete());
+  assert.deepEqual((await ref.get()).data(), {firstName: 'Synthetic Unchanged'});
+  assert.equal((await database.doc(`trees/${a.treeId}/people/viewer-added`).get()).exists, false);
+});
+test('real Rules denied parent timestamp rolls back actual Editor Add without partial person creation', async () => {
+  const a = await account(), restricted = await account();
+  await database.doc(`trees/${restricted.treeId}`).update({collaborators: {}});
+  const db = env.authenticatedContext('editor').firestore()._delegate;
+  const toasts = [], commands = [];
+  const handlers = treeHandlers({...browserFirestore, db, user: {uid: 'editor'}, treeId: a.treeId,
+    getPeopleColRef: () => browserFirestore.collection(db, 'trees', a.treeId, 'people'),
+    // Fault injection: person target is authorized but parent timestamp target is not.
+    getTreeDocRef: () => browserFirestore.doc(db, 'trees', restricted.treeId),
+    toast: value => toasts.push(value), pushCommand: value => commands.push(value),
+    saveLayoutSnapshot() {assert.fail('Denied Add must not save a layout snapshot');},
+  });
+  await handlers.handleAddPerson({firstName: 'Synthetic Atomic Denial'});
+  assert.equal((await database.collection(`trees/${a.treeId}/people`).get()).size, 0);
+  assert.equal((await database.doc(`trees/${restricted.treeId}`).get()).data().lastUpdated, undefined);
+  assert.equal(commands.length, 0); assert.equal(toasts.length, 1);
+  assert.equal(toasts[0].description, 'Failed to save new person.');
 });

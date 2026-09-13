@@ -1,5 +1,7 @@
 # Invitation onboarding and photo cleanup: local review record
 
+The original checkpoint below is historical. The owner subsequently committed/pushed it as `61718872d83e995e21daac5160bf91ec89bc7c63`. The final section records the separate, uncommitted Editor member-count correction based on that commit; earlier validation/status statements remain checkpoint evidence.
+
 Date: 2026-09-13. Branch: `codex/fix-invite-onboarding-photo-cleanup`.
 Base/HEAD: `1f7c37282277523f32f7245d39089b7deefe6d95`, current rewritten master/production.
 Status: implemented locally; owner review and browser validation pending. No commit, push, PR, deployment, merge, Stripe mutation, billing emulator reset, or production configuration change.
@@ -137,3 +139,48 @@ Phase 2 billing/Stripe, paid entitlement amounts, storageAuthority, `prepareStor
 The unrelated `startTime` console error was not investigated/fixed and remains a separate follow-up defect. Browser auth/Google/image/CORS validation is pending. Protected scratch scripts remain SHA-256 identical and untracked; dependency manifests/locks and storage.rules remain byte-identical. Candidate files are unstaged/uncommitted and HEAD remains the base.
 
 Proposed commit message, not executed: `fix(ux): improve invite onboarding and photo cleanup`
+
+## Editor member-count correction: follow-up local review, 2026-09-13
+
+Base/HEAD: `61718872d83e995e21daac5160bf91ec89bc7c63`, existing branch `codex/fix-invite-onboarding-photo-cleanup`. This correction is local and awaiting owner review. No commit, push, deployment, PR creation or merge was performed.
+
+Review found that Add, Delete and Merge still browser-mutated `memberCount`, although Editor parent-tree permission correctly allows only `lastUpdated == request.time`. Add previously created the person separately before attempting the denied count update, so it could report failure after successful creation; Delete/Merge count updates denied their entire batches.
+
+Every parent-tree browser write in `src/app/tree/[treeId]/page.tsx` was inspected:
+
+| Workflow | Final parent-tree mutation | Count correction |
+| --- | --- | --- |
+| `handleAddPerson` | Batch create person + `{lastUpdated: serverTimestamp()}` | Removed separate browser `memberCount: increment(1)` update |
+| `handleSavePerson` | Existing person-save batch + `{lastUpdated: serverTimestamp()}` | Already timestamp-only; unchanged |
+| `handleConfirmDelete` | Person deletion/reference cleanup batch + `{lastUpdated: serverTimestamp()}` | Removed browser `memberCount: increment(-1)` |
+| `handleMergeDuplicates` | Duplicate merge/reference rewiring/deletion batch + `{lastUpdated: serverTimestamp()}` | Removed browser `memberCount: increment(-1)` |
+
+These are the only four parent-tree writes in the page. Node moves, position resets, relationship creation/deletion and orphan-reference repair mutate people only. Layout autosaves write `layoutHistory` subcollection documents. Name suggestions and editor saves use the audited Add/Save handlers; undo/redo writes people through the existing hook. No Editor-reachable privileged parent metadata mutation remains in this page.
+
+Add commits person creation and the timestamp atomically before announcing success or registering undo. A denied batch leaves no person behind. Optional post-commit layout history is caught separately with a static warning, so its failure cannot produce a misleading "Failed to save new person" toast or encourage duplicate retries.
+
+`memberCount` is server-maintained by the unchanged `updateTreeMemberCount` Function on `trees/{treeId}/people/{personId}`. Its count aggregation calculates the actual people count; browser edits leave the prior count untouched until server recount. No Rules were loosened. Editor still cannot write count, title, owner ID, collaborators or slug, or substitute an arbitrary tree timestamp. Owner/Manager continue to add, delete and merge.
+
+### Follow-up validation
+
+| Check | Result |
+| --- | --- |
+| Root `npm run typecheck` | Passed, 0 errors |
+| Root `npm test` | 380/380 passed, including 7 new handler/inventory regressions |
+| Root `npm run lint` | 0 errors, 50 existing warnings |
+| Root `npm run build` | Passed; 30 static-generation entries, tree/invite dynamic routes retained |
+| `npm run test:storage-rules` | 118/118 passed, including 18 additional real Rules/behavior regressions |
+| `npm --prefix functions run build` | Passed on existing Node 20.20.2 |
+| `npm --prefix functions test` | 273/273 passed on Node 20.20.2 |
+| Gitleaks changed publishable source | 8.30.1: all 5 changed publishable files, redaction/decode depth 3, 0 findings; configuration unchanged |
+| `git diff --check` | Passed |
+
+The test helper executes the actual page Add/Delete/Merge handlers without copying their mutation implementation. Real Rules tests verify persisted person creation/deletion, spouse/parent/child cleanup, merge rewiring and transferred biography, timestamp acceptance, unchanged client count and subsequent persisted backend recount for each Owner/Manager/Editor workflow. The unchanged compiled count handler is invoked with the real Admin emulator database; this does not claim deployed trigger delivery. Fault injection also proves an authorized Editor person target remains empty when a parent timestamp target is denied. Separate real Rules tests deny Editor count/title/owner/collaborators/slug/arbitrary timestamp mutations and Viewer add/edit/delete; root tests cover atomic failure, success and optional history failure.
+
+Rules tests use only the dedicated `demo-konnectedroots-storage-rules` project and its isolated ports. Existing billing emulators were not reused, stopped, reset or reseeded. Browser/Preview validation of this unpushed correction has not been performed.
+
+No new dependency audit was run for this correction. The previous live audit evidence remains Root 67 total / 12 high / 0 critical; Root production 62 / 7 / 0; Functions 8 / 0 / 0 (moderate). The historical accepted Functions checkpoint 9 remains historical. Audit is not clean; accepted Genkit/OpenTelemetry findings and compensating controls remain unchanged. No audit fix, scanner exemption, dependency override or suppression was added.
+
+Invitation onboarding/account switching/redirects/email matching/explicit acceptance, photo staging/removal/cleanup, storageAuthority, Storage Rules, Stripe/billing, Resend, Node runtime, manifests/lockfiles and PR #4 remain untouched. Both protected scratch scripts remain untracked and byte-identical.
+
+Proposed follow-up commit message, not executed: `fix(tree): keep member counts server-authoritative`.
