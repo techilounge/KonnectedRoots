@@ -712,7 +712,7 @@ export async function recordAIPackGrant(event: Stripe.Event, invoice: Stripe.Inv
   });
 }
 
-export const stripeWebhook = onRequest({ region: 'us-central1', secrets: ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'] }, async (req, res) => {
+export const stripeWebhook = onRequest({ region: 'us-central1', secrets: ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'RESEND_API_KEY'] }, async (req, res) => {
   if (req.method !== 'POST') { res.status(405).send('Method Not Allowed'); return; }
   const signature = req.headers['stripe-signature'] as string | undefined;
   let event: Stripe.Event;

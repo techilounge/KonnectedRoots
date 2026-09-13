@@ -34,6 +34,7 @@ export const weeklyActivityDigest = onSchedule(
         schedule: "0 9 * * 1", // Every Monday at 9 AM UTC
         timeZone: "UTC",
         retryCount: 3,
+        secrets: ["RESEND_API_KEY"],
     },
     async () => {
         logger.info("Starting weekly activity digest job");
@@ -173,6 +174,7 @@ export const inactivityReminder = onSchedule(
         schedule: "0 10 * * *", // Daily at 10 AM UTC
         timeZone: "UTC",
         retryCount: 3,
+        secrets: ["RESEND_API_KEY"],
     },
     async () => {
         logger.info("Starting inactivity reminder job");
@@ -287,6 +289,7 @@ export const planExpirationReminder = onSchedule(
         schedule: "0 11 * * *", // Daily at 11 AM UTC
         timeZone: "UTC",
         retryCount: 3,
+        secrets: ["RESEND_API_KEY"],
     },
     async () => {
         logger.info("Starting plan expiration reminder job");
