@@ -253,13 +253,13 @@ export async function handleUploadProfilePicture(formData: FormData): Promise<{ 
   }
 }
 
-export async function handleRecordExport(authToken?: string): Promise<{
+export async function handleRecordExport(authToken?: string, exportType: 'png' | 'pdf' | 'gedcom' = 'png'): Promise<{
   success: boolean;
   error?: string;
   exportsUsed?: number;
   limit?: number | null;
 }> {
-  return await recordExportOnServer(authToken);
+  return await recordExportOnServer(authToken, exportType);
 }
 
 // 7. Contact Us Form Submission

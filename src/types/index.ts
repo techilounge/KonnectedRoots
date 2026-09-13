@@ -42,6 +42,16 @@ export interface UserProfile {
     plan?: string;
     currentPeriodEnd?: any;
     cancelAtPeriodEnd?: boolean;
+    scheduledCancellationAt?: number | null;
+    aiPackItemExists?: boolean;
+    aiPackStatus?: 'none' | 'pending' | 'active';
+    aiPackPaidThrough?: number | null;
+    aiPackCancelAtPeriodEnd?: boolean;
+    aiPackScheduledRemovalAt?: number | null;
+    aiPackRemovalOperationId?: string | null;
+    aiPackRemovalRequestedAt?: number | null;
+    aiPackResumeOperationId?: string | null;
+    aiPackResumeRequestedAt?: number | null;
   };
   lastActivityAt?: any;       // serverTimestamp - for inactivity tracking
   welcomeEmailSent?: boolean;

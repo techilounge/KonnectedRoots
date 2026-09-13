@@ -158,8 +158,8 @@ export async function getAdminDashboardData(idToken: string): Promise<AdminDashb
 
   const treeCreationSeries = Object.entries(weeklyTreeBuckets).map(([date, count]) => ({ date, count }));
 
-  // Estimated MRR: Pro = $9.99, Family = $19.99
-  const estimatedMRR = Math.round((proUsers * 9.99 + familyUsers * 19.99) * 100) / 100;
+  // Estimated MRR uses the current catalog: Pro $5.99, Family $9.99.
+  const estimatedMRR = Math.round((proUsers * 5.99 + familyUsers * 9.99) * 100) / 100;
 
   // Plan distribution chart data
   const planDistribution = [
@@ -678,6 +678,14 @@ export interface AdminBillingData {
     status: 'succeeded' | 'pending' | 'failed';
     date: string;
   }[];
+  reconciliation: {
+    synced: number;
+    mismatch: number;
+    pendingWebhook: number;
+    pastDue: number;
+    canceled: number;
+    missingCustomer: number;
+  };
 }
 
 export async function getAdminBillingMetrics(idToken: string): Promise<AdminBillingData> {
@@ -688,33 +696,43 @@ export async function getAdminBillingMetrics(idToken: string): Promise<AdminBill
   let familyCount = 0;
   let freeCount = 0;
   const subscribers: AdminBillingData['subscribers'] = [];
+  const reconciliation = { synced: 0, mismatch: 0, pendingWebhook: 0, pastDue: 0, canceled: 0, missingCustomer: 0 };
 
   usersSnap.forEach(doc => {
     const data = doc.data();
-    const plan = (data.plan || 'free').toLowerCase();
-    const isPro = plan === 'pro';
-    const isFamily = plan === 'family' || plan === 'team';
+    const billing = data.billing || {};
+    const synchronizedPlan = (billing.plan || 'free').toLowerCase();
+    const status = String(billing.status || 'none');
+    const isPro = synchronizedPlan === 'pro' && (status === 'active' || status === 'trialing');
+    const isFamily = (synchronizedPlan === 'family' || synchronizedPlan === 'team') && (status === 'active' || status === 'trialing');
 
     if (isPro) proCount++;
     else if (isFamily) familyCount++;
     else freeCount++;
 
-    if (isPro || isFamily || data.billing?.stripeCustomerId) {
+    const isPaidState = (isPro || isFamily) && (status === 'active' || status === 'trialing');
+    if (isPaidState && billing.latestStripeEventCreated) reconciliation.synced++;
+    else if ((synchronizedPlan === 'pro' || synchronizedPlan === 'family' || synchronizedPlan === 'team') && status === 'past_due') reconciliation.pastDue++;
+    else if ((synchronizedPlan === 'pro' || synchronizedPlan === 'family' || synchronizedPlan === 'team') && status === 'canceled') reconciliation.canceled++;
+    else if ((synchronizedPlan === 'pro' || synchronizedPlan === 'family' || synchronizedPlan === 'team') && !billing.latestStripeEventCreated) reconciliation.pendingWebhook++;
+    if ((synchronizedPlan === 'pro' || synchronizedPlan === 'family' || synchronizedPlan === 'team') && !billing.stripeCustomerId) reconciliation.missingCustomer++;
+    if (data.plan && data.plan !== synchronizedPlan) reconciliation.mismatch++;
+    if (synchronizedPlan === 'pro' || synchronizedPlan === 'family' || synchronizedPlan === 'team' || billing.stripeCustomerId) {
       subscribers.push({
         uid: doc.id,
         email: data.email || 'No email',
         displayName: data.displayName || 'Unnamed User',
-        plan: isFamily ? 'family' : isPro ? 'pro' : 'free',
-        amount: isFamily ? 19.99 : isPro ? 9.99 : 0,
-        stripeCustomerId: data.billing?.stripeCustomerId || `cus_sim_${doc.id.slice(0, 8)}`,
-        subscriptionStatus: data.billing?.status || (isPro || isFamily ? 'active' : 'inactive'),
-        currentPeriodEnd: data.billing?.currentPeriodEnd || null,
+        plan: synchronizedPlan === 'family' || synchronizedPlan === 'team' ? 'family' : synchronizedPlan === 'pro' ? 'pro' : 'free',
+        amount: isFamily ? 9.99 : isPro ? 5.99 : 0,
+        stripeCustomerId: billing.stripeCustomerId || `unmapped_${doc.id.slice(0, 8)}`,
+        subscriptionStatus: status,
+        currentPeriodEnd: billing.currentPeriodEnd || null,
       });
     }
   });
 
   const activeSubscribers = proCount + familyCount;
-  const mrr = Math.round((proCount * 9.99 + familyCount * 19.99) * 100) / 100;
+  const mrr = Math.round((proCount * 5.99 + familyCount * 9.99) * 100) / 100;
   const arr = Math.round(mrr * 12 * 100) / 100;
   const arpu = activeSubscribers > 0 ? Math.round((mrr / activeSubscribers) * 100) / 100 : 0;
   const churnRateEstimate = 1.8;
@@ -742,6 +760,7 @@ export async function getAdminBillingMetrics(idToken: string): Promise<AdminBill
     familyCount,
     subscribers,
     billingEvents,
+    reconciliation,
   };
 }
 
@@ -969,7 +988,7 @@ export async function getAdminReportData(
       if (plan === 'family' || plan === 'team') familyCount++;
     });
 
-    const mrr = Math.round((proCount * 9.99 + familyCount * 19.99) * 100) / 100;
+    const mrr = Math.round((proCount * 5.99 + familyCount * 9.99) * 100) / 100;
     const arr = Math.round(mrr * 12 * 100) / 100;
 
     const chartData = [
@@ -982,8 +1001,8 @@ export async function getAdminReportData(
     ];
 
     const tableRows = [
-      { tier: 'Pro Monthly ($9.99)', subscribers: proCount, monthlyGross: `$${(proCount * 9.99).toFixed(2)}`, annualPacing: `$${(proCount * 9.99 * 12).toFixed(2)}` },
-      { tier: 'Family Monthly ($19.99)', subscribers: familyCount, monthlyGross: `$${(familyCount * 19.99).toFixed(2)}`, annualPacing: `$${(familyCount * 19.99 * 12).toFixed(2)}` },
+      { tier: 'Pro Monthly ($5.99)', subscribers: proCount, monthlyGross: `$${(proCount * 5.99).toFixed(2)}`, annualPacing: `$${(proCount * 5.99 * 12).toFixed(2)}` },
+      { tier: 'Family Monthly ($9.99)', subscribers: familyCount, monthlyGross: `$${(familyCount * 9.99).toFixed(2)}`, annualPacing: `$${(familyCount * 9.99 * 12).toFixed(2)}` },
       { tier: 'Free Tier', subscribers: usersSnap.size - (proCount + familyCount), monthlyGross: '$0.00', annualPacing: '$0.00' },
     ];
 

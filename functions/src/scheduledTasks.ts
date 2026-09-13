@@ -10,6 +10,7 @@
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as logger from "firebase-functions/logger";
 import * as admin from "firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { sendEmail } from "./sendEmail";
 import {
     activityDigestEmail,
@@ -139,9 +140,9 @@ export const weeklyActivityDigest = onSchedule(
                         html: email.html
                     });
 
-                    if (result.success) {
+                    if (result.delivery === 'sent') {
                         emailsSent++;
-                    } else {
+                    } else if (!result.success) {
                         errors++;
                         logger.warn(`Failed to send digest to ${userData.email}: ${result.error}`);
                     }
@@ -248,14 +249,14 @@ export const inactivityReminder = onSchedule(
                         html: email.html
                     });
 
-                    if (result.success) {
+                    if (result.delivery === 'sent') {
                         emailsSent++;
 
                         // Mark that we sent a reminder
                         await userDoc.ref.update({
-                            lastInactivityReminderSent: admin.firestore.FieldValue.serverTimestamp()
+                            lastInactivityReminderSent: FieldValue.serverTimestamp()
                         });
-                    } else {
+                    } else if (!result.success) {
                         errors++;
                         logger.warn(`Failed to send inactivity reminder to ${userData.email}: ${result.error}`);
                     }
@@ -348,9 +349,9 @@ export const planExpirationReminder = onSchedule(
                         html: email.html
                     });
 
-                    if (result.success) {
+                    if (result.delivery === 'sent') {
                         emailsSent++;
-                    } else {
+                    } else if (!result.success) {
                         errors++;
                         logger.warn(`Failed to send expiration reminder to ${userData.email}: ${result.error}`);
                     }

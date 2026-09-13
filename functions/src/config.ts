@@ -9,6 +9,7 @@ export function functionsConfig(env: NodeJS.ProcessEnv = process.env) {
     get stripeSecretKey() { return required('STRIPE_SECRET_KEY'); },
     get stripeWebhookSecret() { return required('STRIPE_WEBHOOK_SECRET'); },
     get resendApiKey() { return env.RESEND_API_KEY; },
+    get localBillingTestDisableEmail() { return env.LOCAL_BILLING_TEST_DISABLE_EMAIL === 'true'; },
     get appUrl() { return env.APP_URL || 'https://konnectedroots.app'; },
     prices: {
       pro_monthly: env.STRIPE_PRICE_PRO_MONTHLY || '',

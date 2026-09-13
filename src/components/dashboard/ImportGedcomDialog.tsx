@@ -14,10 +14,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Upload, FileText, Loader2, AlertTriangle, CheckCircle, Crown } from 'lucide-react';
+import { Upload, FileText, Loader2, AlertTriangle, CheckCircle } from 'lucide-react';
 import { parseGedcom, convertToPeople, type GedcomParseResult } from '@/lib/gedcom-parser';
-import { useEntitlements } from '@/hooks/useEntitlements';
-import Link from 'next/link';
 
 interface ImportGedcomDialogProps {
     isOpen: boolean;
@@ -26,7 +24,6 @@ interface ImportGedcomDialogProps {
 }
 
 export default function ImportGedcomDialog({ isOpen, onClose, onImport }: ImportGedcomDialogProps) {
-    const { isPro, isFamily, isFree, loading: entitlementLoading } = useEntitlements();
     const [treeName, setTreeName] = useState('');
     const [file, setFile] = useState<File | null>(null);
     const [parseResult, setParseResult] = useState<GedcomParseResult | null>(null);
@@ -34,8 +31,6 @@ export default function ImportGedcomDialog({ isOpen, onClose, onImport }: Import
     const [isParsing, setIsParsing] = useState(false);
     const [error, setError] = useState('');
     const [dragOver, setDragOver] = useState(false);
-
-    const canImport = isPro || isFamily;
 
     const handleFileChange = useCallback(async (selectedFile: File | null) => {
         setError('');
@@ -162,28 +157,7 @@ export default function ImportGedcomDialog({ isOpen, onClose, onImport }: Import
                     </DialogDescription>
                 </DialogHeader>
 
-                {entitlementLoading ? (
-                    <div className="flex justify-center py-8">
-                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                    </div>
-                ) : !canImport ? (
-                    /* Upgrade prompt for free users */
-                    <div className="py-6">
-                        <Alert className="border-amber-200 bg-amber-50">
-                            <Crown className="h-5 w-5 text-amber-600" />
-                            <AlertDescription className="ml-2">
-                                <span className="font-semibold">GEDCOM import is a Pro/Family feature.</span>
-                                <p className="text-sm mt-1 text-muted-foreground">
-                                    Upgrade to import family trees from Ancestry, MyHeritage, FamilySearch, and more.
-                                </p>
-                                <Button asChild size="sm" className="mt-3">
-                                    <Link href="/pricing">View Plans</Link>
-                                </Button>
-                            </AlertDescription>
-                        </Alert>
-                    </div>
-                ) : (
-                    <form onSubmit={handleSubmit}>
+                <form onSubmit={handleSubmit}>
                         <div className="space-y-4 py-4">
                             {/* File Drop Zone */}
                             <div
@@ -296,8 +270,7 @@ export default function ImportGedcomDialog({ isOpen, onClose, onImport }: Import
                                 )}
                             </Button>
                         </DialogFooter>
-                    </form>
-                )}
+                </form>
             </DialogContent>
         </Dialog>
     );

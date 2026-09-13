@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — Phase 2 server-authoritative billing and entitlements
+
+- Added a server-only Stripe plan/price catalog, authenticated customer mapping, safe Checkout/Portal callables and duplicate-subscription protection.
+- Added atomic webhook event claiming, out-of-order subscription protection and idempotent AI Pack grant records.
+- Added the canonical entitlement resolver and server billing view; tightened Firestore rules so clients cannot self-upgrade, grant credits or edit billing authority fields.
+- Documented the entitlement matrix, status/downgrade policy, webhook contract, AI credit accounting and baseline/remediation inventory. No live production charge was made.
+- See `docs/billing/PHASE2_REMEDIATION_REPORT.md`; Phase 2 remains a draft PR until test-mode lifecycle and authenticated Preview regression are recorded.
+
 ## Unreleased — Phase 1 repository and architecture cleanup
 
 - Centralized public/guarded server environment reads and standalone Node 20 Functions configuration; preserved dependency locks and credential/secret bindings.

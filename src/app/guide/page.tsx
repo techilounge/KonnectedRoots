@@ -182,7 +182,7 @@ const guides: GuideSection[] = [
             },
             {
                 title: 'Choose your format',
-                description: 'Select PDF (for printing), PNG/JPG (for images), or GEDCOM (for backup/transfer). GEDCOM requires Pro or Family plan.',
+                description: 'Select PDF (for printing), PNG/JPG (for images), or GEDCOM (for backup/transfer). GEDCOM is available on every plan; PDF and PNG use the visual export allowance.',
             },
             {
                 title: 'Customize options',

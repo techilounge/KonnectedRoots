@@ -11,8 +11,9 @@ test('Functions secrets fail lazily with variable names only', () => {
 });
 
 test('Functions config preserves isolated app URL and price selection', () => {
-  const config = functionsConfig({APP_URL: 'https://example.test', STRIPE_PRICE_PRO_MONTHLY: 'price_fixture'});
+  const config = functionsConfig({APP_URL: 'https://example.test', STRIPE_PRICE_PRO_MONTHLY: 'price_fixture', LOCAL_BILLING_TEST_DISABLE_EMAIL: 'true'});
   assert.equal(config.appUrl, 'https://example.test');
   assert.equal(config.prices.pro_monthly, 'price_fixture');
   assert.equal(config.prices.family_monthly, '');
+  assert.equal(config.localBillingTestDisableEmail, true);
 });

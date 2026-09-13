@@ -3,7 +3,9 @@ import { adminAuth, adminDb } from '@/lib/firebase/admin';
 import * as admin from 'firebase-admin';
 import { getCurrentMonthKey, getAIAllowance, AI_ACTION_WEIGHTS, PLAN_LIMITS } from './constants';
 import { DEFAULT_USER_USAGE } from './types';
-import type { UserUsage, Plan } from './types';
+import type { UserUsage, Plan, BillingStatus } from './types';
+import { effectivePlan, grantsPaidAccess, hasActiveAIPack, resolveFamilyAIPackAuthority } from './plan';
+import { billingEvaluationTime } from './evaluationTime.server';
 
 export interface VerifyAndDeductResult {
     success: boolean;
@@ -47,10 +49,53 @@ export async function verifyAuthAndDeductAICredits(
 
             const userData = userDoc.data() || {};
             const billing = userData.billing || { plan: 'free', addons: { aiPack: false } };
+            const now = await billingEvaluationTime(billing, uid);
             let usage: UserUsage = userData.usage || DEFAULT_USER_USAGE;
+            let usageRef = userRef;
             const currentMonth = getCurrentMonthKey();
-            const plan = billing.plan || 'free';
-            const hasAIPack = billing.addons?.aiPack || false;
+            let plan = effectivePlan({
+                plan: (billing.plan || 'free') as Plan,
+                status: billing.status || 'none',
+                currentPeriodEnd: Number(billing.currentPeriodEnd || 0),
+                scheduledCancellationAt: Number(billing.scheduledCancellationAt || 0) || null,
+            }, now);
+            let hasAIPack = plan !== 'free' && hasActiveAIPack(billing, now);
+
+            // Family AI actions are a shared workspace pool. Resolve and debit
+            // the family document in the same transaction as the user activity
+            // marker so a member cannot receive an independent allowance.
+            const familyId = userData.family?.familyId as string | undefined;
+            if (familyId) {
+                const familyRef = adminDb.collection('families').doc(familyId);
+                const familyDoc = await transaction.get(familyRef);
+                const familyData = familyDoc.exists ? familyDoc.data() || {} : {};
+                const familyPlan = familyData.plan || {};
+                const ownerUid = typeof familyData.ownerUid === 'string' ? familyData.ownerUid : '';
+                const ownerBilling = ownerUid === uid
+                    ? billing
+                    : ownerUid
+                        ? (await transaction.get(adminDb.collection('users').doc(ownerUid))).data()?.billing
+                        : null;
+                const familyNow = ownerBilling && ownerUid != uid ? await billingEvaluationTime(ownerBilling, ownerUid) : now;
+                const ownerFamilyPaid = Boolean(ownerBilling) && ownerBilling.plan === 'family' && grantsPaidAccess(
+                    ownerBilling.status || 'none',
+                    Number(ownerBilling.currentPeriodEnd || 0),
+                    familyNow,
+                    Number(ownerBilling.scheduledCancellationAt || 0) || null,
+                ) && ownerBilling.stripeCustomerId === familyPlan.stripeCustomerId
+                    && ownerBilling.stripeSubscriptionId === familyPlan.stripeSubscriptionId;
+                if (familyDoc.exists && familyPlan.plan === 'family' && ownerFamilyPaid && grantsPaidAccess(
+                    (familyPlan.status || 'none') as BillingStatus,
+                    Number(familyPlan.currentPeriodEnd || 0),
+                    familyNow,
+                    Number(familyPlan.scheduledCancellationAt || 0) || null,
+                )) {
+                    plan = 'family';
+                    usageRef = familyRef;
+                    usage = familyData.usage || DEFAULT_USER_USAGE;
+                    hasAIPack = hasActiveAIPack(resolveFamilyAIPackAuthority(familyPlan, ownerBilling), familyNow);
+                }
+            }
             const allowance = getAIAllowance(plan, hasAIPack);
 
             // Lazy monthly reset if new month
@@ -72,13 +117,13 @@ export async function verifyAuthAndDeductAICredits(
                 };
             }
 
-            // Deduct credits and track user activity
-            transaction.update(userRef, {
+            // Deduct credits from the authoritative bucket and track user activity.
+            transaction.update(usageRef, {
                 'usage.monthKey': usage.monthKey,
                 'usage.aiActionsAllowance': allowance,
                 'usage.aiActionsUsed': (usage.aiActionsUsed || 0) + cost,
-                lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
             });
+            transaction.update(userRef, { lastActivityAt: admin.firestore.FieldValue.serverTimestamp() });
 
             return { success: true };
         });
@@ -101,9 +146,24 @@ export async function refundAICredits(uid: string, cost: number): Promise<void> 
     if (!uid || cost <= 0) return;
     try {
         const userRef = adminDb.collection('users').doc(uid);
-        await userRef.update({
-            'usage.aiActionsUsed': admin.firestore.FieldValue.increment(-cost),
-        });
+        const userSnap = await userRef.get();
+        const userData = userSnap.data() || {};
+        const familyId = userData.family?.familyId as string | undefined;
+        if (familyId) {
+            const familyRef = adminDb.collection('families').doc(familyId);
+            const familySnap = await familyRef.get();
+            const familyPlan = familySnap.data()?.plan || {};
+            if (familySnap.exists && familyPlan.plan === 'family' && grantsPaidAccess(
+                (familyPlan.status || 'none') as BillingStatus,
+                Number(familyPlan.currentPeriodEnd || 0),
+                Date.now(),
+                Number(familyPlan.scheduledCancellationAt || 0) || null,
+            )) {
+                await familyRef.update({ 'usage.aiActionsUsed': admin.firestore.FieldValue.increment(-cost) });
+                return;
+            }
+        }
+        await userRef.update({ 'usage.aiActionsUsed': admin.firestore.FieldValue.increment(-cost) });
     } catch (error) {
         console.error(`Failed to refund ${cost} AI credits to user ${uid}:`, error);
     }
@@ -112,7 +172,7 @@ export async function refundAICredits(uid: string, cost: number): Promise<void> 
 /**
  * Checks export limits and records a tree export on the server.
  */
-export async function recordExportOnServer(idToken: string | undefined): Promise<{
+export async function recordExportOnServer(idToken: string | undefined, exportType: 'png' | 'pdf' | 'gedcom' = 'png'): Promise<{
     success: boolean;
     error?: string;
     exportsUsed?: number;
@@ -141,10 +201,60 @@ export async function recordExportOnServer(idToken: string | undefined): Promise
 
             const userData = userDoc.data() || {};
             const billing = userData.billing || { plan: 'free' };
+            const now = await billingEvaluationTime(billing, uid);
             let usage: UserUsage = userData.usage || DEFAULT_USER_USAGE;
             const currentMonth = getCurrentMonthKey();
-            const plan = (billing.plan || 'free') as Plan;
+            let plan = effectivePlan({
+                plan: (billing.plan || 'free') as Plan,
+                status: billing.status || 'none',
+                currentPeriodEnd: Number(billing.currentPeriodEnd || 0),
+                scheduledCancellationAt: Number(billing.scheduledCancellationAt || 0) || null,
+            }, now);
+            let hasAIPack = plan !== 'free' && hasActiveAIPack(billing, now);
+            let usageRef = userRef;
+            const familyId = userData.family?.familyId as string | undefined;
+            if (familyId) {
+                const familyRef = adminDb.collection('families').doc(familyId);
+                const familyDoc = await transaction.get(familyRef);
+                const familyData = familyDoc.exists ? familyDoc.data() || {} : {};
+                const familyPlan = familyData.plan || {};
+                const ownerUid = typeof familyData.ownerUid === 'string' ? familyData.ownerUid : '';
+                const ownerBilling = ownerUid === uid
+                    ? billing
+                    : ownerUid
+                        ? (await transaction.get(adminDb.collection('users').doc(ownerUid))).data()?.billing
+                        : null;
+                const familyNow = ownerBilling && ownerUid != uid ? await billingEvaluationTime(ownerBilling, ownerUid) : now;
+                const ownerFamilyPaid = Boolean(ownerBilling) && ownerBilling.plan === 'family' && grantsPaidAccess(
+                    ownerBilling.status || 'none',
+                    Number(ownerBilling.currentPeriodEnd || 0),
+                    familyNow,
+                    Number(ownerBilling.scheduledCancellationAt || 0) || null,
+                ) && ownerBilling.stripeCustomerId === familyPlan.stripeCustomerId
+                    && ownerBilling.stripeSubscriptionId === familyPlan.stripeSubscriptionId;
+                if (familyDoc.exists && familyPlan.plan === 'family' && ownerFamilyPaid && grantsPaidAccess(
+                    (familyPlan.status || 'none') as BillingStatus,
+                    Number(familyPlan.currentPeriodEnd || 0),
+                    familyNow,
+                    Number(familyPlan.scheduledCancellationAt || 0) || null,
+                )) {
+                    plan = 'family';
+                    usageRef = familyRef;
+                    usage = familyData.usage || DEFAULT_USER_USAGE;
+                    hasAIPack = hasActiveAIPack(resolveFamilyAIPackAuthority(familyPlan, ownerBilling), familyNow);
+                }
+            }
             const limit = PLAN_LIMITS[plan]?.exportLimitPerMonth ?? 2;
+
+            // GEDCOM is data portability on every plan. It must never consume
+            // the visual PNG/PDF allowance or mutate export usage.
+            if (exportType === 'gedcom') {
+                return {
+                    success: true,
+                    exportsUsed: usage.exportsUsed || 0,
+                    limit,
+                };
+            }
 
             // Monthly reset if needed
             if (usage.monthKey !== currentMonth) {
@@ -152,7 +262,7 @@ export async function recordExportOnServer(idToken: string | undefined): Promise
                     monthKey: currentMonth,
                     exportsUsed: 0,
                     aiActionsUsed: 0,
-                    aiActionsAllowance: getAIAllowance(plan, Boolean(billing.addons?.aiPack)),
+                    aiActionsAllowance: getAIAllowance(plan, hasAIPack),
                     storageUsedBytes: usage.storageUsedBytes || 0,
                 };
             }
@@ -167,11 +277,11 @@ export async function recordExportOnServer(idToken: string | undefined): Promise
             }
 
             const newExportsUsed = (usage.exportsUsed || 0) + 1;
-            transaction.update(userRef, {
+            transaction.update(usageRef, {
                 'usage.monthKey': usage.monthKey,
                 'usage.exportsUsed': newExportsUsed,
-                lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
             });
+            transaction.update(userRef, { lastActivityAt: admin.firestore.FieldValue.serverTimestamp() });
 
             return {
                 success: true,

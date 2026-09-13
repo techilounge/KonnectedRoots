@@ -5,9 +5,20 @@
 // Plan types
 export type Plan = 'free' | 'pro' | 'family';
 export type BillingInterval = 'month' | 'year' | null;
-export type BillingStatus = 'none' | 'active' | 'trialing' | 'past_due' | 'canceled';
+export type BillingStatus = 'none' | 'active' | 'trialing' | 'past_due' | 'unpaid' | 'canceled' | 'incomplete' | 'incomplete_expired' | 'paused';
 export type FamilyRole = 'owner' | 'member';
 export type SeatStatus = 'active' | 'invited';
+export type AIPackStatus = 'none' | 'pending' | 'active';
+export type PlanChangeStatus = 'none' | 'pending' | 'failed';
+export type EntitlementReason =
+    | 'active'
+    | 'trialing'
+    | 'free_plan'
+    | 'past_due'
+    | 'payment_required'
+    | 'subscription_canceled'
+    | 'subscription_expired'
+    | 'paid_entitlement_unavailable';
 
 // Billing addon flags
 export interface BillingAddons {
@@ -15,13 +26,43 @@ export interface BillingAddons {
 }
 
 // User billing information (stored in users/{uid}.billing)
-export interface UserBilling {
+export interface ScheduledPlanChange {
+    scheduledPlan: 'pro' | null;
+    scheduledInterval: 'month' | 'year' | null;
+    scheduledChangeAt: number | null;
+    scheduledChangeType: 'downgrade' | null;
+    scheduledChangeStatus: 'scheduled' | null;
+}
+
+export interface UserBilling extends Partial<ScheduledPlanChange> {
+    scheduleReconciliationStatus?: 'none' | 'scheduled' | 'partial_owned' | 'applied_pro' | 'released' | 'canceled' | 'completed' | 'unknown';
+    scheduleReleaseConfirmed?: boolean;
+    hasBasePlanSchedule?: boolean;
     plan: Plan;
     status: BillingStatus;
     stripeCustomerId: string | null;
     stripeSubscriptionId: string | null;
     currentPeriodEnd: number; // timestamp in ms
     cancelAtPeriodEnd: boolean;
+    scheduledCancellationAt: number | null; // canonical Stripe cancellation timestamp in ms
+    aiPackItemExists: boolean;
+    aiPackStatus: AIPackStatus;
+    aiPackPaidThrough: number | null;
+    aiPackOperationId: string | null;
+    aiPackRequestedAt: number | null;
+    aiPackCancelAtPeriodEnd: boolean;
+    aiPackScheduledRemovalAt: number | null;
+    aiPackRemovalOperationId: string | null;
+    aiPackRemovalRequestedAt: number | null;
+    aiPackResumeOperationId: string | null;
+    aiPackResumeRequestedAt: number | null;
+    planChangeStatus: PlanChangeStatus;
+    planChangeTarget: 'family' | null;
+    planChangeInterval: BillingInterval;
+    planChangeFamilyId: string | null;
+    planChangeOperationId: string | null;
+    planChangeRequestedAt: number | null;
+    planChangeFailure: 'payment_failed' | 'payment_expired' | null;
     priceId: string | null;
     interval: BillingInterval;
     addons: BillingAddons;
@@ -57,11 +98,26 @@ export interface UserWithBilling {
 }
 
 // Family plan structure (stored in families/{familyId})
-export interface FamilyPlan {
+export interface FamilyPlan extends Partial<ScheduledPlanChange> {
+    plan: Plan; // preserved workspace may hold an inactive Pro/Free projection
+    paidSeatEntitlementActive?: boolean;
     status: BillingStatus;
     stripeCustomerId: string | null;
     stripeSubscriptionId: string | null;
     currentPeriodEnd: number;
+    cancelAtPeriodEnd: boolean;
+    scheduledCancellationAt: number | null;
+    aiPackItemExists: boolean;
+    aiPackStatus: AIPackStatus;
+    aiPackPaidThrough: number | null;
+    aiPackCancelAtPeriodEnd: boolean;
+    aiPackScheduledRemovalAt: number | null;
+    aiPackRemovalOperationId: string | null;
+    aiPackRemovalRequestedAt: number | null;
+    aiPackResumeOperationId: string | null;
+    aiPackResumeRequestedAt: number | null;
+    priceId: string | null;
+    interval: BillingInterval;
     seatLimit: number;
     addons: BillingAddons;
     updatedAt: number;
@@ -111,6 +167,7 @@ export interface PlanLimits {
     maxTrees: number | null; // null = unlimited
     maxPeoplePerTree: number | null;
     maxCollaboratorsPerTree: number;
+    maxEditorsPerTree: number | null;
     allowedCollaboratorRoles: ('viewer' | 'editor' | 'manager')[];
     exportLimitPerMonth: number | null;
     watermarkExports: boolean;
@@ -128,6 +185,14 @@ export interface Entitlements {
     usage: UserUsage | FamilyUsage;
     isFamily: boolean;
     familyId: string | null;
+    /** Server-reported commercial state retained for billing attention/history. */
+    canonicalPlan?: Plan;
+    canonicalStatus?: BillingStatus;
+    effectivePaidEntitlement?: boolean;
+    paymentAttentionRequired?: boolean;
+    entitlementReason?: EntitlementReason;
+    familyWorkspacePreserved?: boolean;
+    aiPackEntitlementValid?: boolean;
 }
 
 // Stripe metadata keys (for type safety)
@@ -159,12 +224,36 @@ export interface CreateCheckoutRequest {
 
 // Default billing values for new users
 export const DEFAULT_USER_BILLING: UserBilling = {
+    scheduledPlan: null,
+    scheduledInterval: null,
+    scheduledChangeAt: null,
+    scheduledChangeType: null,
+    scheduledChangeStatus: null,
     plan: 'free',
     status: 'none',
     stripeCustomerId: null,
     stripeSubscriptionId: null,
     currentPeriodEnd: 0,
     cancelAtPeriodEnd: false,
+    scheduledCancellationAt: null,
+    aiPackItemExists: false,
+    aiPackStatus: 'none',
+    aiPackPaidThrough: null,
+    aiPackOperationId: null,
+    aiPackRequestedAt: null,
+    aiPackCancelAtPeriodEnd: false,
+    aiPackScheduledRemovalAt: null,
+    aiPackRemovalOperationId: null,
+    aiPackRemovalRequestedAt: null,
+    aiPackResumeOperationId: null,
+    aiPackResumeRequestedAt: null,
+    planChangeStatus: 'none',
+    planChangeTarget: null,
+    planChangeInterval: null,
+    planChangeFamilyId: null,
+    planChangeOperationId: null,
+    planChangeRequestedAt: null,
+    planChangeFailure: null,
     priceId: null,
     interval: null,
     addons: { aiPack: false },

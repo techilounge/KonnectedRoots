@@ -34,8 +34,9 @@ import { Copy, Share2, Users, Check, Loader2, X, Clock, UserPlus, Send } from 'l
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
-import { db } from '@/lib/firebase/clients';
-import { collection, addDoc, query, where, getDocs, getDoc, deleteDoc, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { db, functions } from '@/lib/firebase/clients';
+import { collection, query, where, getDocs, getDoc, deleteDoc, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 
 import type { Invitation } from '@/types/invitations';
 
@@ -180,49 +181,30 @@ export default function ShareDialog({ isOpen, onClose, tree }: ShareDialogProps)
 
     setIsLoading(true);
     try {
-      // Check if user exists in the system
-      const usersRef = collection(db, 'users');
-      const userQuery = query(usersRef, where('email', '==', inviteEmail.toLowerCase()));
-      const userSnapshot = await getDocs(userQuery);
-
-      const inviteeUid = userSnapshot.empty ? null : userSnapshot.docs[0].id;
-
-      // Create invitation
-      const invitation: Omit<Invitation, 'id'> = {
+      const createInvitation = httpsCallable<
+        { treeId: string; inviteeEmail: string; role: CollaboratorRole },
+        { success: boolean; invitationId: string }
+      >(functions, 'createInvitation');
+      const result = await createInvitation({
+        treeId: tree.id,
+        inviteeEmail: inviteEmail.toLowerCase(),
+        role: inviteRole,
+      });
+      const invitation: Invitation = {
+        id: result.data.invitationId,
         treeId: tree.id,
         treeName: tree.title,
         inviterUid: user.uid,
         inviterName: user.displayName || 'Someone',
         inviteeEmail: inviteEmail.toLowerCase(),
-        inviteeUid,
         role: inviteRole,
         status: 'pending',
-        createdAt: serverTimestamp()
       };
-
-      const docRef = await addDoc(collection(db, 'invitations'), invitation);
-
-      // Add to local state
-      setPendingInvitations(prev => [...prev, { ...invitation, id: docRef.id }]);
-
-      // If user exists, create in-app notification
-      if (inviteeUid) {
-        await addDoc(collection(db, 'notifications'), {
-          userId: inviteeUid,
-          type: 'tree_invite',
-          title: 'Tree Invitation',
-          message: `${user.displayName || 'Someone'} invited you to collaborate on "${tree.title}" as ${inviteRole}`,
-          data: { treeId: tree.id, invitationId: docRef.id },
-          read: false,
-          createdAt: serverTimestamp()
-        });
-      }
+      setPendingInvitations(prev => [...prev, invitation]);
 
       toast({
         title: 'Invitation Sent!',
-        description: inviteeUid
-          ? `${inviteEmail} will be notified.`
-          : `An invitation email will be sent to ${inviteEmail}.`
+        description: `An invitation email will be sent to ${inviteEmail}.`
       });
 
       setInviteEmail('');

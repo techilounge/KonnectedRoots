@@ -128,7 +128,7 @@ export default function PrivacyPolicyPage() {
                         <li><strong>Access</strong>: Request a copy of your personal data</li>
                         <li><strong>Correction</strong>: Update or correct inaccurate information</li>
                         <li><strong>Deletion</strong>: Request deletion of your account and data</li>
-                        <li><strong>Export</strong>: Download your family tree data (GEDCOM format for paid plans)</li>
+                        <li><strong>Export</strong>: Download your family tree data in GEDCOM format on every plan</li>
                         <li><strong>Opt-out</strong>: Unsubscribe from marketing emails (service emails cannot be opted out)</li>
                     </ul>
                     <p>

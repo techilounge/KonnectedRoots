@@ -28,6 +28,7 @@ import {
     DEFAULT_USER_USAGE,
     DEFAULT_USER_FAMILY,
 } from './types';
+import { effectivePlan as resolveEffectivePlan, grantsPaidAccess, hasActiveAIPack, resolveFamilyAIPackAuthority } from './plan';
 
 /**
  * Get a user's billing information from Firestore
@@ -75,22 +76,49 @@ export async function getEntitlements(uid: string): Promise<Entitlements> {
     const { billing, usage, family } = await getUserBilling(uid);
 
     // Determine effective plan
-    let effectivePlan: Plan = billing.plan;
+    let effectivePlan: Plan = resolveEffectivePlan(billing);
     let isFamily = false;
     let familyId: string | null = null;
     let effectiveUsage: UserUsage | FamilyUsage = usage;
+    let hasAIPack = hasActiveAIPack(billing);
 
     // If user is part of a family, use family's plan and pooled usage
     if (family.familyId) {
-        isFamily = true;
         familyId = family.familyId;
 
         const familyDoc = await getDoc(doc(db, 'families', family.familyId));
         if (familyDoc.exists()) {
             const familyData = familyDoc.data();
-            if (familyData.plan?.status === 'active' || familyData.plan?.status === 'trialing') {
-                effectivePlan = 'family';
-                effectiveUsage = familyData.usage || usage;
+            if (familyData.plan?.plan === 'family') {
+                const ownerBilling = familyData.ownerUid === uid
+                    ? billing
+                    : typeof familyData.ownerUid === 'string'
+                        ? (await getDoc(doc(db, 'users', familyData.ownerUid))).data()?.billing as UserBilling | undefined
+                        : null;
+                const familyPaid = grantsPaidAccess(
+                    familyData.plan.status || 'none',
+                    Number(familyData.plan.currentPeriodEnd || 0),
+                    Date.now(),
+                    Number(familyData.plan.scheduledCancellationAt || 0) || null,
+                ) && ownerBilling?.plan === 'family' && grantsPaidAccess(
+                    ownerBilling.status,
+                    Number(ownerBilling.currentPeriodEnd || 0),
+                    Date.now(),
+                    Number(ownerBilling.scheduledCancellationAt || 0) || null,
+                ) && ownerBilling.stripeCustomerId === familyData.plan.stripeCustomerId
+                    && ownerBilling.stripeSubscriptionId === familyData.plan.stripeSubscriptionId;
+                effectivePlan = familyPaid ? 'family' : resolveEffectivePlan(billing);
+                if (!familyPaid) {
+                    hasAIPack = false;
+                } else {
+                    isFamily = true;
+                    effectiveUsage = familyData.usage || usage;
+                    const familyAIPackAuthority = resolveFamilyAIPackAuthority(
+                        familyData.plan || {},
+                        ownerBilling,
+                    );
+                    hasAIPack = hasActiveAIPack(familyAIPackAuthority);
+                }
             }
         }
     }
@@ -99,7 +127,6 @@ export async function getEntitlements(uid: string): Promise<Entitlements> {
     const baseLimits = PLAN_LIMITS[effectivePlan];
 
     // Adjust AI allowance based on AI Pack add-on
-    const hasAIPack = billing.addons?.aiPack || false;
     const aiActionsAllowance = getAIAllowance(effectivePlan, hasAIPack);
 
     const limits: PlanLimits = {
@@ -208,13 +235,13 @@ export async function canInviteCollaborator(
     roleAllowed?: boolean;
 }> {
     const entitlements = await getEntitlements(uid);
-    const { maxCollaboratorsPerTree, allowedCollaboratorRoles } = entitlements.limits;
+    const { maxCollaboratorsPerTree, maxEditorsPerTree, allowedCollaboratorRoles } = entitlements.limits;
 
     // Check if role is allowed on this plan
     if (!allowedCollaboratorRoles.includes(role)) {
         return {
             allowed: false,
-            reason: `${role.charAt(0).toUpperCase() + role.slice(1)} role is not available on the Free plan. Upgrade to Pro to invite Editors and Managers.`,
+            reason: `${role.charAt(0).toUpperCase() + role.slice(1)} role is not available on this plan.`,
             roleAllowed: false,
         };
     }
@@ -226,13 +253,26 @@ export async function canInviteCollaborator(
     }
 
     const collaborators = treeDoc.data().collaborators || {};
-    const currentCount = Object.keys(collaborators).length;
+    const currentCount = Object.keys(collaborators).filter(uid => uid !== treeDoc.data().ownerId).length;
 
     if (currentCount >= maxCollaboratorsPerTree) {
         return {
             allowed: false,
             reason: `You've reached the maximum of ${maxCollaboratorsPerTree} collaborators on your plan. Upgrade for more collaboration.`,
         };
+    }
+
+    if (role === 'editor' && maxEditorsPerTree !== null) {
+        const editorCount = Object.entries(collaborators)
+            .filter(([uid, value]) => uid !== treeDoc.data().ownerId && value === 'editor')
+            .length;
+        if (editorCount >= maxEditorsPerTree) {
+            return {
+                allowed: false,
+                reason: `This plan allows up to ${maxEditorsPerTree} Editor per tree.`,
+                roleAllowed: false,
+            };
+        }
     }
 
     return { allowed: true, roleAllowed: true };
@@ -251,14 +291,11 @@ export async function canExport(
     remaining?: number | null;
 }> {
     const entitlements = await getEntitlements(uid);
-    const { exportLimitPerMonth, watermarkExports, allowGedcomExport } = entitlements.limits;
+    const { exportLimitPerMonth, watermarkExports } = entitlements.limits;
 
-    // Check GEDCOM permission
-    if (exportType === 'gedcom' && !allowGedcomExport) {
-        return {
-            allowed: false,
-            reason: 'GEDCOM export is only available on Pro and Family plans.',
-        };
+    // GEDCOM is portability and does not consume visual export allowance.
+    if (exportType === 'gedcom') {
+        return { allowed: true, watermark: false, remaining: null };
     }
 
     // Unlimited exports

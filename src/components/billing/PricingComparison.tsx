@@ -20,7 +20,7 @@ const KR_WINS = {
     private: "Private workspace + controlled sharing",
     roles: "Role-based collaboration (Viewer/Editor/Manager)",
     freeLimit: "Generous free tier (3 trees, 500 people/tree)",
-    gedcom: "GEDCOM import + export (Pro/Family)",
+    gedcom: "GEDCOM import + export on every plan",
     ai: "AI assist with predictable monthly credits",
     family: "Family plan (up to 6 seats) built for shared ownership",
     exports: "Easy exports (PNG/PDF; watermark removed on paid)",
@@ -33,7 +33,7 @@ const rows: Row[] = [
         startingPaid: "$5.99/mo (Pro) • $9.99/mo (Family)",
         freeTreeSize: "3 trees • 500 people/tree",
         collaboration: "Role-based (Viewer/Editor/Manager) • Family seats (up to 6)",
-        portability: "GEDCOM import + export (Pro/Family) • PNG/PDF exports",
+        portability: "GEDCOM import + export • 2 visual exports/month",
         aiAssist: "Yes (monthly credits + optional AI Pack)",
         whyKR: [
             "Best value for building together",
@@ -49,7 +49,7 @@ const rows: Row[] = [
         startingPaid: "Typically $24.99+/mo (varies by plan & promos)",
         freeTreeSize: "Start a tree free (limits vary)",
         collaboration: "Sharing available (not positioned as role-based teamwork)",
-        portability: "GEDCOM upload/download supported",
+        portability: "GEDCOM upload/download • unlimited visual exports",
         aiAssist: "Not the core value (varies)",
         whyKR: [KR_WINS.value, KR_WINS.roles, KR_WINS.freeLimit, KR_WINS.ai],
     },
@@ -118,7 +118,7 @@ function CheckList({ items }: { items: string[] }) {
     );
 }
 
-export default function PricingComparison() {
+export default function PricingComparison({ showCallToAction = true }: { showCallToAction?: boolean }) {
     return (
         <section className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
             {/* Header */}
@@ -257,11 +257,11 @@ export default function PricingComparison() {
             </div>
 
             {/* CTA */}
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            {showCallToAction && <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <div className="text-sm font-medium text-zinc-900">Best starting point:</div>
                     <div className="text-sm text-zinc-600">
-                        Start free (3 trees, 500 people/tree). Upgrade only when you need unlimited growth + GEDCOM + roles.
+                                Start free (3 trees, 500 people/tree). Upgrade for unlimited growth, visual exports, and expanded collaboration roles.
                     </div>
                 </div>
                 <div className="flex gap-3">
@@ -278,7 +278,7 @@ export default function PricingComparison() {
                         View Pricing
                     </a>
                 </div>
-            </div>
+            </div>}
         </section>
     );
 }
