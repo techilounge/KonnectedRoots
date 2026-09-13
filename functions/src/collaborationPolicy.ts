@@ -9,7 +9,11 @@ export interface CollaborationPolicy {
 function hasActivePaidAccess(billing: any, now: number): boolean {
   const status = billing?.status;
   const periodEnd = Number(billing?.currentPeriodEnd || 0);
-  return (status === 'active' || status === 'trialing') && periodEnd > now;
+  const scheduledCancellationAt = Number(billing?.scheduledCancellationAt || 0);
+  const accessEnd = scheduledCancellationAt > 0
+    ? Math.min(periodEnd, scheduledCancellationAt)
+    : periodEnd;
+  return (status === 'active' || status === 'trialing') && accessEnd > now;
 }
 
 export function collaborationPolicy(ownerData: any, now = Date.now()): CollaborationPolicy {

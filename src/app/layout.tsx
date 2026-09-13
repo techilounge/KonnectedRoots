@@ -2,6 +2,7 @@ import { clientEnv } from '@/lib/config/env.client';
 import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
+import BillingNotifications from '@/components/billing/BillingNotifications';
 import Header from '@/components/shared/Header';
 import Footer from '@/components/shared/Footer';
 import CookieConsentBanner from '@/components/shared/CookieConsentBanner';
@@ -165,6 +166,7 @@ export default function RootLayout({
             {children}
           </main>
           <Footer />
+          <BillingNotifications />
           <Toaster />
           <CookieConsentBanner />
           <Analytics />

@@ -118,7 +118,7 @@ function CheckList({ items }: { items: string[] }) {
     );
 }
 
-export default function PricingComparison() {
+export default function PricingComparison({ showCallToAction = true }: { showCallToAction?: boolean }) {
     return (
         <section className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
             {/* Header */}
@@ -257,7 +257,7 @@ export default function PricingComparison() {
             </div>
 
             {/* CTA */}
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            {showCallToAction && <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <div className="text-sm font-medium text-zinc-900">Best starting point:</div>
                     <div className="text-sm text-zinc-600">
@@ -278,7 +278,7 @@ export default function PricingComparison() {
                         View Pricing
                     </a>
                 </div>
-            </div>
+            </div>}
         </section>
     );
 }

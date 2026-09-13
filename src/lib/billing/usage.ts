@@ -9,6 +9,7 @@ import { doc, getDoc, updateDoc, increment, serverTimestamp } from 'firebase/fir
 import type { UserUsage, FamilyUsage, Plan } from './types';
 import { getCurrentMonthKey, PLAN_LIMITS, getAIAllowance } from './constants';
 import { DEFAULT_USER_USAGE } from './types';
+import { hasActiveAIPack } from './plan';
 
 /**
  * Get or create usage document for a user
@@ -81,7 +82,7 @@ export async function incrementExportCount(uid: string): Promise<{
         uid,
         usage,
         billing.plan || 'free',
-        billing.addons?.aiPack || false
+        hasActiveAIPack(billing)
     );
 
     const plan = (billing.plan || 'free') as Plan;
@@ -142,10 +143,10 @@ export async function consumeAIActions(
         uid,
         usage,
         billing.plan || 'free',
-        billing.addons?.aiPack || false
+        hasActiveAIPack(billing)
     );
 
-    const allowance = getAIAllowance(billing.plan || 'free', billing.addons?.aiPack || false);
+    const allowance = getAIAllowance(billing.plan || 'free', hasActiveAIPack(billing));
     const remaining = allowance - currentUsage.aiActionsUsed;
 
     // Check if enough credits
@@ -196,8 +197,8 @@ async function consumeFamilyAIActions(
 
     // Check if needs reset
     if (usage.monthKey !== currentMonth) {
-        const hasAIPack = data.plan?.addons?.aiPack || false;
-        const newAllowance = getAIAllowance('family', hasAIPack);
+        const familyHasAIPack = hasActiveAIPack(data.plan || {});
+        const newAllowance = getAIAllowance('family', familyHasAIPack);
 
         await updateDoc(familyRef, {
             'usage.monthKey': currentMonth,

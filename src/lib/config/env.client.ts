@@ -2,6 +2,7 @@
 export const clientEnv = {
   appUrl: process.env.NEXT_PUBLIC_APP_URL || 'https://konnectedroots.app',
   googleSiteVerification: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION,
+  useFirebaseEmulators: process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === 'true',
   firebase: {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
     authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,

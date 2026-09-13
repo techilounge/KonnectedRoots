@@ -12,6 +12,7 @@ import * as logger from "firebase-functions/logger";
 import { onDocumentWritten, onDocumentCreated } from "firebase-functions/v2/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { sendEmail } from "./sendEmail";
 import {
   welcomeEmail,
@@ -26,7 +27,8 @@ const db = admin.firestore();
 
 // Export Stripe functions
 export { stripeWebhook } from "./stripeWebhook";
-export { createCheckoutSession, createPortalSession, addAIPack } from "./stripeBilling";
+export { createCheckoutSession, createPortalSession, upgradeToFamily, addAIPack, removeAIPack, resumeAIPack } from "./stripeBilling";
+export { scheduleDowngradeToPro, cancelScheduledDowngrade, reconcileScheduledBilling } from "./familyDowngrade";
 
 // Export scheduled tasks
 export { weeklyActivityDigest, inactivityReminder, planExpirationReminder } from "./scheduledTasks";
@@ -96,7 +98,7 @@ export const createInvitation = onCall(async (request) => {
         inviteeUid,
         role,
         status: 'pending',
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
       };
       transaction.create(invitationRef, invitation);
 
@@ -109,7 +111,7 @@ export const createInvitation = onCall(async (request) => {
           message: `${inviterData.displayName || inviterData.email || 'Someone'} invited you to collaborate on "${invitation.treeName}" as ${role}`,
           data: { treeId, invitationId: invitationRef.id },
           read: false,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          createdAt: FieldValue.serverTimestamp(),
         });
       }
     });
@@ -197,7 +199,7 @@ export const acceptInvitation = onCall(async (request) => {
       transaction.update(invitationRef, {
         status: 'accepted',
         inviteeUid: user.uid,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        updatedAt: FieldValue.serverTimestamp()
       });
 
       // Create notification for inviter
@@ -209,7 +211,7 @@ export const acceptInvitation = onCall(async (request) => {
         message: `${user.token.name || user.token.email} accepted your invitation to "${invitation.treeName}"`,
         data: { treeId: invitation.treeId },
         read: false,
-        createdAt: admin.firestore.FieldValue.serverTimestamp()
+        createdAt: FieldValue.serverTimestamp()
       });
     });
 
@@ -230,13 +232,17 @@ export const acceptInvitation = onCall(async (request) => {
             invitation.role
           );
 
-          await sendEmail({
+          const result = await sendEmail({
             to: inviterData.email,
             subject: email.subject,
             html: email.html
           });
 
-          logger.info(`Invitation accepted email sent to ${inviterData.email}`);
+          if (result.delivery === 'sent') {
+            logger.info(`Invitation accepted email sent to ${inviterData.email}`);
+          } else if (!result.success) {
+            logger.warn(`Failed to send invitation accepted email to ${inviterData.email}: ${result.error}`);
+          }
         }
       }
     } catch (emailError) {
@@ -354,13 +360,14 @@ export const sendInvitationEmail = onDocumentWritten(
       // We don't throw here to avoid infinite retries if the error is permanent (like invalid email)
       return;
     }
+    if (result.delivery === 'suppressed') return;
 
     // Mark as sent
     // Update both emailSent and lastEmailSentAt
     await event.data.after.ref.update({
       emailSent: true,
       emailId: result.emailId,
-      lastEmailSentAt: admin.firestore.FieldValue.serverTimestamp()
+      lastEmailSentAt: FieldValue.serverTimestamp()
     });
     logger.info(`Invitation email sent to ${inviteeEmail}`);
 
@@ -391,15 +398,15 @@ export const onUserCreated = onDocumentCreated(
       html: emailContent.html
     });
 
-    if (result.success) {
+    if (result.delivery === 'sent') {
       logger.info(`Welcome email sent to ${email}`);
 
       // Mark welcome email as sent
       await snapshot.ref.update({
         welcomeEmailSent: true,
-        welcomeEmailSentAt: admin.firestore.FieldValue.serverTimestamp()
+        welcomeEmailSentAt: FieldValue.serverTimestamp()
       });
-    } else {
+    } else if (!result.success) {
       logger.warn(`Failed to send welcome email to ${email}: ${result.error}`);
     }
   } catch (welcomeError) {
@@ -428,7 +435,7 @@ export const onUserCreated = onDocumentCreated(
         message: `${doc.data().inviterName || 'Someone'} invited you to collaborate on "${doc.data().treeName}"`,
         data: { treeId: doc.data().treeId, invitationId: doc.id },
         read: false,
-        createdAt: admin.firestore.FieldValue.serverTimestamp()
+        createdAt: FieldValue.serverTimestamp()
       });
     });
 

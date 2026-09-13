@@ -35,6 +35,14 @@ function run(env = {}, file, certError = false, existing = false) {
         vm.runInNewContext(configCode, { exports: configExports, process: { env }, require: () => ({}) });
         return configExports;
       }
+      if (name === './emulator-config') {
+        const emulatorExports = {};
+        const emulatorCode = ts.transpileModule(fs.readFileSync('src/lib/firebase/emulator-config.ts', 'utf8'), {
+          compilerOptions: { module: ts.ModuleKind.CommonJS },
+        }).outputText;
+        vm.runInNewContext(emulatorCode, { exports: emulatorExports, require: () => ({}) });
+        return emulatorExports;
+      }
       if (name === 'firebase-admin') return admin;
       if (name === 'path') return require('node:path');
       if (name === 'fs') return {

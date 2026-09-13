@@ -148,7 +148,11 @@ service cloud.firestore {
       allow create, delete: if isPlatformAdmin();
       
       match /seats/{seatId} {
-        allow read, write: if isPlatformAdmin() || get(/databases/$(database)/documents/families/$(familyId)).data.ownerUid == request.auth.uid;
+        // Membership is billing authority and is written only by trusted Admin
+        // SDK code. Owners may inspect seats but cannot grant themselves or
+        // others paid Family access through a browser write.
+        allow write: if isPlatformAdmin();
+        allow read: if isPlatformAdmin() || get(/databases/$(database)/documents/families/$(familyId)).data.ownerUid == request.auth.uid;
         allow read: if request.auth != null && request.auth.uid == seatId;
       }
     }

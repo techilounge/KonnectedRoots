@@ -74,6 +74,15 @@ test('Family collaborator capacity is separate from Family account seats', () =>
   assert.equal(policy.collaborationPolicy(paidOwner('family'), NOW).allowedRoles.includes('manager'), true);
 });
 
+for (const [plan, expectedCollaborators] of [['pro', 10], ['family', 20]]) {
+  test(`${plan} scheduled cancellation retains collaboration entitlement until expiration`, () => {
+    const owner = paidOwner(plan);
+    owner.billing.scheduledCancellationAt = NOW + 5_000;
+    assert.equal(policy.collaborationPolicy(owner, NOW + 4_999).maxCollaborators, expectedCollaborators);
+    assert.equal(policy.collaborationPolicy(owner, NOW + 5_000).maxCollaborators, 2);
+  });
+}
+
 test('Firestore rules keep collaborator membership server-owned', () => {
   const rules = fs.readFileSync(path.join(__dirname, '../../firestore.rules'), 'utf8');
   assert.match(rules, /affectedKeys\(\)\.hasAny\(\['collaborators'\]\)/);

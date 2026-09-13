@@ -44,7 +44,7 @@ service firebase.storage {
       let hasBilling = user.keys().hasAny(['billing']);
       let hasFamily = user.keys().hasAny(['family']) && user.family.keys().hasAny(['familyId']) && user.family.familyId != null;
       let family = hasFamily ? firestore.get(/databases/(default)/documents/families/$(user.family.familyId)).data : null;
-      let familyPaid = hasFamily && family != null && family.keys().hasAny(['plan']) &&
+      let familyPaid = hasFamily && family != null && family.keys().hasAny(['plan']) && family.plan.plan == 'family' &&
         (family.plan.status == 'active' || family.plan.status == 'trialing');
       let paid = hasBilling && (user.billing.status == 'active' || user.billing.status == 'trialing');
       return familyPaid ? 100 * 1024 * 1024 * 1024 :
@@ -56,7 +56,7 @@ service firebase.storage {
       let user = firestore.get(/databases/(default)/documents/users/$(uid)).data;
       let hasFamily = user.keys().hasAny(['family']) && user.family.keys().hasAny(['familyId']) && user.family.familyId != null;
       let family = hasFamily ? firestore.get(/databases/(default)/documents/families/$(user.family.familyId)).data : null;
-      let familyPaid = hasFamily && family != null && family.keys().hasAny(['plan']) &&
+      let familyPaid = hasFamily && family != null && family.keys().hasAny(['plan']) && family.plan.plan == 'family' &&
         (family.plan.status == 'active' || family.plan.status == 'trialing');
       let hasFamilyUsage = familyPaid && family.keys().hasAny(['usage']) && family.usage.keys().hasAny(['storageUsedBytes']);
       let hasUsage = user.keys().hasAny(['usage']) && user.usage.keys().hasAny(['storageUsedBytes']);

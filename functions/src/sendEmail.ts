@@ -17,6 +17,7 @@ export interface SendEmailOptions {
 
 export interface SendEmailResult {
     success: boolean;
+    delivery: 'sent' | 'suppressed' | 'failed';
     emailId?: string;
     error?: string;
     retryable?: boolean;
@@ -24,6 +25,16 @@ export interface SendEmailResult {
 
 // Lazy-initialize Resend client
 let _resend: Resend | null = null;
+
+const LOCAL_BILLING_PROJECT_ID = 'demo-konnectedroots-phase2';
+
+export function shouldSuppressLocalBillingEmail(env: NodeJS.ProcessEnv = process.env): boolean {
+    if (env.LOCAL_BILLING_TEST_DISABLE_EMAIL !== 'true') return false;
+    if (env.NODE_ENV === 'production') return false;
+    return env.FUNCTIONS_EMULATOR === 'true' &&
+        env.FIRESTORE_EMULATOR_HOST === '127.0.0.1:8080' &&
+        (env.GCLOUD_PROJECT === LOCAL_BILLING_PROJECT_ID || env.GOOGLE_CLOUD_PROJECT === LOCAL_BILLING_PROJECT_ID);
+}
 
 function getResend(): Resend | null {
     if (!_resend) {
@@ -44,11 +55,17 @@ function getResend(): Resend | null {
  * @returns Result object with success status and optional emailId or error
  */
 export async function sendEmail(options: SendEmailOptions): Promise<SendEmailResult> {
+    if (shouldSuppressLocalBillingEmail()) {
+        logger.info('Local billing test: outbound email suppressed');
+        return { success: true, delivery: 'suppressed' };
+    }
+
     const resend = getResend();
 
     if (!resend) {
         return {
             success: false,
+            delivery: 'failed',
             error: "Email service not configured (RESEND_API_KEY missing)"
         };
     }
@@ -68,6 +85,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
             logger.error("Resend delivery failed", { operation: 'send_email', code: 'provider_rejected' });
             return {
                 success: false,
+                delivery: 'failed',
                 error: "Email delivery failed.",
                 retryable: !(error.message?.includes('invalid') || error.message?.includes('not found'))
             };
@@ -77,6 +95,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
 
         return {
             success: true,
+            delivery: 'sent',
             emailId: data?.id
         };
     } catch (err) {
@@ -84,6 +103,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
 
         return {
             success: false,
+            delivery: 'failed',
             error: "Email delivery failed.",
             retryable: !(err instanceof Error && (err.message.includes('invalid') || err.message.includes('not found')))
         };
@@ -125,6 +145,7 @@ export async function sendEmailWithRetry(
 
     return {
         success: false,
+        delivery: 'failed',
         error: lastError || "Max retries exceeded"
     };
 }

@@ -13,6 +13,7 @@ Use `.env.example` as a list of placeholders, not a working credential file. Loc
 | NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET | Client/server, public | Required for browser Storage; configure for Admin Storage where used | env.client, env.server → firebase/clients, firebase/admin |
 | NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID | Client, public | Optional for current Auth/Firestore/Storage features; supply registered web-app value | env.client → firebase/clients |
 | NEXT_PUBLIC_FIREBASE_APP_ID | Client, public | Required for browser use | env.client → firebase/clients |
+| NEXT_PUBLIC_USE_FIREBASE_EMULATORS | Client, public local-test flag | Set exactly `true` only for the dedicated local billing harness. Connects Auth, Firestore, Functions and Storage to hard-coded `127.0.0.1` ports; absent/false preserves deployed behavior | env.client → firebase/clients |
 | NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION | Client/server, public verification token | Optional; only environments intended for search verification | env.client → app/layout |
 | FIREBASE_SERVICE_ACCOUNT | Server/CLI, private credential | Required on Vercel when Admin operations execute; raw JSON or Base64 supported by Next runtime. Omit entirely for local ADC; an explicitly empty/invalid value fails closed. Not required for static sitemap/build | env.server → firebase/admin; set-admin.mjs accepts raw JSON only |
 | GOOGLE_APPLICATION_CREDENTIALS | Server/CLI, sensitive local identity-file path | Optional explicit ADC/workload identity outside Vercel; no file contents committed | env.server → firebase/admin; Google SDK/CLI |
@@ -23,6 +24,11 @@ Use `.env.example` as a list of placeholders, not a working credential file. Loc
 | NODE_ENV | Runtime-provided, public mode | Managed by Next/Node; development/test permits local Admin file/ADC, production does not | env.server → firebase/admin |
 | VERCEL | Platform-provided, public marker | Optional outside Vercel; value 1 enforces Vercel credential policy | env.server → firebase/admin |
 | VERCEL_ENV | Platform-provided, public environment label | Managed by Vercel; enforces server credential policy in Preview and Production | env.server → firebase/admin |
+| USE_FIREBASE_EMULATORS | Server, local-test flag | Set exactly `true` only in development/test with the fixed local Auth/Firestore hosts and `demo-konnectedroots-phase2`; never set on Vercel or production | firebase/admin; local scripts |
+| FIREBASE_AUTH_EMULATOR_HOST | Server/CLI, local endpoint | Local harness requires exactly `127.0.0.1:9099` | Firebase Admin SDK; local scripts |
+| FIRESTORE_EMULATOR_HOST | Server/CLI, local endpoint | Local harness requires exactly `127.0.0.1:8080` | Firebase Admin SDK; Functions; local scripts |
+| FIREBASE_STORAGE_EMULATOR_HOST | Server/CLI, local endpoint | Local harness uses exactly `127.0.0.1:9199` | Firebase Admin SDK |
+| GCLOUD_PROJECT | Server/CLI, public project selector | Local billing harness requires exactly `demo-konnectedroots-phase2`; normal deployed selection is runtime-managed | Firebase emulators/Admin; local scripts |
 | K_SERVICE | Google platform marker, public | Optional; identifies hosted ADC environment | env.server → firebase/admin |
 | FUNCTION_NAME | Google platform marker, public | Optional; identifies hosted ADC environment | env.server → firebase/admin |
 | GAE_ENV | Google platform marker, public | Optional; identifies hosted ADC environment | env.server → firebase/admin |
@@ -30,6 +36,7 @@ Use `.env.example` as a list of placeholders, not a working credential file. Loc
 | STRIPE_SECRET_KEY | Functions, secret | Required only when Stripe operations execute; existing Functions secret bindings preserved | functions/config → stripeBilling, stripeWebhook |
 | STRIPE_WEBHOOK_SECRET | Functions, secret | Required for webhook signature verification; existing secret binding preserved | functions/config → stripeWebhook |
 | RESEND_API_KEY | Functions, secret | Required for successful email delivery; missing value returns explicit failure | functions/config → sendEmail |
+| LOCAL_BILLING_TEST_DISABLE_EMAIL | Functions, local-test flag | Suppresses outbound email only when exactly `true` and the Functions/Firestore emulators and demo project are independently verified in a non-production runtime | functions/config → sendEmail |
 | STRIPE_PRICE_PRO_MONTHLY | Functions, server-only catalog ID | Required to enable corresponding checkout product; never expose to the browser or trust a browser price | functions/config → billingCatalog → stripeBilling |
 | STRIPE_PRICE_PRO_YEARLY | Functions, server-only catalog ID | Same | functions/config → billingCatalog → stripeBilling |
 | STRIPE_PRICE_FAMILY_MONTHLY | Functions, server-only catalog ID | Same | functions/config → billingCatalog → stripeBilling |
@@ -42,10 +49,10 @@ Use `.env.example` as a list of placeholders, not a working credential file. Loc
 ## Firebase runtime consistency
 
 - Browser: the six explicit web-app fields are the canonical path. SSR-only placeholders permit marketing-page builds; actual browser execution rejects missing required fields with field names only.
-- Next Admin: service-account project wins; otherwise configured ADC resolves its project, with the public project setting supplied when available. Removed the hardcoded fallback to a different project. Vercel still rejects local files and implicit ADC. Local development/test may use gitignored `service-account.json`; this is never a production fallback.
+- Next Admin: the dedicated local billing harness uses credential-free Admin initialization only when the explicit server flag, development/test mode, exact localhost emulator hosts and demo project guard all match. Otherwise service-account/ADC behavior is unchanged: the service-account project wins, Vercel rejects local files and implicit ADC, and local development/test may use gitignored `service-account.json`.
 - Functions: attached Google runtime identity plus `.firebaserc` deployment selection; Stripe/email settings are in Functions config. Root Next tsconfig excludes Functions source. Generated `functions/lib` is ignored.
 - Firebase CLI: `.firebaserc` selects deployment target; it is not read by browser or Next runtime. `firebase.json` retains Functions/rules/indexes and the legacy Hosting stanza pending owner confirmation. Vercel is the actual web hosting path. No tracked `apphosting.yaml` exists.
-- `.idx/dev.nix` starts demo emulators, but the app does not call `connect*Emulator`. Do not assume Firebase Studio traffic is isolated merely because emulators are running. Configure a dedicated development project; emulator wiring is deferred rather than silently redirecting runtime traffic.
+- Browser emulator wiring is opt-in through `NEXT_PUBLIC_USE_FIREBASE_EMULATORS=true` and uses fixed `127.0.0.1` endpoints. The flag is intended only for the dedicated local billing lifecycle runbook; simply starting emulators does not redirect the app.
 - `cors.json` allows wildcard-origin GET only. It is a manual Storage CORS artifact, not deployed by Next or `firebase.json`. Retained pending owner confirmation; CORS does not replace Storage authorization. No cloud CORS/restrictions/authorized domains were changed.
 - Browser keys are public Firebase configuration. Preserve Firebase-only API restrictions and exact approved website/Auth domains. Any temporary Preview hostname must be exact, never `*.vercel.app`, and should be removed after testing. See [browser-key runbook](../security/FIREBASE_BROWSER_KEY.md).
 

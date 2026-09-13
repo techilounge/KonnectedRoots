@@ -4,6 +4,7 @@ import { serverEnv } from '@/lib/config/env.server';
 import * as admin from 'firebase-admin';
 import * as path from 'path';
 import * as fs from 'fs';
+import { localAdminEmulatorOptions } from './emulator-config';
 
 function parseCredential(value: string, source: string) {
   try {
@@ -37,9 +38,16 @@ function parseCredential(value: string, source: string) {
   }
 }
 
-function initializeFirebaseAdmin(): admin.app.App {
+export function initializeFirebaseAdmin(): admin.app.App {
   if (admin.apps.length > 0) {
     return admin.apps[0]!;
+  }
+
+  const emulatorOptions = localAdminEmulatorOptions(process.env);
+  if (emulatorOptions) {
+    // Emulator mode deliberately has no credential or ADC lookup. The Admin
+    // SDK routes Auth/Firestore through the fixed local host environment.
+    return admin.initializeApp(emulatorOptions);
   }
 
   const projectId = serverEnv.firebaseProjectId;

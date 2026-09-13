@@ -4,7 +4,8 @@ import * as admin from 'firebase-admin';
 import { getCurrentMonthKey, getAIAllowance, AI_ACTION_WEIGHTS, PLAN_LIMITS } from './constants';
 import { DEFAULT_USER_USAGE } from './types';
 import type { UserUsage, Plan, BillingStatus } from './types';
-import { effectivePlan, grantsPaidAccess } from './plan';
+import { effectivePlan, grantsPaidAccess, hasActiveAIPack, resolveFamilyAIPackAuthority } from './plan';
+import { billingEvaluationTime } from './evaluationTime.server';
 
 export interface VerifyAndDeductResult {
     success: boolean;
@@ -48,6 +49,7 @@ export async function verifyAuthAndDeductAICredits(
 
             const userData = userDoc.data() || {};
             const billing = userData.billing || { plan: 'free', addons: { aiPack: false } };
+            const now = await billingEvaluationTime(billing, uid);
             let usage: UserUsage = userData.usage || DEFAULT_USER_USAGE;
             let usageRef = userRef;
             const currentMonth = getCurrentMonthKey();
@@ -55,8 +57,9 @@ export async function verifyAuthAndDeductAICredits(
                 plan: (billing.plan || 'free') as Plan,
                 status: billing.status || 'none',
                 currentPeriodEnd: Number(billing.currentPeriodEnd || 0),
-            });
-            let hasAIPack = Boolean(billing.addons?.aiPack);
+                scheduledCancellationAt: Number(billing.scheduledCancellationAt || 0) || null,
+            }, now);
+            let hasAIPack = plan !== 'free' && hasActiveAIPack(billing, now);
 
             // Family AI actions are a shared workspace pool. Resolve and debit
             // the family document in the same transaction as the user activity
@@ -67,14 +70,30 @@ export async function verifyAuthAndDeductAICredits(
                 const familyDoc = await transaction.get(familyRef);
                 const familyData = familyDoc.exists ? familyDoc.data() || {} : {};
                 const familyPlan = familyData.plan || {};
-                if (familyDoc.exists && grantsPaidAccess(
+                const ownerUid = typeof familyData.ownerUid === 'string' ? familyData.ownerUid : '';
+                const ownerBilling = ownerUid === uid
+                    ? billing
+                    : ownerUid
+                        ? (await transaction.get(adminDb.collection('users').doc(ownerUid))).data()?.billing
+                        : null;
+                const familyNow = ownerBilling && ownerUid != uid ? await billingEvaluationTime(ownerBilling, ownerUid) : now;
+                const ownerFamilyPaid = Boolean(ownerBilling) && ownerBilling.plan === 'family' && grantsPaidAccess(
+                    ownerBilling.status || 'none',
+                    Number(ownerBilling.currentPeriodEnd || 0),
+                    familyNow,
+                    Number(ownerBilling.scheduledCancellationAt || 0) || null,
+                ) && ownerBilling.stripeCustomerId === familyPlan.stripeCustomerId
+                    && ownerBilling.stripeSubscriptionId === familyPlan.stripeSubscriptionId;
+                if (familyDoc.exists && familyPlan.plan === 'family' && ownerFamilyPaid && grantsPaidAccess(
                     (familyPlan.status || 'none') as BillingStatus,
                     Number(familyPlan.currentPeriodEnd || 0),
+                    familyNow,
+                    Number(familyPlan.scheduledCancellationAt || 0) || null,
                 )) {
                     plan = 'family';
                     usageRef = familyRef;
                     usage = familyData.usage || DEFAULT_USER_USAGE;
-                    hasAIPack = Boolean(familyPlan.addons?.aiPack);
+                    hasAIPack = hasActiveAIPack(resolveFamilyAIPackAuthority(familyPlan, ownerBilling), familyNow);
                 }
             }
             const allowance = getAIAllowance(plan, hasAIPack);
@@ -134,9 +153,11 @@ export async function refundAICredits(uid: string, cost: number): Promise<void> 
             const familyRef = adminDb.collection('families').doc(familyId);
             const familySnap = await familyRef.get();
             const familyPlan = familySnap.data()?.plan || {};
-            if (familySnap.exists && grantsPaidAccess(
+            if (familySnap.exists && familyPlan.plan === 'family' && grantsPaidAccess(
                 (familyPlan.status || 'none') as BillingStatus,
                 Number(familyPlan.currentPeriodEnd || 0),
+                Date.now(),
+                Number(familyPlan.scheduledCancellationAt || 0) || null,
             )) {
                 await familyRef.update({ 'usage.aiActionsUsed': admin.firestore.FieldValue.increment(-cost) });
                 return;
@@ -180,13 +201,16 @@ export async function recordExportOnServer(idToken: string | undefined, exportTy
 
             const userData = userDoc.data() || {};
             const billing = userData.billing || { plan: 'free' };
+            const now = await billingEvaluationTime(billing, uid);
             let usage: UserUsage = userData.usage || DEFAULT_USER_USAGE;
             const currentMonth = getCurrentMonthKey();
             let plan = effectivePlan({
                 plan: (billing.plan || 'free') as Plan,
                 status: billing.status || 'none',
                 currentPeriodEnd: Number(billing.currentPeriodEnd || 0),
-            });
+                scheduledCancellationAt: Number(billing.scheduledCancellationAt || 0) || null,
+            }, now);
+            let hasAIPack = plan !== 'free' && hasActiveAIPack(billing, now);
             let usageRef = userRef;
             const familyId = userData.family?.familyId as string | undefined;
             if (familyId) {
@@ -194,13 +218,30 @@ export async function recordExportOnServer(idToken: string | undefined, exportTy
                 const familyDoc = await transaction.get(familyRef);
                 const familyData = familyDoc.exists ? familyDoc.data() || {} : {};
                 const familyPlan = familyData.plan || {};
-                if (familyDoc.exists && grantsPaidAccess(
+                const ownerUid = typeof familyData.ownerUid === 'string' ? familyData.ownerUid : '';
+                const ownerBilling = ownerUid === uid
+                    ? billing
+                    : ownerUid
+                        ? (await transaction.get(adminDb.collection('users').doc(ownerUid))).data()?.billing
+                        : null;
+                const familyNow = ownerBilling && ownerUid != uid ? await billingEvaluationTime(ownerBilling, ownerUid) : now;
+                const ownerFamilyPaid = Boolean(ownerBilling) && ownerBilling.plan === 'family' && grantsPaidAccess(
+                    ownerBilling.status || 'none',
+                    Number(ownerBilling.currentPeriodEnd || 0),
+                    familyNow,
+                    Number(ownerBilling.scheduledCancellationAt || 0) || null,
+                ) && ownerBilling.stripeCustomerId === familyPlan.stripeCustomerId
+                    && ownerBilling.stripeSubscriptionId === familyPlan.stripeSubscriptionId;
+                if (familyDoc.exists && familyPlan.plan === 'family' && ownerFamilyPaid && grantsPaidAccess(
                     (familyPlan.status || 'none') as BillingStatus,
                     Number(familyPlan.currentPeriodEnd || 0),
+                    familyNow,
+                    Number(familyPlan.scheduledCancellationAt || 0) || null,
                 )) {
                     plan = 'family';
                     usageRef = familyRef;
                     usage = familyData.usage || DEFAULT_USER_USAGE;
+                    hasAIPack = hasActiveAIPack(resolveFamilyAIPackAuthority(familyPlan, ownerBilling), familyNow);
                 }
             }
             const limit = PLAN_LIMITS[plan]?.exportLimitPerMonth ?? 2;
@@ -221,7 +262,7 @@ export async function recordExportOnServer(idToken: string | undefined, exportTy
                     monthKey: currentMonth,
                     exportsUsed: 0,
                     aiActionsUsed: 0,
-                    aiActionsAllowance: getAIAllowance(plan, Boolean(billing.addons?.aiPack)),
+                    aiActionsAllowance: getAIAllowance(plan, hasAIPack),
                     storageUsedBytes: usage.storageUsedBytes || 0,
                 };
             }

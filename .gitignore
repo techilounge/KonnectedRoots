@@ -40,6 +40,15 @@ pnpm-debug.log*
 .env.production.local
 .env.*
 !.env.example
+functions/.env.local
+functions/.secret.local
+
+# Local-only Phase 2 billing emulator state and reports
+.phase2-billing-test/
+phase2-billing-test-output.*
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
 
 # Local security reports and operator-supplied history replacement files
 .security-local/

@@ -76,7 +76,7 @@ Create these **Stripe Prices**:
 
 * `price.nickname`: `Family Yearly`
 
-* `unit_amount`: `9999`
+* `unit_amount`: `9900`
 
 * `recurring.interval`: `year`
 

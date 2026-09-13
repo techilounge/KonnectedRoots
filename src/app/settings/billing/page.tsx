@@ -1,14 +1,24 @@
 "use client";
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { useEntitlements } from '@/hooks/useEntitlements';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { useToast } from '@/hooks/use-toast';
 import {
     CreditCard,
     Sparkles,
@@ -23,16 +33,27 @@ import {
 } from 'lucide-react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app } from '@/lib/firebase/clients';
+import FamilyDowngradeControls from '@/components/billing/FamilyDowngradeControls';
+import ScheduledBillingReconciliation from '@/components/billing/ScheduledBillingReconciliation';
+import BillingActionFeedback, { useBillingProgress } from '@/components/billing/BillingActionFeedback';
+import { billingError, billingNotifications, billingRequestRejected } from '@/lib/billing/notifications';
+import { unavailableBillingNotice } from '@/lib/billing/notificationTracker';
+import { resolveAIUsageDisplay } from '@/lib/billing/usageDisplay';
+import { resolveSubscriptionPeriodDisplay } from '@/lib/billing/subscriptionDisplay';
 
 export default function BillingSettingsPage() {
     const { user, loading: authLoading } = useAuth();
-    const { entitlements, plan, limits, isPro, isFamily, isFree, aiRemaining, exportsRemaining, subscriptionStatus, billingInterval, renewsAt, cancelAtPeriodEnd, hasAIPack, hasStripeCustomer } = useEntitlements();
-    const { toast } = useToast();
+    const { billingScheduleCleanupRequired, billingScheduleReleaseConfirmed, billingViewUid, billingReadStartedAt, scheduledDowngrade, canManageFamilyBilling, loading: entitlementLoading, entitlements, plan, canonicalPlan, canonicalStatus, effectivePaidEntitlement, paymentAttentionRequired, entitlementReason, limits, isPro, isFamily, isFree, exportsRemaining, subscriptionStatus, billingInterval, renewsAt, cancelAtPeriodEnd, scheduledCancellationAt, hasAIPack, aiPackItemExists, aiPackStatus, aiPackPaidThrough, aiPackCancelAtPeriodEnd, aiPackScheduledRemovalAt, aiPackRemovalPending, aiPackResumePending, hasStripeCustomer, refresh: refreshEntitlements } = useEntitlements();
+    const billingProgress = useBillingProgress();
     const [isOpeningPortal, setIsOpeningPortal] = useState(false);
+    const [isRemovingAIPack, setIsRemovingAIPack] = useState(false);
+    const [isResumingAIPack, setIsResumingAIPack] = useState(false);
+    const [isAwaitingAIPackResume, setIsAwaitingAIPackResume] = useState(false);
+    const [aiPackResumeError, setAIPackResumeError] = useState<string | null>(null);
 
-    const billing = { status: subscriptionStatus, interval: billingInterval, currentPeriodEnd: renewsAt, cancelAtPeriodEnd };
+    const billing = { status: subscriptionStatus, interval: billingInterval, currentPeriodEnd: renewsAt, cancelAtPeriodEnd, scheduledCancellationAt };
     const usage = entitlements?.usage;
-    const isSubscriptionActive = subscriptionStatus === 'active' || subscriptionStatus === 'trialing';
+    const isSubscriptionActive = effectivePaidEntitlement;
 
     const handleOpenPortal = async () => {
         if (!user) return;
@@ -49,17 +70,78 @@ export default function BillingSettingsPage() {
             } else {
                 throw new Error("No portal URL returned.");
             }
-        } catch (error: any) {
-            console.error("Error opening customer portal:", error);
-            const msg = error?.message || "Failed to open billing portal. Please try again.";
-            toast({
-                variant: "destructive",
-                title: "Portal Error",
-                description: msg,
-            });
+        } catch {
+            billingError({ variant: 'destructive', title: 'Billing portal unavailable', description: 'Please try opening your billing portal again.' });
             setIsOpeningPortal(false);
         }
     };
+
+    const handleRemoveAIPack = async () => {
+        if (paymentAttentionRequired) { billingError(unavailableBillingNotice); return; }
+        if (!user || entitlementLoading || !effectivePaidEntitlement || scheduledDowngrade || isRemovingAIPack || aiPackCancelAtPeriodEnd) return;
+        const notifications = billingNotifications();
+        const operation = notifications.begin(user.uid, 'stop_ai_pack');
+        if (!operation) return;
+        setIsRemovingAIPack(true);
+        try {
+            const functions = getFunctions(app, 'us-central1');
+            const removeAIPackFn = httpsCallable(functions, 'removeAIPack');
+            const result = await removeAIPackFn({}) as {
+                data: { success?: boolean; status?: 'none' | 'scheduled'; endsAt?: number | null };
+            };
+            if (!result.data.success) throw new Error('AI Pack removal was not accepted.');
+            notifications.accepted(operation);
+        } catch (error) {
+            notifications.failed(operation, billingRequestRejected(error));
+        } finally {
+            refreshEntitlements();
+            setIsRemovingAIPack(false);
+        }
+    };
+
+    const handleResumeAIPack = async () => {
+        if (paymentAttentionRequired) { billingError(unavailableBillingNotice); return; }
+        if (!user || entitlementLoading || !effectivePaidEntitlement || scheduledDowngrade || isResumingAIPack || !aiPackCancelAtPeriodEnd || aiPackItemExists) return;
+        const notifications = billingNotifications();
+        const operation = notifications.begin(user.uid, 'resume_ai_pack');
+        if (!operation) return;
+        setIsResumingAIPack(true);
+        setIsAwaitingAIPackResume(false);
+        setAIPackResumeError(null);
+        try {
+            const functions = getFunctions(app, 'us-central1');
+            const resumeAIPackFn = httpsCallable(functions, 'resumeAIPack');
+            const result = await resumeAIPackFn({}) as {
+                data: { success?: boolean; status?: 'resuming' | 'renewing'; paidThrough?: number | null };
+            };
+            if (!result.data.success) throw new Error('AI Pack renewal request was not accepted.');
+            notifications.accepted(operation);
+            setIsAwaitingAIPackResume(true);
+            refreshEntitlements();
+        } catch (error) {
+            notifications.failed(operation, billingRequestRejected(error));
+            setIsAwaitingAIPackResume(false);
+            setAIPackResumeError('AI Pack renewal update could not be confirmed. Refresh your billing status before trying again.');
+        } finally {
+            refreshEntitlements();
+            setIsResumingAIPack(false);
+        }
+    };
+
+    useEffect(() => {
+        if (entitlementLoading || !isAwaitingAIPackResume || !aiPackItemExists || aiPackCancelAtPeriodEnd) return;
+        const confirmation = window.setTimeout(() => {
+            setIsAwaitingAIPackResume(false);
+            setAIPackResumeError(null);
+        }, 0);
+        return () => window.clearTimeout(confirmation);
+    }, [entitlementLoading, aiPackCancelAtPeriodEnd, aiPackItemExists, isAwaitingAIPackResume]);
+
+    useEffect(() => {
+        if (!isAwaitingAIPackResume && !aiPackResumePending) return;
+        const interval = window.setInterval(refreshEntitlements, 5_000);
+        return () => window.clearInterval(interval);
+    }, [aiPackResumePending, isAwaitingAIPackResume, refreshEntitlements]);
 
     if (authLoading) {
         return (
@@ -80,19 +162,35 @@ export default function BillingSettingsPage() {
         );
     }
 
-    const aiAllowance = usage?.aiActionsAllowance || limits.aiActionsAllowance || 10;
-    const aiUsed = usage?.aiActionsUsed || 0;
-    const aiPercent = Math.min(100, Math.round((aiUsed / (aiAllowance || 1)) * 100));
+    const {
+        allowance: aiAllowance,
+        used: aiUsed,
+        remaining: aiRemaining,
+        percentUsed: aiPercent,
+    } = resolveAIUsageDisplay(limits, usage);
 
     const exportLimit = limits.exportLimitPerMonth;
     const exportsUsed = usage?.exportsUsed || 0;
     const exportPercent = exportLimit ? Math.min(100, Math.round((exportsUsed / exportLimit) * 100)) : 0;
 
-    const periodEndFormatted = billing?.currentPeriodEnd
-        ? new Date(billing.currentPeriodEnd).toLocaleDateString('en-US', {
+    const subscriptionPeriod = resolveSubscriptionPeriodDisplay(
+        billing.currentPeriodEnd,
+        billing.cancelAtPeriodEnd,
+        billing.scheduledCancellationAt,
+    );
+    const subscriptionDateFormatted = subscriptionPeriod.timestamp
+        ? new Date(subscriptionPeriod.timestamp).toLocaleDateString('en-US', {
             month: 'long',
             day: 'numeric',
             year: 'numeric'
+        })
+        : null;
+    const aiPackEndTimestamp = aiPackScheduledRemovalAt || aiPackPaidThrough;
+    const aiPackEndDateFormatted = aiPackEndTimestamp
+        ? new Date(aiPackEndTimestamp).toLocaleDateString('en-US', {
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric',
         })
         : null;
 
@@ -114,6 +212,11 @@ export default function BillingSettingsPage() {
                 </div>
             </div>
 
+            <BillingActionFeedback refresh={refreshEntitlements} />
+            <ScheduledBillingReconciliation needed={billingScheduleCleanupRequired} released={billingScheduleReleaseConfirmed}
+                viewUid={billingViewUid} readStartedAt={billingReadStartedAt} loading={entitlementLoading}
+                plan={plan} status={canonicalStatus} paid={effectivePaidEntitlement} paymentAttention={paymentAttentionRequired}
+                disabled={Boolean(billingProgress)} refresh={refreshEntitlements} />
             {/* Current Plan Overview Card */}
             <Card className="shadow-sm border-border">
                 <CardHeader>
@@ -131,7 +234,7 @@ export default function BillingSettingsPage() {
                             className="text-sm font-semibold capitalize px-3 py-1"
                             variant={isFree ? "secondary" : "default"}
                         >
-                            {plan} Plan
+                            {canonicalPlan} Plan
                         </Badge>
                     </div>
                 </CardHeader>
@@ -141,7 +244,17 @@ export default function BillingSettingsPage() {
                         <div>
                             <p className="text-xs text-muted-foreground uppercase font-medium">Status</p>
                             <p className="text-base font-semibold capitalize flex items-center gap-1.5 mt-0.5">
-                                {isSubscriptionActive ? (
+                                {paymentAttentionRequired ? (
+                                    <>
+                                        <AlertCircle className="h-4 w-4 text-amber-600" />
+                                        Payment required
+                                    </>
+                                ) : subscriptionStatus === 'canceled' || entitlementReason === 'subscription_canceled' ? (
+                                    <>
+                                        <Shield className="h-4 w-4 text-muted-foreground" />
+                                        Canceled
+                                    </>
+                                ) : isSubscriptionActive ? (
                                     <>
                                         <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                                         Active
@@ -164,27 +277,96 @@ export default function BillingSettingsPage() {
 
                         <div>
                             <p className="text-xs text-muted-foreground uppercase font-medium">
-                                {billing?.cancelAtPeriodEnd ? "Expires On" : "Next Renewal"}
+                                {subscriptionPeriod.label}
                             </p>
                             <p className="text-base font-semibold mt-0.5">
-                                {periodEndFormatted || "N/A"}
+                                {subscriptionDateFormatted || "N/A"}
                             </p>
                         </div>
                     </div>
 
-                    {billing?.cancelAtPeriodEnd && (
+                    {paymentAttentionRequired && (
+                        <div role="alert" className="flex items-start gap-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-md text-amber-900 dark:text-amber-200 text-sm">
+                            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                            <div className="space-y-1">
+                                <p className="font-semibold">Payment required</p>
+                                <p>Your {canonicalPlan === 'family' ? 'Family' : 'Pro'} subscription is {canonicalStatus.replace('_', ' ')}. Paid features are paused until Stripe confirms payment.</p>
+                                <Link href="#manage-billing" className="font-medium underline">Fix payment method in Stripe Portal</Link>
+                            </div>
+                        </div>
+                    )}
+
+                    {subscriptionPeriod.isCancellationScheduled && (
                         <div className="flex items-start gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-md text-amber-800 dark:text-amber-300 text-sm">
                             <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
                             <span>
-                                Your subscription will cancel on <strong>{periodEndFormatted}</strong>. You will retain Pro features until that date.
+                                Your subscription will cancel on <strong>{subscriptionDateFormatted}</strong>. You will retain {isFamily ? 'Family' : 'Pro'} features until that date.
                             </span>
                         </div>
                     )}
                 </CardContent>
 
+                {canManageFamilyBilling && <div className="px-6 pb-6">
+                    <FamilyDowngradeControls scheduled={scheduledDowngrade} periodEnd={renewsAt} interval={billingInterval}
+                        hasAIPack={hasAIPack} refresh={refreshEntitlements}
+                        disabled={entitlementLoading || Boolean(billingProgress) || paymentAttentionRequired || cancelAtPeriodEnd || plan !== 'family'} />
+                </div>}
                 <CardFooter className="flex flex-wrap gap-3 pt-2 justify-end border-t bg-muted/20">
+                    {!scheduledDowngrade && !paymentAttentionRequired && hasAIPack && !aiPackCancelAtPeriodEnd && (
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="destructive" disabled={entitlementLoading || Boolean(billingProgress) || isRemovingAIPack}>
+                                    {isRemovingAIPack && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    {isRemovingAIPack
+                                        ? 'Removing AI Pack...'
+                                        : aiPackRemovalPending ? 'Retry Remove AI Pack' : 'Remove AI Pack'}
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>Stop AI Pack renewal?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        Your {isFamily ? 'Family' : 'Pro'} subscription will remain active. The AI Pack will not renew, and your already-paid 1,000 additional AI credits will remain available{aiPackEndDateFormatted ? ` through ${aiPackEndDateFormatted}` : ' through the current paid period'}.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Not now</AlertDialogCancel>
+                                    <AlertDialogAction onClick={handleRemoveAIPack} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                        Stop AI Pack renewal
+                                    </AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                    )}
+                    {!scheduledDowngrade && !paymentAttentionRequired && hasAIPack && aiPackCancelAtPeriodEnd && !aiPackItemExists && aiPackEndDateFormatted && (
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="outline" disabled={entitlementLoading || Boolean(billingProgress) || isResumingAIPack}>
+                                    {isResumingAIPack && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    {isResumingAIPack
+                                        ? 'Resuming...'
+                                        : aiPackResumePending ? 'Retry Keep AI Pack' : 'Keep AI Pack'}
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>Keep AI Pack renewing?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        Your AI Pack access is already paid through {aiPackEndDateFormatted}. You will not be charged today. AI Pack billing will resume with your next renewal.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Not now</AlertDialogCancel>
+                                    <AlertDialogAction onClick={handleResumeAIPack}>
+                                        Keep AI Pack
+                                    </AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                    )}
                     {hasStripeCustomer ? (
                         <Button
+                            id="manage-billing"
                             onClick={handleOpenPortal}
                             disabled={isOpeningPortal}
                             className="gap-2"
@@ -229,6 +411,29 @@ export default function BillingSettingsPage() {
                         <p className="text-xs text-muted-foreground">
                             {aiRemaining} credit(s) remaining for the current month. Credits reset automatically on the 1st of each month.
                         </p>
+                        {aiPackStatus === 'pending' && (
+                            <p className="text-xs text-amber-700 dark:text-amber-300">
+                                AI Pack payment is processing. The additional 1,000 credits become available after Stripe confirms payment.
+                            </p>
+                        )}
+                        {aiPackRemovalPending && (
+                            <p className="text-xs text-amber-700 dark:text-amber-300">
+                                AI Pack removal still needs confirmation. Your paid access remains active; retrying uses the same safe operation.
+                            </p>
+                        )}
+                        {hasAIPack && aiPackCancelAtPeriodEnd && aiPackEndDateFormatted && (
+                            <p className="text-xs text-amber-700 dark:text-amber-300">
+                                AI Pack ends on {aiPackEndDateFormatted}. Your {isFamily ? 'Family' : 'Pro'} subscription remains active.
+                            </p>
+                        )}
+                        {(isResumingAIPack || isAwaitingAIPackResume || aiPackResumePending) && (
+                            <p className="text-xs text-amber-700 dark:text-amber-300">
+                                Resuming AI Pack renewal. This page will update automatically after the authoritative billing state is confirmed.
+                            </p>
+                        )}
+                        {aiPackResumeError && (
+                            <p role="alert" className="text-xs text-destructive">{aiPackResumeError}</p>
+                        )}
                     </CardContent>
                 </Card>
 
@@ -240,7 +445,7 @@ export default function BillingSettingsPage() {
                             Monthly Tree Exports
                         </CardTitle>
                         <CardDescription>
-                            High-resolution PDF, PNG canvas exports and GEDCOM files.
+                            High-resolution PDF and PNG tree exports.
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-3">
@@ -261,6 +466,9 @@ export default function BillingSettingsPage() {
                             {exportLimit === null
                                 ? "You have unlimited PDF & PNG tree exports on your current plan."
                                 : `Free tier is limited to 2 exports per month. Upgrade to Pro for unlimited exports.`}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                            GEDCOM import/export is available on all plans and does not count toward your visual export allowance.
                         </p>
                     </CardContent>
                 </Card>
