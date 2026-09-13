@@ -1001,3 +1001,26 @@ after this task; the previously accepted 9-total checkpoint is retained as
 history. No Functions dependency changed. See
 [the full correction report](STORAGE_RULES_REMEDIATION_2026-09-13.md) for the
 proposed files, access-budget table, audit comparison and manual rollout steps.
+
+## Storage review follow-up since 4edd73e (2026-09-13)
+
+Corrected prepared linked-account quota precedence: active Family 100 GiB,
+otherwise valid personal active/trialing Pro 50 GiB, otherwise Free 1 GiB.
+Missing/mismatched linked projection still fails closed until preparation.
+Storage triggers now compare only normalized base-storage inputs before Admin
+reads; profile, AI/export usage, AI Pack-only and storageAuthority-only writes
+cause no transactions. Individual avatar/tree upload preparation refreshes only
+the selected user, including Family owners. Relevant owner billing/Family
+authority transitions retain fanout, and meaningful authority deletions revoke
+remaining cached paid elevation. Stripe IDs remain necessary for live owner
+subscription binding; known usage floors and the two-document budget remain.
+
+Follow-up local validation: 85/85 real Rules tests, 263/263 Functions tests under
+Node 20, 274/274 root tests, builds/typecheck, zero Rules compiler errors/warnings,
+0 lint errors/50 existing warnings, changed-source Gitleaks and diff check passed.
+Root audits remain 67 total/12 high/0 critical and production 62/7/0; Functions
+currently 8 moderate/0 high/0 critical, with no dependency/lock change. The prior
+74/220-test checkpoint above is historical. Exact storage accounting/complete
+shared quota enforcement remain Phase 3/4. Follow-up changes remain local and
+uncommitted; no push, PR, deploy or merge. See
+[the full follow-up report](STORAGE_RULES_REMEDIATION_2026-09-13.md#follow-up-correction-and-validation-since-4edd73e).

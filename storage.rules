@@ -49,7 +49,6 @@ service firebase.storage {
           && authority.get('stripeSubscriptionId', '') == billing.get('stripeSubscriptionId', null)));
       return linked && !projected ? 0
         : projected && familyPaid(authority) && ownerMatches ? 100 * 1024 * 1024 * 1024
-        : projected && authority.get('plan', 'free') == 'family' ? 1 * 1024 * 1024 * 1024
         : paid(billing) && billing.get('plan', 'free') == 'pro' ? 50 * 1024 * 1024 * 1024
         : 1 * 1024 * 1024 * 1024;
     }

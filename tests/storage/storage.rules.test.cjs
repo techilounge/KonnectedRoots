@@ -60,6 +60,11 @@ function put(uid, objectPath, size = 100, contentType = 'image/png', customMetad
   return object(uid, objectPath).put(new Uint8Array(size), {contentType, ...(customMetadata ? {customMetadata} : {})});
 }
 
+function change(before, after) {
+  const snapshot = data => ({exists: data !== undefined, data: () => data});
+  return {before: snapshot(before), after: snapshot(after)};
+}
+
 test('Free owner valid image under 5 MiB and within 1 GiB is allowed', async () => {
   const a = await account(); await assertSucceeds(put(a.uid, a.objectPath));
 });
@@ -255,13 +260,15 @@ test('live owner billing immediately invalidates an otherwise active stale Famil
 
 test('storage triggers re-read live authority instead of applying stale event data', async () => {
   const a = await account({plan: 'family', familyUsed: 2 * GiB}); const m = await member(a);
+  const oldFamily = (await database.doc(`families/${a.familyId}`).get()).data();
   await database.doc(`families/${a.familyId}`).update({'plan.status': 'past_due'});
   const handlers = uploadPreparation();
-  await handlers.onStorageFamilyWritten({params: {familyId: a.familyId}, data: {plan: billing('family', 'active')}});
+  await handlers.onStorageFamilyWritten({params: {familyId: a.familyId}, data: change(undefined, oldFamily)});
   assert.equal((await database.doc(`users/${m.uid}`).get()).data().storageAuthority.status, 'none');
   await assertFails(put(m.uid, m.target));
+  const oldUser = (await database.doc(`users/${m.uid}`).get()).data();
   await database.doc(`users/${m.uid}`).update({family: {familyId: null}});
-  await handlers.onStorageUserWritten({params: {uid: m.uid}, data: {family: {familyId: a.familyId}}});
+  await handlers.onStorageUserWritten({params: {uid: m.uid}, data: change(oldUser, {...oldUser, family: {familyId: null}})});
   assert.equal((await database.doc(`users/${m.uid}`).get()).data().storageAuthority.familyId, null);
   assert.equal((await database.doc(`users/${m.uid}`).get()).data().storageAuthority.storageUsedBytes, 2 * GiB);
 });
@@ -271,18 +278,19 @@ test('unchanged projections do not cause repeated user-trigger writes', async ()
   // Firestore map order is not an authority change.
   for (const uid of [a.uid, m.uid]) {
     const ref = database.doc(`users/${uid}`);
-    const old = (await ref.get()).data().storageAuthority;
+    const oldUser = (await ref.get()).data(); const old = oldUser.storageAuthority;
     await ref.update({storageAuthority: Object.fromEntries(Object.entries(old).reverse())});
     const before = await ref.get();
-    await uploadPreparation().onStorageUserWritten({params: {uid}});
+    await uploadPreparation().onStorageUserWritten({params: {uid}, data: change(oldUser, before.data())});
     assert.ok((await ref.get()).updateTime.isEqual(before.updateTime));
   }
 });
 
 test('live owner-user trigger revokes linked projections after trusted out-of-band billing writes', async () => {
   const a = await account({plan: 'family', familyUsed: 2 * GiB}); const m = await member(a);
+  const oldUser = (await database.doc(`users/${a.uid}`).get()).data();
   await database.doc(`users/${a.uid}`).update({'billing.status': 'past_due'});
-  await uploadPreparation().onStorageUserWritten({params: {uid: a.uid}});
+  await uploadPreparation().onStorageUserWritten({params: {uid: a.uid}, data: change(oldUser, {...oldUser, billing: {...oldUser.billing, status: 'past_due'}})});
   assert.equal((await database.doc(`users/${m.uid}`).get()).data().storageAuthority.status, 'none');
   await assertFails(put(m.uid, m.target));
 });
@@ -298,14 +306,84 @@ test('mismatched supplied billing owner cannot grant Family or reset the actual 
   await assertFails(put(a.uid, a.objectPath));
 });
 
-async function member(a) {
+async function member(a, {plan = 'free', status = plan === 'free' ? 'none' : 'active', used = 0, project = true} = {}) {
   const uid = `storage-member-${++sequence}`;
-  const target = `trees/storage-member-tree-${sequence}/people/synthetic-person/image.png`;
-  await database.doc(`users/${uid}`).set({billing: billing(), family: {familyId: a.familyId, role: 'member'}, usage: {storageUsedBytes: 0}});
-  await database.doc(`trees/storage-member-tree-${sequence}`).set({ownerId: uid, collaborators: {}});
-  await syncUserStorageAuthority(uid, database);
-  return {uid, target};
+  const treeId = `storage-member-tree-${sequence}`;
+  const target = `trees/${treeId}/people/synthetic-person/image.png`;
+  await database.doc(`users/${uid}`).set({billing: billing(plan, status, {stripeCustomerId: `cus_synthetic_personal_${uid}`, stripeSubscriptionId: `sub_synthetic_personal_${uid}`}),
+    family: {familyId: a.familyId, role: 'member'}, usage: {storageUsedBytes: used}});
+  await database.doc(`trees/${treeId}`).set({ownerId: uid, collaborators: {}});
+  if (project) await syncUserStorageAuthority(uid, database);
+  return {uid, target, treeId};
 }
+
+test('linked personal Pro retains active Family 100 GiB precedence', async () => {
+  const a = await account({plan: 'family', familyUsed: 60 * GiB}); const m = await member(a, {plan: 'pro'});
+  await assertSucceeds(put(m.uid, m.target)); // Greater than Pro's 50 GiB floor.
+});
+
+for (const [familyStatus, personalStatus] of [['past_due', 'active'], ['canceled', 'trialing']]) test(`linked ${personalStatus} personal Pro falls back to 50 GiB with ${familyStatus} Family`, async () => {
+  const a = await account({plan: 'family', status: familyStatus, familyUsed: 2 * GiB});
+  const m = await member(a, {plan: 'pro', status: personalStatus, used: 50 * GiB - 100});
+  assert.equal((await database.doc(`users/${m.uid}`).get()).data().storageAuthority.status, 'none');
+  await assertSucceeds(put(m.uid, m.target)); await assertFails(put(m.uid, m.target + '.crossing', 101));
+});
+
+test('linked Free user with inactive Family retains only 1 GiB', async () => {
+  const a = await account({plan: 'family', status: 'past_due', familyUsed: 0}); const m = await member(a, {used: GiB - 100});
+  await assertSucceeds(put(m.uid, m.target)); await assertFails(put(m.uid, m.target + '.crossing', 101));
+});
+
+test('linked personal Pro with missing projection denies growth until authorized preparation', async () => {
+  const a = await account({plan: 'family', familyUsed: 2 * GiB}); const m = await member(a, {plan: 'pro', project: false});
+  await assertFails(put(m.uid, m.target));
+  await uploadPreparation().prepareStorageUpload({auth: {uid: m.uid}, data: {treeId: m.treeId}});
+  await assertSucceeds(put(m.uid, m.target));
+});
+
+test('Family billing owner downgrade retains its floor and personal Pro 50 GiB', async () => {
+  const a = await account({plan: 'family', familyUsed: 2 * GiB}); const w = webhook();
+  await w.updateBillingIfNewer(a.uid, 5000, billing('pro', 'active'));
+  await w.updateFamilyIfNewer(a.familyId, 5000, billing('pro', 'active'), a.uid);
+  assert.equal((await database.doc(`users/${a.uid}`).get()).data().storageAuthority.storageUsedBytes, 2 * GiB);
+  await assertSucceeds(put(a.uid, a.objectPath));
+  await database.doc(`users/${a.uid}`).update({'usage.storageUsedBytes': 50 * GiB - 100}); await syncUserStorageAuthority(a.uid, database);
+  await assertSucceeds(put(a.uid, a.objectPath + '.boundary')); await assertFails(put(a.uid, a.objectPath + '.crossing', 101));
+});
+
+test('linked past_due personal Pro with inactive Family retains only Free storage', async () => {
+  const a = await account({plan: 'family', status: 'past_due', familyUsed: 0}); const m = await member(a, {plan: 'pro', status: 'past_due', used: GiB - 100});
+  await assertSucceeds(put(m.uid, m.target)); await assertFails(put(m.uid, m.target + '.crossing', 101));
+});
+
+for (const selection of ['avatar', 'tree']) test(`Family billing owner ${selection} preparation leaves unrelated member projection untouched`, async () => {
+  const a = await account({plan: 'family', familyUsed: 2 * GiB}); const m = await member(a);
+  const ref = database.doc(`users/${m.uid}`);
+  await ref.update({'storageAuthority.status': 'none'}); // Deliberately stale to detect a refresh, not merely a same-value write.
+  const before = await ref.get();
+  await uploadPreparation().prepareStorageUpload({auth: {uid: a.uid}, data: selection === 'avatar' ? {} : {treeId: a.treeId}});
+  const after = await ref.get(); assert.ok(after.updateTime.isEqual(before.updateTime)); assert.deepEqual(after.data(), before.data());
+  assert.equal((await database.doc(`users/${a.uid}`).get()).data().storageAuthority.status, 'active');
+});
+
+test('deleted Family billing owner invalidates remaining members without recreating the user', async () => {
+  const a = await account({plan: 'family', familyUsed: 2 * GiB}); const m = await member(a);
+  const before = (await database.doc(`users/${a.uid}`).get()).data(); await database.doc(`users/${a.uid}`).delete();
+  await uploadPreparation().onStorageUserWritten({params: {uid: a.uid}, data: change(before, undefined)});
+  assert.equal((await database.doc(`users/${a.uid}`).get()).exists, false);
+  assert.equal((await database.doc(`users/${m.uid}`).get()).data().storageAuthority.status, 'none');
+  assert.equal((await database.doc(`users/${m.uid}`).get()).data().storageAuthority.storageUsedBytes, 2 * GiB);
+  await assertFails(put(m.uid, m.target));
+});
+
+test('deleted Family authority invalidates remaining members and preserves known floors', async () => {
+  const a = await account({plan: 'family', familyUsed: 2 * GiB}); const m = await member(a);
+  const before = (await database.doc(`families/${a.familyId}`).get()).data(); await database.doc(`families/${a.familyId}`).delete();
+  await uploadPreparation().onStorageFamilyWritten({params: {familyId: a.familyId}, data: change(before, undefined)});
+  assert.equal((await database.doc(`users/${m.uid}`).get()).data().storageAuthority.status, 'none');
+  assert.equal((await database.doc(`users/${m.uid}`).get()).data().storageAuthority.storageUsedBytes, 2 * GiB);
+  await assertFails(put(m.uid, m.target));
+});
 test('linked non-owner Family tree owner receives pooled quota and loses it atomically on payment attention', async () => {
   const a = await account({plan: 'family', familyUsed: 2 * GiB}); const m = await member(a);
   await assertSucceeds(put(m.uid, m.target));

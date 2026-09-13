@@ -171,12 +171,22 @@ server-owned projection of the linked workspace and its billing owner's matching
 subscription, paid status and paid-period cutoff. A retained `familyId` alone
 never grants 100 GiB. Both owner and linked non-owner tree-owner paths use this
 projection, keeping every Storage evaluation within two unique Firestore reads.
+For a prepared linked account, quota precedence is active Family (100 GiB),
+otherwise valid personal active/trialing Pro (50 GiB), otherwise Free (1 GiB).
+A missing/mismatched linked projection still denies positive growth until trusted
+preparation; preserved membership alone never grants Family.
 
 The existing authoritative billing transactions update linked users' storage
 projections with their accepted owner/Family mutation, including revocation.
-Live-document triggers maintain the projection after membership/usage writes;
-`prepareStorageUpload` lazily initializes existing accounts and refreshes the
-selected tree owner's projection before browser image uploads. It accepts only a
+Live-document triggers compare only normalized storage-relevant fields before
+any Admin Firestore access. Profile, AI/export usage, AI Pack-only and
+storageAuthority-only writes cause no synchronization transaction. Relevant owner
+base-billing changes and Family authority/pool changes retain linked-member
+fanout. Personal storage-counter or membership changes refresh only that user.
+Meaningful authority deletions invalidate remaining members; personal/empty
+document deletions do no synchronization. `prepareStorageUpload` lazily
+initializes existing accounts and refreshes only the selected tree owner's or
+avatar user's projection, including when that user is the Family billing owner. It accepts only a
 tree selection (or an empty avatar selection), verifies Auth/tree roles, and
 never accepts browser quota, billing, membership or usage values.
 

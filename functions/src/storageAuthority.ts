@@ -15,6 +15,39 @@ function paidEnd(billing: DocumentData): number {
   return cancellation > 0 ? Math.min(end, cancellation) : end;
 }
 
+function identifier(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+function billingInputs(billing: DocumentData = {}): unknown[] {
+  return [identifier(billing.plan), identifier(billing.status), bytes(billing.currentPeriodEnd),
+    bytes(billing.scheduledCancellationAt), identifier(billing.stripeCustomerId), identifier(billing.stripeSubscriptionId)];
+}
+
+function sameInputs(before: unknown[], after: unknown[]): boolean {
+  return before.every((value, index) => value === after[index]);
+}
+
+export function storageUserInputsChanged(before?: DocumentData, after?: DocumentData): boolean {
+  // Only a deleted possible Family billing owner needs remaining-member
+  // invalidation; deleting a personal/member profile has nothing to refresh.
+  if (!after) return Boolean(before && identifier(before.family?.familyId) && before.billing?.plan === 'family');
+  if (!before) return true;
+  return identifier(before.family?.familyId) !== identifier(after.family?.familyId) ||
+    bytes(before.usage?.storageUsedBytes) !== bytes(after.usage?.storageUsedBytes) ||
+    !sameInputs(billingInputs(before.billing || {}), billingInputs(after.billing || {}));
+}
+
+export function storageFamilyInputsChanged(before?: DocumentData, after?: DocumentData): boolean {
+  // Removing actual Family authority invalidates cached member elevation.
+  // Empty/unrelated deleted documents require no transaction or fanout.
+  if (!after) return Boolean(before && (identifier(before.ownerUid) || before.plan?.plan === 'family'));
+  if (!before) return true;
+  return identifier(before.ownerUid) !== identifier(after.ownerUid) ||
+    bytes(before.usage?.storageUsedBytes) !== bytes(after.usage?.storageUsedBytes) ||
+    !sameInputs(billingInputs(before.plan || {}), billingInputs(after.plan || {}));
+}
+
 export function deriveStorageAuthority(
   user: DocumentData,
   family: DocumentData = {},
@@ -82,18 +115,27 @@ export async function familyStorageWrites(
   return writes;
 }
 
-export async function syncUserStorageAuthority(uid: string, database: Firestore = admin.firestore()): Promise<void> {
+async function refreshStorageAuthority(
+  uid: string, database: Firestore, fanoutOwnedFamily: boolean, previousFamilyId: string | null = null,
+): Promise<void> {
   const ref = database.collection('users').doc(uid);
   await database.runTransaction(async transaction => {
     const userSnap = await transaction.get(ref);
-    if (!userSnap.exists) return;
+    if (!userSnap.exists) {
+      if (!fanoutOwnedFamily || !previousFamilyId) return;
+      const family = (await transaction.get(database.collection('families').doc(previousFamilyId))).data() || {};
+      if (family.ownerUid === uid) {
+        applyStorageWrites(transaction, await familyStorageWrites(transaction, database, previousFamilyId, family, {}));
+      }
+      return;
+    }
     const user = userSnap.data() || {};
     const familyId = user.family?.familyId;
     const family = typeof familyId === 'string' && familyId
       ? (await transaction.get(database.collection('families').doc(familyId))).data() || {} : {};
     const owner = family.ownerUid === uid ? user : typeof family.ownerUid === 'string' && family.ownerUid
       ? (await transaction.get(database.collection('users').doc(family.ownerUid))).data() || {} : {};
-    if (family.ownerUid === uid) {
+    if (fanoutOwnedFamily && family.ownerUid === uid) {
       applyStorageWrites(transaction, await familyStorageWrites(transaction, database, familyId, family, user));
       return;
     }
@@ -102,11 +144,23 @@ export async function syncUserStorageAuthority(uid: string, database: Firestore 
   });
 }
 
+// Upload preparation refreshes exactly this user, even for a Family owner.
+export async function syncUserStorageAuthority(uid: string, database: Firestore = admin.firestore()): Promise<void> {
+  await refreshStorageAuthority(uid, database, false);
+}
+
 export const onStorageUserWritten = onDocumentWritten({ document: 'users/{uid}', retry: true }, async event => {
-  await syncUserStorageAuthority(event.params.uid);
+  const before = event.data?.before.exists ? event.data.before.data() : undefined;
+  const after = event.data?.after.exists ? event.data.after.data() : undefined;
+  if (!storageUserInputsChanged(before, after)) return;
+  const billingChanged = !sameInputs(billingInputs(before?.billing || {}), billingInputs(after?.billing || {}));
+  await refreshStorageAuthority(event.params.uid, admin.firestore(), billingChanged, identifier(before?.family?.familyId));
 });
 
 export const onStorageFamilyWritten = onDocumentWritten({ document: 'families/{familyId}', retry: true }, async event => {
+  const before = event.data?.before.exists ? event.data.before.data() : undefined;
+  const after = event.data?.after.exists ? event.data.after.data() : undefined;
+  if (!storageFamilyInputsChanged(before, after)) return;
   const database = admin.firestore();
   await database.runTransaction(async transaction => {
     const family = (await transaction.get(database.collection('families').doc(event.params.familyId))).data() || {};

@@ -1,11 +1,15 @@
 # Storage Rules and Family quota correction — 2026-09-13
 
-Status: local implementation and validation only, awaiting owner review. Branch:
-`codex/fix-storage-rules-family-quota`, starting commit
-`494f997a9993553e3fc2b70c4d639ab91fcb0a63` (merged PR #7 email hotfix).
-Nothing was staged, committed, pushed, deployed or opened as a PR. No production
-records, Stripe state, credentials, runtime version or public-media policy were
-changed. The two pre-existing untracked lifecycle scratch scripts are unchanged.
+Status: follow-up implementation and validation against committed first
+implementation `4edd73e11007d68540c381b056edea90c2b44646`, awaiting owner review.
+Branch remains `codex/fix-storage-rules-family-quota`. The original implementation
+started at `494f997a9993553e3fc2b70c4d639ab91fcb0a63` (merged PR #7 email hotfix).
+Its original 74-test validation/inventory below is a historical checkpoint;
+current follow-up corrections and validation are recorded in the final section.
+No follow-up changes were staged, committed, pushed, deployed or opened as a PR.
+No production records, Stripe state, credentials, dependency versions, runtime
+version or public-media policy changed. Both pre-existing scratch scripts remain
+unchanged.
 
 ## Root cause and compiler warnings
 
@@ -51,8 +55,10 @@ paid-period/cancellation cutoff. Missing/mismatched ownership or commercial
 mapping grants no Family elevation. Preserved workspace linkage alone is
 insufficient. Rules check the projection's linked Family ID and expiry; for the
 billing owner they also check live owner billing/status/IDs in that same user
-document. Non-entitled Family resolves to the Free foundation. After a
-Family-to-Pro transition, personal active Pro resolves to 50 GiB.
+document. When Family paid elevation is unavailable, a prepared account falls
+back to its own valid active/trialing Pro (50 GiB), otherwise Free (1 GiB).
+Active Family remains first in precedence; a Family-to-Pro billing owner retains
+its own valid Pro entitlement.
 
 Ordinary client creates/updates cannot write `storageAuthority`, `billing`,
 `usage`, `family`, `entitlements` or `plan`. Existing platform-admin authority is
@@ -72,9 +78,10 @@ Lifecycle maintenance:
    user/Family usage maximum at Family-to-Pro downgrade.
 3. Verified Family owner activation initializes its projection with the existing
    owner link; it creates no additional customer-facing seats.
-4. `onStorageUserWritten` and `onStorageFamilyWritten` re-read current documents
-   inside transactions. Owner user changes refresh all linked users; member
-   changes refresh that member. Both triggers enable retries for transient
+4. `onStorageUserWritten` and `onStorageFamilyWritten` first compare normalized
+   storage inputs before any Admin read. Relevant events re-read current documents
+   inside transactions. Owner base-billing transitions refresh linked users;
+   personal storage-counter/membership changes refresh just that user. Both triggers enable retries for transient
    failures. Stale event snapshots cannot restore old paid
    state. Field comparisons ignore map order and avoid repeated unchanged writes.
    Out-of-band trusted writes have asynchronous trigger propagation; the normal
@@ -148,7 +155,7 @@ shared floor after unlink until that trusted reconciliation resolves actual
 personal usage. Remaining five-seat lifecycle and public-media privacy policy
 remain separately deferred.
 
-## Validation evidence
+## Original implementation validation evidence (74-test checkpoint)
 
 | Check | Result |
 | --- | --- |
@@ -222,7 +229,7 @@ production 55 moderate/7 high. **npm audit is not clean.** Accepted residual
 Genkit/OpenTelemetry production-high findings and their documented compensating
 controls remain unchanged. No audit fix, override, ignore or suppression added.
 
-## Exact proposed files and Git state
+## Original implementation inventory and Git state (historical)
 
 26 proposed files, grouped by purpose:
 
@@ -247,10 +254,11 @@ controls remain unchanged. No audit fix, override, ignore or suppression added.
   `docs/architecture/SYSTEM_ARCHITECTURE.md`,
   `docs/billing/STORAGE_RULES_REMEDIATION_2026-09-13.md` (new).
 
-`git status --short` contains 20 modified tracked files and six new proposed
-files (the tests directory is collapsed by default). It also contains the two
-unchanged pre-existing untracked scratch scripts. No staged changes; HEAD stays
-at the starting merge commit. Scratch scripts, `functions/src/sendEmail.ts`,
+At the original pre-commit checkpoint, `git status --short` contained 20 modified
+tracked files and six new proposed files (tests collapsed by default), plus the
+two unchanged scratch scripts. HEAD then remained at the starting merge commit;
+these implementation files are now committed in `4edd73e`. The follow-up state
+is recorded below. Scratch scripts, `functions/src/sendEmail.ts`,
 `functions/src/scheduledTasks.ts`, Functions dependency files and email secret
 bindings remain intact. No credentials were printed or changed.
 
@@ -286,3 +294,141 @@ No blanket Functions deployment, email-hotfix change, Node migration, Stripe
 configuration change or data deletion is included. Production compilation,
 Firestore cross-service IAM authorization and an authenticated synthetic upload
 smoke test remain deliberate post-review deployment checks, not local claims.
+
+## Follow-up correction and validation since 4edd73e
+
+Local review blockers are corrected; this follow-up remains uncommitted and
+awaiting owner review. No deploy, push, PR creation, merge or dependency change.
+
+### Quota precedence
+
+Removed the early projected-Family-to-Free branch. After the deliberate linked
+missing/mismatched-projection guard, Storage Rules resolve: valid active Family
+projection -> 100 GiB; otherwise valid personal active/trialing Pro -> 50 GiB;
+otherwise Free -> 1 GiB. Personal Pro never overrides actually active Family.
+Non-entitled personal Pro remains Free. Owner downgrade keeps known usage floors.
+
+### Exact trigger relevance predicates
+
+Both exported helpers compare named scalar inputs, not serialized maps. Nonempty
+strings remain strings; missing/empty/non-string identifiers become null. Bytes,
+periods and cancellation timestamps use the existing nonnegative safe-integer
+normalization (invalid/missing -> 0). Map ordering and unrelated fields are ignored.
+
+`storageUserInputsChanged(before, after)` compares exactly:
+
+- `family.familyId`
+- `usage.storageUsedBytes`
+- `billing.plan`, `billing.status`, `billing.currentPeriodEnd`
+- `billing.scheduledCancellationAt`
+- `billing.stripeCustomerId`, `billing.stripeSubscriptionId`
+
+`storageFamilyInputsChanged(before, after)` compares exactly:
+
+- `ownerUid`
+- `usage.storageUsedBytes`
+- `plan.plan`, `plan.status`, `plan.currentPeriodEnd`
+- `plan.scheduledCancellationAt`
+- `plan.stripeCustomerId`, `plan.stripeSubscriptionId`
+
+Creation may initialize state. User deletion is relevant only for a previously
+linked possible Family billing owner (`billing.plan=family`); the transaction
+verifies actual workspace ownership before meaningful remaining-member
+invalidation and never recreates the deleted user. Family deletion with prior
+owner/base-Family authority invalidates existing member projections; empty or
+unrelated deletions short-circuit. These deletion fanouts revoke cached paid
+elevation rather than performing meaningless synchronization. Live documents
+are re-read, so stale delete/create events cannot replace current authority.
+
+Each handler evaluates its relevance predicate before `admin.firestore()` or any
+transaction/query. A `storageAuthority`-only write changes none of these inputs
+and returns immediately, avoiding recursive transactions/reads entirely. Profile,
+photo, email-preference/activity, AI/export usage and AI Pack-only updates also
+short-circuit. The prior fieldwise no-op write guard remains an additional safeguard.
+
+### Single-user upload preparation and fanout
+
+`syncUserStorageAuthority` now always refreshes just its selected user. Avatar
+preparation selects the authenticated UID; tree preparation verifies
+owner/editor/manager and selects the tree owner. Neither queries linked users,
+even for the Family billing owner. Known storage floors remain conservative.
+
+Trusted user triggers request owned-Family fanout only for relevant base-billing
+input transitions, after verifying the live Family owner. Membership/personal
+storage-counter changes refresh the user only. Relevant Family authority/pool
+transitions and meaningful authority deletion retain fanout. Existing webhook
+ordering/idempotency/atomic projection fanout and all Resend bindings are unchanged.
+
+### Stripe-ID data minimization decision
+
+Retained projected Stripe customer/subscription IDs. The Storage owner branch
+uses both to bind a still-active cached Family projection to the current owner
+billing subscription. Dropping them would weaken stale/mismatched-subscription
+detection or require another authoritative lookup beyond the two-document budget.
+The uniform owner/member projection schema remains; selective removal/migration
+and broader user-document read privacy are outside this correction. These IDs
+are commercial identifiers, not API keys or webhook credentials. No secret was
+added and no read-privacy policy changed.
+
+### New tests and final validation
+
+Added 11 real Storage/Firestore tests: active Family beats personal Pro; inactive
+Family falls back to active/trialing personal Pro at the exact 50 GiB boundary;
+Free and past_due personal Pro stay at 1 GiB; linked missing projection fails
+closed until preparation; owner Family-to-Pro retains floor and 50 GiB;
+avatar/tree preparation leaves deliberately stale unrelated member projections
+and update times untouched; owner/Family authority deletion invalidates remaining
+members while retaining floors. Existing trigger tests now supply actual
+before/after Change snapshot shapes and still exercise live-state reconciliation.
+
+Added 43 Functions tests: every listed relevant field, ignored profile/AI/export/
+AI Pack/projection-only changes, reordered maps/normalized absent values,
+creation/deletion handling, and upload preparation for avatar/owner/editor/manager
+without a Family query. Irrelevant handlers use a Firestore factory that throws
+if accessed; single-user preparation/counter tests reject any linked-user query.
+
+| Validation | Final follow-up result |
+| --- | --- |
+| Root typecheck | Passed |
+| Root tests | 274/274 passed |
+| Root lint | 0 errors / 50 existing warnings |
+| Root production build | Passed |
+| Functions build / tests under existing Node 20 | Passed / 263/263 passed |
+| Real Firestore + Storage Rules tests | 85/85 passed |
+| Actual Storage Rules runtime compiler | 0 errors / 0 warnings, loaded |
+| Gitleaks publishable changed source | No findings; existing config unchanged |
+| `git diff --check` | Passed |
+
+Current audit: root 67 total/12 high/0 critical; production 62/7/0; Functions
+8 moderate/0 high/0 critical. No task delta or dependency/lock changes. The
+accepted historical Functions 9-total checkpoint and residual production-high
+Genkit/OpenTelemetry controls remain documented. Audit is not clean. Exact
+atomic/shared byte accounting and remaining seat lifecycle remain Phase 3/4.
+Two-document Storage budget and the original access-count table are unchanged.
+
+### Exact follow-up files and Git status
+
+Six modified tracked files and one new test file since `4edd73e`:
+
+```text
+ M docs/billing/BILLING_ARCHITECTURE.md
+ M docs/billing/PHASE2_REMEDIATION_REPORT.md
+ M docs/billing/STORAGE_RULES_REMEDIATION_2026-09-13.md
+ M functions/src/storageAuthority.ts
+ M storage.rules
+ M tests/storage/storage.rules.test.cjs
+?? functions/tests/storageAuthority.test.cjs
+?? scripts/V1-phase2-lifecycle-V1.ps1
+?? scripts/V2phase2-lifecycleV2.ps1
+```
+
+The final two entries are pre-existing unchanged scratch scripts, not proposed
+changes. Nothing staged; HEAD remains `4edd73e11007d68540c381b056edea90c2b44646`.
+Dependencies/locks, Firestore protections, client code, Stripe webhook/email
+hotfix and Node 20 configuration are unchanged by this follow-up.
+
+Proposed follow-up commit message, not executed:
+
+```text
+fix(storage): tighten projection refresh and Pro fallback
+```
