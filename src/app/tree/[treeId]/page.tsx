@@ -39,7 +39,7 @@ export default function TreeEditorPage() {
   const { toast } = useToast();
   const { user, refreshUserProfile } = useAuth();
   const [resolvedTreeId, setResolvedTreeId] = useState<string | null>(null);
-  const { pushCommand, undo, redo, canUndo, canRedo, isProcessing: isUndoProcessing } = useUndoRedo(resolvedTreeId || '');
+  const { pushCommand, retainPhotoForUndo, undo, redo, canUndo, canRedo, isProcessing: isUndoProcessing } = useUndoRedo(resolvedTreeId || '');
   const photoUploadInputRef = useRef<HTMLInputElement>(null);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
 
@@ -294,10 +294,10 @@ export default function TreeEditorPage() {
     }, 150);
   };
 
-  const handleSavePerson = async (updatedPerson: Person) => {
-    if (readOnly) {
+  const handleSavePerson = async (updatedPerson: Person): Promise<boolean> => {
+    if (readOnly || !user) {
       toast({ variant: "destructive", title: "View Only", description: "You don't have permission to edit." });
-      return;
+      return false;
     }
     // Find current state before update (for undo)
     const beforePerson = people.find(p => p.id === updatedPerson.id);
@@ -315,9 +315,12 @@ export default function TreeEditorPage() {
 
       // Remove id because we don't save it inside the document itself
       delete dataToSave.id;
+      // Merge writes must explicitly remove an absent photo field.
+      const personWrite = Object.fromEntries(Object.entries(dataToSave).filter(([, value]) => value !== undefined));
+      personWrite.profilePictureUrl = updatedPerson.profilePictureUrl || deleteField();
 
       const batch = writeBatch(db);
-      batch.set(personDocRef, dataToSave, { merge: true });
+      batch.set(personDocRef, personWrite, { merge: true });
       batch.update(getTreeDocRef(), { lastUpdated: serverTimestamp() });
       await batch.commit();
 
@@ -327,18 +330,17 @@ export default function TreeEditorPage() {
           type: 'UPDATE_PERSON',
           treeId,
           personId: updatedPerson.id,
-          before: beforePerson,
-          after: updatedPerson
+          before: {...beforePerson, profilePictureUrl: beforePerson.profilePictureUrl},
+          after: {...updatedPerson, profilePictureUrl: updatedPerson.profilePictureUrl}
         });
       }
 
       toast({ title: "Person Updated", description: `${updatedPerson.firstName} has been saved.` });
+      return true;
     } catch (error) {
       console.error("Error updating person in Firestore:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to save changes." });
-    } finally {
-      setIsEditorOpen(false);
-      setSelectedPerson(null);
+      return false;
     }
   };
 
@@ -1222,6 +1224,7 @@ export default function TreeEditorPage() {
           onClose={() => { setIsEditorOpen(false); setSelectedPerson(null); }}
           person={selectedPerson}
           onSave={handleSavePerson}
+          retainPhotoForUndo={retainPhotoForUndo}
           onDeleteRequest={handleOpenDeleteDialog}
           onOpenNameSuggestor={(details) => {
             setIsEditorOpen(false);
@@ -1257,7 +1260,7 @@ export default function TreeEditorPage() {
             const personToUpdate = people.find(p => p.id === personForSuggestion!.id);
             if (personToUpdate) {
               const fullyUpdatedPerson = { ...personToUpdate, ...updatedDetails };
-              handleSavePerson(fullyUpdatedPerson);
+              void handleSavePerson(fullyUpdatedPerson);
               setSelectedPerson(fullyUpdatedPerson);
               setIsEditorOpen(true);
             }

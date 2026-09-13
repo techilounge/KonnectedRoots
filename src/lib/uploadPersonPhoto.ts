@@ -1,17 +1,15 @@
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { app } from '@/lib/firebase/clients';
 import { prepareStorageUpload } from '@/lib/billing/storage';
+import { photoPrefix, uniquePhotoName, validatePhoto } from '@/lib/photos/ownership';
 
 const storage = getStorage(app);
 
 export async function uploadPersonPhoto(file: File, treeId: string, personId: string) {
-  if (!file) throw new Error("No file selected");
-  if (!file.type.startsWith("image/")) throw new Error("Only images are allowed");
-  if (file.size > 5 * 1024 * 1024) throw new Error("Max file size is 5MB");
+  validatePhoto(file);
 
   // (Optionally sanitize the filename)
-  const safeName = file.name.replace(/[^\w.\-]/g, "_");
-  const path = `trees/${treeId}/people/${personId}/${safeName}`;
+  const path = photoPrefix({treeId, personId}) + uniquePhotoName(file.type);
   const objectRef = ref(storage, path);
 
   // CRITICAL: send proper metadata so the Storage rule's image check passes
@@ -19,5 +17,9 @@ export async function uploadPersonPhoto(file: File, treeId: string, personId: st
 
   await prepareStorageUpload(treeId);
   await uploadBytes(objectRef, file, metadata);
-  return await getDownloadURL(objectRef);
+  try { return await getDownloadURL(objectRef); }
+  catch (error) {
+    await deleteObject(objectRef).catch(() => console.warn('New photo cleanup could not complete.'));
+    throw error;
+  }
 }

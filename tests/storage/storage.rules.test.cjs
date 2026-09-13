@@ -8,6 +8,7 @@ const {initializeApp, deleteApp} = require('firebase-admin/app');
 const {getFirestore} = require('firebase-admin/firestore');
 const {syncUserStorageAuthority} = require('../../functions/lib/storageAuthority');
 
+require('firebase/compat/firestore');
 const projectId = 'demo-konnectedroots-storage-rules';
 const root = path.resolve(__dirname, '../..');
 const GiB = 1024 ** 3;
@@ -413,4 +414,66 @@ test('downgrade and unlink retain known Family usage floor and remove Family quo
   await database.doc(`users/${m.uid}`).update({family: {familyId: null}}); await syncUserStorageAuthority(m.uid, database);
   assert.equal((await database.doc(`users/${m.uid}`).get()).data().storageAuthority.storageUsedBytes, 60 * GiB);
   await assertFails(put(m.uid, m.target));
+});
+
+// Real Firestore + compiled invitation handlers. No production Auth/Resend calls.
+const {loadInvitations} = require('../../functions/tests/helpers/invitations.cjs');
+function invitationHandlers(identities) {
+  return loadInvitations(database, {
+    async getUserByEmail(email) {
+      const found = [...identities.values()].find(user => user.email === email);
+      if (!found) throw Object.assign(Error('Synthetic missing identity'), {code: 'auth/user-not-found'});
+      return found;
+    },
+    async getUser(uid) {return identities.get(uid);},
+  }, require('firebase-admin/firestore'));
+}
+for (const role of ['viewer', 'editor', 'manager']) test(`real invitation ${role}: signup links pending invitation; explicit acceptance persists exact role`, async () => {
+  const a = await account({plan: 'pro'}), uid = `invitee-${++sequence}`, email = `${uid}@example.test`, identities = new Map();
+  const handlers = invitationHandlers(identities);
+  const result = await handlers.createInvitation({auth: {uid: a.uid}, data: {treeId: a.treeId, inviteeEmail: email, role}});
+  const inviteRef = database.doc(`invitations/${result.invitationId}`);
+  assert.equal((await inviteRef.get()).data().inviteeUid, null);
+  identities.set(uid, {uid, email}); await assertSucceeds(env.authenticatedContext(uid, {email}).firestore().doc(`users/${uid}`).set({email, displayName: 'Synthetic Invitee'}));
+  await handlers.onUserCreated({data: await database.doc(`users/${uid}`).get(), params: {userId: uid}});
+  let invite = (await inviteRef.get()).data(); assert.equal(invite.status, 'pending'); assert.equal(invite.inviteeUid, uid);
+  assert.equal((await database.doc(`trees/${a.treeId}`).get()).data().collaborators[uid], undefined);
+  await assert.rejects(handlers.acceptInvitation({auth: {uid: 'wrong', token: {email: 'wrong@example.test'}}, data: {invitationId: result.invitationId}}), {code: 'permission-denied'});
+  await handlers.acceptInvitation({auth: {uid, token: {email}}, data: {invitationId: result.invitationId}});
+  assert.equal((await database.doc(`trees/${a.treeId}`).get()).data().collaborators[uid], role);
+  assert.equal((await inviteRef.get()).data().status, 'accepted');
+});
+for (const actor of ['correct', 'wrong', 'linked-wrong', 'anonymous', 'inviter']) test(`real Rules invitation decline/cancellation: ${actor}`, async () => {
+  const id = `decline-${++sequence}`;
+  await database.doc(`invitations/${id}`).set({inviteeEmail: 'invited@example.test', inviteeUid: 'linked-wrong', inviterUid: 'inviter', status: 'pending'});
+  const context = actor === 'anonymous' ? env.unauthenticatedContext() : env.authenticatedContext(actor, {email: actor === 'correct' ? 'INVITED@example.test' : `${actor}@example.test`});
+  const operation = context.firestore().doc(`invitations/${id}`).delete();
+  if (actor === 'correct' || actor === 'inviter') {await assertSucceeds(operation); assert.equal((await database.doc(`invitations/${id}`).get()).exists, false);}
+  else {await assertFails(operation); assert.equal((await database.doc(`invitations/${id}`).get()).exists, true);}
+});
+test('real Rules invitation ID read remains available but public/unscoped listing denied', async () => {
+  const id = `listing-${++sequence}`; await database.doc(`invitations/${id}`).set({inviterUid: 'inviter', inviteeEmail: 'invited@example.test'});
+  await assertSucceeds(env.unauthenticatedContext().firestore().doc(`invitations/${id}`).get());
+  await assertFails(env.unauthenticatedContext().firestore().collection('invitations').get());
+  await assertFails(env.authenticatedContext('stranger', {email: 'stranger@example.test'}).firestore().collection('invitations').get());
+  await assertSucceeds(env.authenticatedContext('inviter').firestore().collection('invitations').where('inviterUid', '==', 'inviter').get());
+});
+for (const role of ['owner', 'editor', 'manager', 'viewer', 'anonymous']) test(`real Rules person photo save/remove and tree timestamp batch: ${role}`, async () => {
+  const a = await account(); const uid = role === 'owner' ? a.uid : role;
+  const reference = database.doc(`trees/${a.treeId}/people/synthetic-person`); await reference.set({firstName: 'Synthetic', profilePictureUrl: 'synthetic-old-photo'});
+  const context = role === 'anonymous' ? env.unauthenticatedContext() : env.authenticatedContext(uid);
+  const client = context.firestore(); const batch = client.batch();
+  batch.update(client.doc(reference.path), {profilePictureUrl: 'synthetic-new-photo'});
+  batch.update(client.doc(`trees/${a.treeId}`), {lastUpdated: require('firebase/compat/app').firestore.FieldValue.serverTimestamp()});
+  if (['owner', 'editor', 'manager'].includes(role)) {
+    await assertSucceeds(batch.commit()); assert.equal((await reference.get()).data().profilePictureUrl, 'synthetic-new-photo');
+    await assertSucceeds(client.doc(reference.path).update({profilePictureUrl: require('firebase/compat/app').firestore.FieldValue.delete()}));
+    assert.equal((await reference.get()).data().profilePictureUrl, undefined);
+  } else {await assertFails(batch.commit()); assert.equal((await reference.get()).data().profilePictureUrl, 'synthetic-old-photo');}
+});
+test('real Rules Editor timestamp permission cannot edit tree metadata or collaborator membership', async () => {
+  const a = await account(); const client = env.authenticatedContext('editor').firestore();
+  await assertFails(client.doc(`trees/${a.treeId}`).update({title: 'Unauthorized'}));
+  await assertFails(client.doc(`trees/${a.treeId}`).update({collaborators: {editor: 'manager'}}));
+  await assertFails(client.doc(`trees/${a.treeId}`).update({lastUpdated: new Date(0)}));
 });

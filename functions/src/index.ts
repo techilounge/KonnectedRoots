@@ -48,8 +48,6 @@ export const createInvitation = onCall(async (request) => {
   }
 
   const treeRef = db.collection('trees').doc(treeId);
-  const inviteeSnapshot = await db.collection('users').where('email', '==', inviteeEmail).limit(1).get();
-  const inviteeUid = inviteeSnapshot.empty ? null : inviteeSnapshot.docs[0].id;
   const invitationRef = db.collection('invitations').doc();
 
   try {
@@ -61,6 +59,14 @@ export const createInvitation = onCall(async (request) => {
       const inviterIsManager = treeData.collaborators?.[request.auth!.uid] === 'manager';
       if (!inviterIsOwner && !inviterIsManager) {
         throw new HttpsError('permission-denied', 'Only the tree owner or a manager can invite collaborators.');
+      }
+
+      // Account existence is scoped to this authorized invitation. Profile email
+      // is editable, so Firebase Auth is the authoritative identity source.
+      let inviteeUid: string | null = null;
+      try { inviteeUid = (await admin.auth().getUserByEmail(inviteeEmail)).uid; }
+      catch (error) {
+        if ((error as {code?: string}).code !== 'auth/user-not-found') throw error;
       }
 
       const ownerRef = db.collection('users').doc(treeData.ownerId);
@@ -162,6 +168,18 @@ export const acceptInvitation = onCall({ secrets: ["RESEND_API_KEY"] }, async (r
 
     // Run as transaction or batched write
     await db.runTransaction(async (transaction) => {
+      // Cancellation/decline must conflict with acceptance rather than allowing
+      // a stale pre-transaction invitation to grant membership.
+      const currentInvitation = await transaction.get(invitationRef);
+      const current = currentInvitation.data();
+      if (!currentInvitation.exists || current?.status !== 'pending') {
+        throw new HttpsError('failed-precondition', 'Invitation is no longer pending.');
+      }
+      if (current.inviteeEmail.toLowerCase() !== user.token.email?.toLowerCase() ||
+          current.treeId !== invitation.treeId || current.role !== invitation.role ||
+          current.inviterUid !== invitation.inviterUid) {
+        throw new HttpsError('permission-denied', 'Invitation changed. Please reopen it.');
+      }
       const treeDoc = await transaction.get(treeRef);
       if (!treeDoc.exists) {
         throw new HttpsError('not-found', 'Tree not found.');
@@ -392,7 +410,10 @@ export const onUserCreated = onDocumentCreated(
   if (!snapshot) return;
 
   const userData = snapshot.data();
-  const email = userData.email;
+  // The profile document is created by a client; never link invitations using
+  // its claimed email without checking the actual Firebase Auth account.
+  const account = await admin.auth().getUser(event.params.userId);
+  const email = account.email;
   if (!email) return;
 
   // 1. Send Welcome Email
