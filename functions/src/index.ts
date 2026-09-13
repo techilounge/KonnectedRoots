@@ -124,7 +124,7 @@ export const createInvitation = onCall(async (request) => {
 });
 
 // Function to handle invitation acceptance securely
-export const acceptInvitation = onCall(async (request) => {
+export const acceptInvitation = onCall({ secrets: ["RESEND_API_KEY"] }, async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'User must be logged in to accept an invitation.');
   }
@@ -294,7 +294,10 @@ export const updateTreeMemberCount = onDocumentWritten("trees/{treeId}/people/{p
 
 
 export const sendInvitationEmail = onDocumentWritten(
-  "invitations/{inviteId}",
+  {
+    document: "invitations/{inviteId}",
+    secrets: ["RESEND_API_KEY"],
+  },
   async (event) => {
   if (!event.data) return; // Document deleted
 
@@ -379,7 +382,10 @@ export const sendInvitationEmail = onDocumentWritten(
 // Triggered when a new user document is created
 // Handles: 1) Sending welcome email, 2) Linking pending invitations
 export const onUserCreated = onDocumentCreated(
-  "users/{userId}",
+  {
+    document: "users/{userId}",
+    secrets: ["RESEND_API_KEY"],
+  },
   async (event) => {
   const snapshot = event.data;
   if (!snapshot) return;
