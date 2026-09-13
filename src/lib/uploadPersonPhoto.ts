@@ -1,5 +1,6 @@
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { app } from '@/lib/firebase/clients';
+import { prepareStorageUpload } from '@/lib/billing/storage';
 
 const storage = getStorage(app);
 
@@ -16,6 +17,7 @@ export async function uploadPersonPhoto(file: File, treeId: string, personId: st
   // CRITICAL: send proper metadata so the Storage rule's image check passes
   const metadata = { contentType: file.type, cacheControl: "public,max-age=3600" };
 
+  await prepareStorageUpload(treeId);
   await uploadBytes(objectRef, file, metadata);
   return await getDownloadURL(objectRef);
 }

@@ -20,6 +20,7 @@ import {
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, setDoc, serverTimestamp, getDoc } from "firebase/firestore";
 import { app, db } from '@/lib/firebase/clients';
+import { prepareStorageUpload } from '@/lib/billing/storage';
 import type { UserProfile } from '@/types';
 
 type AuthContextType = {
@@ -178,6 +179,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     if (photoFile) {
       const storageRef = ref(storage, `users/${auth.currentUser.uid}/profile/${photoFile.name}`);
+      await prepareStorageUpload();
       const snapshot = await uploadBytes(storageRef, photoFile);
       photoURL = await getDownloadURL(snapshot.ref);
     }

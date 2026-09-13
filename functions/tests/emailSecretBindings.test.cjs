@@ -17,6 +17,7 @@ function loadExports() {
     './billingSchedules': {},
     './stripeBilling': {},
     './familyDowngrade': {},
+    './storageAuthority': {},
   };
   function load(name) {
     if (modules[name]) return modules[name];

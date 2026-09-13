@@ -22,10 +22,13 @@ separate concepts; an editor does not automatically consume a Family seat.
 Every collaboration decision still requires both the tree role and the
 resolved account/workspace entitlement.
 
-The storage values above are product targets. Storage Rules select the
-server-owned user or Family counter and handle replacement deltas, but current
-upload/delete paths do not maintain those counters atomically. Full quota
-enforcement and reconciliation therefore remain Phase 3/4 work.
+The storage values above are product targets. Storage Rules read the tree
+owner's server-owned user billing and Family storage-authority projection,
+checking positive growth against the conservative known user/shared usage floor.
+Tree writes need only tree + owner user documents; avatars need only the user.
+Current upload/delete paths do not maintain counters atomically. Full shared
+quota enforcement and exact reconciliation therefore remain Phase 3/4 work;
+see [the Storage Rules correction report](STORAGE_RULES_REMEDIATION_2026-09-13.md).
 
 GEDCOM is data portability on every plan. It does not consume the monthly
 PNG/PDF allowance, require a paid plan, or add premium formatting. Free trees

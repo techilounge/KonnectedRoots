@@ -46,7 +46,13 @@ Browser operations are constrained by `firestore.rules` and `storage.rules`. Tre
 
 `ShareDialog.tsx` creates invitations and notifications in Firestore; `src/app/invite/[inviteId]/page.tsx` invokes `acceptInvitation`. The Function verifies the accepting email and current inviter authority, updates collaborators/invitation status transactionally, and sends an email afterward. `src/types/invitations.ts` is the shared browser domain shape; Functions remain an independently compiled runtime using stored records.
 
-`src/lib/uploadPersonPhoto.ts` uploads browser-authenticated images to Storage. The unused-by-source `handleUploadProfilePicture` server action still uses the browser Storage SDK without browser Auth; retained as a legacy boundary exception pending endpoint retirement or an explicitly authenticated redesign. Do not switch it to Admin Storage without ownership checks.
+`src/lib/uploadPersonPhoto.ts` uploads browser-authenticated images to Storage.
+Person-photo and avatar uploads first call `prepareStorageUpload` to refresh the
+server-owned quota projection; Storage Rules still check Auth, roles, image size
+and known usage on each write. Tree writes read tree + owner user only, and
+avatars read user only. Family authority is projected from trusted workspace and
+billing-owner state; exact byte reconciliation remains deferred. See
+[the Storage correction report](../billing/STORAGE_RULES_REMEDIATION_2026-09-13.md). The unused-by-source `handleUploadProfilePicture` server action still uses the browser Storage SDK without browser Auth; retained as a legacy boundary exception pending endpoint retirement or an explicitly authenticated redesign. Do not switch it to Admin Storage without ownership checks.
 
 `ExportDialog.tsx` creates PDF/PNG with html2canvas/jsPDF and GEDCOM with `src/lib/gedcom-generator.ts`; `gedcom-parser.ts` imports genealogy records. Export entitlement/usage checks remain unchanged. Phase 1 removes console dumps of family names, identifiers and relationships. The separate PR #4 full-tree capture fix was not merged into the Phase 1 starting master and is not duplicated here; viewport completeness remains that PR's scope.
 

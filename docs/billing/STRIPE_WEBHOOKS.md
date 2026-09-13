@@ -37,6 +37,17 @@ accounts without a managed base schedule compares event timestamps and writes
 inside each target's Firestore transaction; older payload mutations are ignored
 and equal timestamps accepted. Unrelated customers are never globally serialized.
 
+Accepted owner billing and Family plan transactions also refresh server-owned
+storage-authority projections for users linked to the same workspace. Projection
+reads occur before writes, and the incoming authoritative state is used for the
+same transaction's projection writes. Payment attention therefore revokes linked
+members' paid Storage elevation with the accepted billing mutation. Managed
+subscription reconciliation refreshes the same projections with its atomic
+user/Family write. The event ledger, ordering markers and safe retries are
+preserved; no Stripe mutation is added inside these transactions. Live-state
+triggers and authenticated upload preparation cover membership/known usage
+changes. See [the Storage correction](STORAGE_RULES_REMEDIATION_2026-09-13.md).
+
 For a subscription with an attached schedule or server-owned
 `hasBasePlanSchedule` history, events invoke `reconcileStripeSubscription`. It
 reads the current authoritative user document, then retrieves live Stripe

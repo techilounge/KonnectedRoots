@@ -164,23 +164,50 @@ markers, past-due/canceled accounts and missing customer mappings. It is a
 read-only reconciliation view; repairing a mismatch is an explicit support or
 admin operation and is not performed broadly or destructively by a page load.
 
-Storage Rules resolve an active Family owner's workspace and select its
-server-owned `families/{familyId}.usage.storageUsedBytes` counter; Free/Pro
-accounts use the owner's user counter. Replacement writes charge only the
-positive size delta, and authorized deletes remain available. The current
-upload paths do not atomically maintain either counter for every create,
-replacement, or delete, so these Rules are a safe foundation rather than a
-complete quota security boundary. Exact accounting and reconciliation,
-including the shared Family 100 GB limit, are deferred to Phase 3/4.
+Storage Rules read only the tree and its owner's user document for tree media,
+and only the user document for avatars. Personal Free/Pro quota is resolved from
+server-owned user billing. Family quota uses `users/{uid}.storageAuthority`, a
+server-owned projection of the linked workspace and its billing owner's matching
+subscription, paid status and paid-period cutoff. A retained `familyId` alone
+never grants 100 GiB. Both owner and linked non-owner tree-owner paths use this
+projection, keeping every Storage evaluation within two unique Firestore reads.
+For a prepared linked account, quota precedence is active Family (100 GiB),
+otherwise valid personal active/trialing Pro (50 GiB), otherwise Free (1 GiB).
+A missing/mismatched linked projection still denies positive growth until trusted
+preparation; preserved membership alone never grants Family.
+
+The existing authoritative billing transactions update linked users' storage
+projections with their accepted owner/Family mutation, including revocation.
+Live-document triggers compare only normalized storage-relevant fields before
+any Admin Firestore access. Profile, AI/export usage, AI Pack-only and
+storageAuthority-only writes cause no synchronization transaction. Relevant owner
+base-billing changes and Family authority/pool changes retain linked-member
+fanout. Personal storage-counter or membership changes refresh only that user.
+Meaningful authority deletions invalidate remaining members; personal/empty
+document deletions do no synchronization. `prepareStorageUpload` lazily
+initializes existing accounts and refreshes only the selected tree owner's or
+avatar user's projection, including when that user is the Family billing owner. It accepts only a
+tree selection (or an empty avatar selection), verifies Auth/tree roles, and
+never accepts browser quota, billing, membership or usage values.
+
+Positive replacement growth is checked against the greater of known user usage
+and the retained projected Family usage floor. Equal/shrinking image replacements
+and authorized deletes remain available above quota. These checks do not update
+object-byte counters. Exact accounting and reconciliation, including complete
+shared Family 100 GB enforcement, remain Phase 3/4 work. Conservative known
+floors survive downgrade/unlink; a future trusted reconciler must resolve actual
+per-account bytes and decreases. See
+[the Storage Rules correction report](STORAGE_RULES_REMEDIATION_2026-09-13.md) for
+lifecycle details, access counts, emulator evidence and deployment order.
 
 Family AI actions are a workspace-scoped pool. A Family document is selected as
 billing and usage authority only when `plan.plan=family`, its status grants paid
 access and its paid period remains current. With no add-on the pool is 600
 actions; one paid AI Pack increases that same pool to 1,600. Each linked member
 debits `families/{familyId}.usage`; no member receives an independent 1,600
-allowance. Storage Rules resolve the Family
-document when its membership and synchronized state are available, but exact
-storage accounting remains deferred as described above. Tree collaborators remain
+allowance. Storage Rules consume the server-owned user projection of this
+Family authority instead of reading the Family document; exact storage
+accounting remains deferred as described above. Tree collaborators remain
 a separate role-based concept. Free trees allow two non-owner collaborators,
 with at most one Editor and the remaining collaborator(s) as Viewers. Pro and
 Family limits remain unchanged, and Family account seats are not tree

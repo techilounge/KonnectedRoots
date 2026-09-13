@@ -110,8 +110,11 @@ section below; earlier implementation and pending checkpoints are historical.
   through a confirmation dialog and displays Scheduled/Keep Family Plan.
   Billing Settings shares these controls; Family remains Current Plan until
   the actual Stripe base Price changes.
-- Updated Storage Rules to select the server-owned Family or user counter and
-  charge only positive replacement deltas while keeping deletes available.
+- Storage Rules now select server-owned personal billing or the Family
+  storage-authority projection on the owner's user document. Tree uploads read
+  only tree + owner user documents; avatars read only the user. Positive growth
+  checks use the conservative known personal/shared floor; equal/shrinking
+  replacements and authorized deletes remain available above quota.
   Current upload/delete paths do not atomically maintain those counters, so
   exact quota enforcement and reconciliation—including the shared Family
   100 GB pool—remain deferred to Phase 3/4.
@@ -134,8 +137,8 @@ section below; earlier implementation and pending checkpoints are historical.
   through the guarded application callable. The real monthly Family + AI Pack
   -> Pro + AI Pack lifecycle is now owner-validated, including payment-gated
   renewal and automatic applied-schedule release.
-- Storage Rules use server-owned user or Family counters and upload checks are
-  server-authorized where available, but the current counters are not
+- Storage Rules use server-owned user usage and a projected known Family floor;
+  trusted upload preparation refreshes authority, but the current counters are not
   atomically maintained by every upload/replacement/delete path; full byte
   reconciliation remains a Phase 3/4 data-integrity item.
 - Owner-approved policy decisions are implemented: GEDCOM import/export is
@@ -971,3 +974,53 @@ Only this report and the local lifecycle runbook were edited for the final
 owner-evidence documentation update. All other uncommitted work was preserved;
 no commit/push/deploy/merge, dependency/lockfile change, Stripe mutation, clock
 advance or Firebase Emulator reset/reseed/write was performed.
+
+## Storage Rules correction: local validation 2026-09-13
+
+The production Rules design could read tree + user + Family, exceeding Storage's
+two-unique-Firestore-document limit. The local correction uses server-owned
+`users/{uid}.storageAuthority`, protected from ordinary client creates/updates.
+Accepted owner/Family billing mutations atomically refresh linked-user storage
+projections; live-state triggers and authenticated upload preparation handle
+membership, known usage changes and existing-account initialization. Active
+Family billing owners and linked members who own trees receive the same 100 GiB
+quota foundation. Preserved workspace linkage alone grants no paid elevation.
+
+Local validation: 74/74 real Firestore + Storage emulator tests, 274/274 root
+tests, 220/220 Functions tests under Node 20, root typecheck, root production
+build and Functions build passed. Storage Rules runtime compiler returned zero
+errors and zero warnings. Lint remains 0 errors / 50 existing warnings. Source
+secret scanning passed; the whole-folder scan separately reports the existing
+ignored local Stripe credentials without suppressions. Exact object-byte
+accounting, complete Family quota enforcement and remaining seat lifecycle stay
+deferred. No production state, credentials or deployment was changed.
+
+Root audits remain 67 total / 12 high / 0 critical, production 62 / 7 / 0.
+Functions currently reports 8 moderate / 0 high / 0 critical, both before and
+after this task; the previously accepted 9-total checkpoint is retained as
+history. No Functions dependency changed. See
+[the full correction report](STORAGE_RULES_REMEDIATION_2026-09-13.md) for the
+proposed files, access-budget table, audit comparison and manual rollout steps.
+
+## Storage review follow-up since 4edd73e (2026-09-13)
+
+Corrected prepared linked-account quota precedence: active Family 100 GiB,
+otherwise valid personal active/trialing Pro 50 GiB, otherwise Free 1 GiB.
+Missing/mismatched linked projection still fails closed until preparation.
+Storage triggers now compare only normalized base-storage inputs before Admin
+reads; profile, AI/export usage, AI Pack-only and storageAuthority-only writes
+cause no transactions. Individual avatar/tree upload preparation refreshes only
+the selected user, including Family owners. Relevant owner billing/Family
+authority transitions retain fanout, and meaningful authority deletions revoke
+remaining cached paid elevation. Stripe IDs remain necessary for live owner
+subscription binding; known usage floors and the two-document budget remain.
+
+Follow-up local validation: 85/85 real Rules tests, 263/263 Functions tests under
+Node 20, 274/274 root tests, builds/typecheck, zero Rules compiler errors/warnings,
+0 lint errors/50 existing warnings, changed-source Gitleaks and diff check passed.
+Root audits remain 67 total/12 high/0 critical and production 62/7/0; Functions
+currently 8 moderate/0 high/0 critical, with no dependency/lock change. The prior
+74/220-test checkpoint above is historical. Exact storage accounting/complete
+shared quota enforcement remain Phase 3/4. Follow-up changes remain local and
+uncommitted; no push, PR, deploy or merge. See
+[the full follow-up report](STORAGE_RULES_REMEDIATION_2026-09-13.md#follow-up-correction-and-validation-since-4edd73e).
