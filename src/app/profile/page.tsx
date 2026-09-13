@@ -12,6 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, UserCircle, Mail, Edit2, KeyRound, Trash2, ImageUp, Eye, EyeOff, Save, XCircle, Download, Shield } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { validatePhoto } from '@/lib/photos/ownership';
 import { AICreditUsageCard } from '@/components/billing/AICreditUsageCard';
 
 export default function ProfilePage() {
@@ -23,6 +24,8 @@ export default function ProfilePage() {
   const [displayName, setDisplayName] = useState('');
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [removePhoto, setRemovePhoto] = useState(false);
+  const [isRemovePhotoOpen, setIsRemovePhotoOpen] = useState(false);
 
   const [isChangePasswordDialogOpen, setIsChangePasswordDialogOpen] = useState(false);
   const [isDeleteAccountDialogOpen, setIsDeleteAccountDialogOpen] = useState(false);
@@ -39,19 +42,23 @@ export default function ProfilePage() {
   useEffect(() => {
     if (user) {
       setDisplayName(user.displayName || '');
-      setAvatarPreview(user.photoURL || null);
+      setAvatarPreview(userProfile?.photoURL || user.photoURL || null);
     }
-  }, [user]);
+  }, [user, userProfile?.photoURL]);
+
+  useEffect(() => () => { if (avatarPreview?.startsWith('blob:')) URL.revokeObjectURL(avatarPreview); }, [avatarPreview]);
 
   const handleProfilePictureChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      try { validatePhoto(file); }
+      catch (error) {
+        toast({variant: 'destructive', title: 'Invalid photo', description: (error as Error).message});
+        event.target.value = ''; return;
+      }
+      setRemovePhoto(false);
       setAvatarFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setAvatarPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      setAvatarPreview(URL.createObjectURL(file));
     }
     if (event.target) {
       event.target.value = '';
@@ -62,9 +69,9 @@ export default function ProfilePage() {
     if (!user) return;
     setIsUpdating(true);
     try {
-      await updateUserProfile(displayName, avatarFile);
+      await updateUserProfile(displayName, avatarFile, removePhoto);
       toast({ title: "Profile Updated", description: "Your changes have been saved." });
-      setAvatarFile(null); // Reset file after upload
+      setAvatarFile(null); setRemovePhoto(false); // Reset staged photo after save
     } catch (error: any) {
       toast({ variant: "destructive", title: "Update Failed", description: error.message });
     } finally {
@@ -75,8 +82,8 @@ export default function ProfilePage() {
   const handleCancelChanges = () => {
     if (user) {
       setDisplayName(user.displayName || '');
-      setAvatarPreview(user.photoURL || null);
-      setAvatarFile(null);
+      setAvatarPreview(userProfile?.photoURL || user.photoURL || null);
+      setAvatarFile(null); setRemovePhoto(false);
     }
     router.push('/dashboard');
   };
@@ -126,7 +133,7 @@ export default function ProfilePage() {
     return null;
   }
 
-  const hasChanges = (user.displayName !== displayName) || (avatarFile !== null);
+  const hasChanges = (user.displayName !== displayName) || (avatarFile !== null) || removePhoto;
 
   return (
     <div className="container py-8">
@@ -139,7 +146,7 @@ export default function ProfilePage() {
         <CardContent className="space-y-6">
           <div className="flex flex-col items-center space-y-4">
             <Avatar className="h-24 w-24">
-              <AvatarImage src={avatarPreview || `https://placehold.co/96x96.png?text=${displayName?.[0]}`} alt={displayName} data-ai-hint="user avatar" />
+              <AvatarImage src={avatarPreview || undefined} alt={displayName} data-ai-hint="user avatar" />
               <AvatarFallback className="text-3xl">{displayName?.[0]?.toUpperCase()}</AvatarFallback>
             </Avatar>
             <input
@@ -153,11 +160,27 @@ export default function ProfilePage() {
             <Button
               variant="outline"
               size="sm"
+              disabled={isUpdating}
               onClick={() => fileInputRef.current?.click()}
               aria-label="Change profile picture"
             >
               <ImageUp className="mr-2 h-4 w-4" /> Change Picture
             </Button>
+            {avatarPreview && <Button variant="outline" size="sm" disabled={isUpdating} onClick={() => setIsRemovePhotoOpen(true)}>
+              <Trash2 className="mr-2 h-4 w-4" /> Remove Photo
+            </Button>}
+            <AlertDialog open={isRemovePhotoOpen} onOpenChange={setIsRemovePhotoOpen}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Remove profile photo?</AlertDialogTitle>
+                  <AlertDialogDescription>Apply Changes will remove your photo. Canceling your profile changes keeps the current photo.</AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => { setAvatarFile(null); setAvatarPreview(null); setRemovePhoto(true); }}>Remove Photo</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
 
           <div className="space-y-4">

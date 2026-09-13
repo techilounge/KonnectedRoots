@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import type { Person, RelationshipType } from '@/types';
 import { db } from '@/lib/firebase/clients';
-import { doc, setDoc, deleteDoc, updateDoc, serverTimestamp, deleteField } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc, updateDoc, serverTimestamp, deleteField, getDoc } from 'firebase/firestore';
+
+import { createPhotoHistory } from '@/lib/photos/history';
 
 // Helper to replace undefined/null values with deleteField() for Firestore
 function cleanForFirestore(obj: Record<string, any>): Record<string, any> {
@@ -36,9 +38,21 @@ export type UndoCommand =
 const MAX_HISTORY_SIZE = 50;
 
 export function useUndoRedo(treeId: string) {
+    const photoHistory = useRef(createPhotoHistory());
+    useEffect(() => { photoHistory.current.clear(); }, [treeId]);
+    const retainPhotoForUndo = useCallback((url: string, personId: string) => photoHistory.current.retain(url, {treeId, personId}), [treeId]);
     const [undoStack, setUndoStack] = useState<UndoCommand[]>([]);
     const [redoStack, setRedoStack] = useState<UndoCommand[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
+    useEffect(() => {
+        const referenced = new Set<string>();
+        for (const command of [...undoStack, ...redoStack]) {
+            const states = command.type === 'UPDATE_PERSON' ? [command.before, command.after] :
+                command.type === 'ADD_PERSON' || command.type === 'DELETE_PERSON' ? [command.data] : [];
+            for (const state of states) if (state.profilePictureUrl) referenced.add(state.profilePictureUrl);
+        }
+        photoHistory.current.prune(referenced);
+    }, [undoStack, redoStack]);
 
     // Use refs to avoid stale closures in async operations
     const undoStackRef = useRef(undoStack);
@@ -81,31 +95,38 @@ export function useUndoRedo(treeId: string) {
 
             case 'DELETE_PERSON': {
                 // Reverse of DELETE is ADD (restore the person)
-                await setDoc(doc(db, peopleColPath, command.personId), {
-                    ...command.data,
-                    updatedAt: serverTimestamp()
+                const restored = await photoHistory.current.restore(command.data, command.treeId, command.personId, async data => {
+                    await setDoc(doc(db, peopleColPath, command.personId), {
+                        ...Object.fromEntries(Object.entries(data).filter(([, value]) => value !== undefined)),
+                        updatedAt: serverTimestamp()
+                    });
                 });
                 return {
                     type: 'ADD_PERSON',
                     treeId: command.treeId,
                     personId: command.personId,
-                    data: command.data
+                    data: restored
                 };
             }
 
             case 'UPDATE_PERSON': {
                 // Reverse of UPDATE is UPDATE with swapped before/after
                 const personRef = doc(db, peopleColPath, command.personId);
-                await updateDoc(personRef, {
-                    ...command.before,
-                    updatedAt: serverTimestamp()
-                });
+                const current = await getDoc(personRef);
+                const changesPhoto = Object.prototype.hasOwnProperty.call(command.before, 'profilePictureUrl');
+                const restored = await photoHistory.current.restore(command.before, command.treeId, command.personId, async data => {
+                    await updateDoc(personRef, {
+                        ...cleanForFirestore(data),
+                        ...(changesPhoto ? {profilePictureUrl: data.profilePictureUrl || deleteField()} : {}),
+                        updatedAt: serverTimestamp()
+                    });
+                }, changesPhoto ? current.data()?.profilePictureUrl : undefined);
                 return {
                     type: 'UPDATE_PERSON',
                     treeId: command.treeId,
                     personId: command.personId,
                     before: command.after,
-                    after: command.before
+                    after: restored
                 };
             }
 
@@ -157,11 +178,9 @@ export function useUndoRedo(treeId: string) {
         try {
             const command = undoStackRef.current[undoStackRef.current.length - 1];
 
-            // Remove from undo stack
-            setUndoStack(prev => prev.slice(0, -1));
-
-            // Execute reverse and add to redo stack
+            // Keep the command available if persistence fails.
             const reversedCommand = await reverseCommand(command);
+            setUndoStack(prev => prev.slice(0, -1));
             setRedoStack(prev => [...prev, reversedCommand]);
         } catch (error) {
             console.error('Undo failed:', error);
@@ -179,11 +198,8 @@ export function useUndoRedo(treeId: string) {
         try {
             const command = redoStackRef.current[redoStackRef.current.length - 1];
 
-            // Remove from redo stack
-            setRedoStack(prev => prev.slice(0, -1));
-
-            // Execute reverse (which will redo the original action) and add to undo stack
             const reversedCommand = await reverseCommand(command);
+            setRedoStack(prev => prev.slice(0, -1));
             setUndoStack(prev => [...prev, reversedCommand]);
         } catch (error) {
             console.error('Redo failed:', error);
@@ -201,6 +217,7 @@ export function useUndoRedo(treeId: string) {
 
     return {
         pushCommand,
+        retainPhotoForUndo,
         undo,
         redo,
         canUndo,

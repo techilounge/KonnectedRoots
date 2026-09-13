@@ -53,7 +53,9 @@ service cloud.firestore {
       // server-owned and may only be changed by Functions/Admin SDK.
       allow read: if isPlatformAdmin() || isOwner() || isCollaborator();
       allow update: if isPlatformAdmin() || (
-        (isOwner() || hasRole('manager')) &&
+        (isOwner() || hasRole('manager') || (hasRole('editor') &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastUpdated']) &&
+          request.resource.data.lastUpdated == request.time)) &&
         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['collaborators'])
       );
       allow delete: if isPlatformAdmin() || isOwner();
@@ -108,7 +110,12 @@ service cloud.firestore {
       // createInvitation/acceptInvitation Functions.
       allow create: if isPlatformAdmin();
 
-      allow read: if true;
+      // The emailed invitation ID permits one document read, not public listing.
+      allow get: if true;
+      allow list: if isPlatformAdmin() || (request.auth != null && (
+        resource.data.inviterUid == request.auth.uid ||
+        resource.data.inviteeEmail == request.auth.token.email.lower()
+      ));
       
       allow update: if isPlatformAdmin() || (
         request.auth != null && resource.data.inviterUid == request.auth.uid &&
@@ -116,8 +123,8 @@ service cloud.firestore {
       );
       allow delete: if isPlatformAdmin() || (request.auth != null && resource.data.inviterUid == request.auth.uid);
       allow delete: if request.auth != null && (
-        request.auth.token.email == resource.data.inviteeEmail || 
-        resource.data.inviteeUid == request.auth.uid
+        request.auth.token.email is string &&
+        request.auth.token.email.lower() == resource.data.inviteeEmail.lower()
       );
     }
 

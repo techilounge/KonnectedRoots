@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { use } from 'react';
 import { db, functions } from '@/lib/firebase/clients';
-import { doc, getDoc, deleteDoc } from 'firebase/firestore';
+import { doc, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,8 @@ import { Loader2, TreeDeciduous, Check, X, LogIn } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
 
+import { invitationState } from '@/lib/auth/invitation';
+
 import type { Invitation } from '@/types/invitations';
 
 interface InvitePageProps {
@@ -32,42 +34,32 @@ interface InvitePageProps {
 export default function InvitePage({ params }: InvitePageProps) {
     const { inviteId } = use(params);
     const router = useRouter();
-    const { user, loading: authLoading } = useAuth();
+    const { user, loading: authLoading, logout } = useAuth();
     const [invitation, setInvitation] = useState<Invitation | null>(null);
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [isSignOutDialogOpen, setIsSignOutDialogOpen] = useState(false);
     const [isDeclineDialogOpen, setIsDeclineDialogOpen] = useState(false);
 
     useEffect(() => {
-        const fetchInvitation = async () => {
-            try {
-                const inviteDoc = await getDoc(doc(db, 'invitations', inviteId));
-                if (!inviteDoc.exists()) {
-                    setError('Invitation not found');
-                    setLoading(false);
-                    return;
-                }
-
+        return onSnapshot(doc(db, 'invitations', inviteId), inviteDoc => {
+            if (!inviteDoc.exists()) {
+                setInvitation(null);
+                setError('Invitation not found');
+            } else {
                 const data = inviteDoc.data() as Omit<Invitation, 'id'>;
-                setInvitation({ id: inviteDoc.id, ...data });
-
-                if (data.status !== 'pending') {
-                    setError(`This invitation has already been ${data.status}`);
-                }
-            } catch (err) {
-                console.error('Error fetching invitation:', err);
-                setError('Failed to load invitation');
-            } finally {
-                setLoading(false);
+                setInvitation({...data, id: inviteDoc.id});
+                setError(data.status === 'pending' ? null : `This invitation has already been ${data.status}`);
             }
-        };
-
-        fetchInvitation();
+            setLoading(false);
+        }, () => { setError('Failed to load invitation'); setLoading(false); });
     }, [inviteId]);
 
+    const state = invitation ? invitationState(invitation, user) : null;
+
     const handleAccept = async () => {
-        if (!user || !invitation) return;
+        if (!user || !invitation || state?.kind !== 'accept') return;
 
         // Verify the user email matches
         if (user.email?.toLowerCase() !== invitation.inviteeEmail.toLowerCase()) {
@@ -91,7 +83,7 @@ export default function InvitePage({ params }: InvitePageProps) {
     };
 
     const handleDecline = async () => {
-        if (!invitation) return;
+        if (!user || !invitation || state?.kind !== 'accept') return;
 
         setProcessing(true);
         try {
@@ -104,7 +96,7 @@ export default function InvitePage({ params }: InvitePageProps) {
         }
     };
 
-    if (loading || authLoading) {
+    if (loading || authLoading || (invitation && invitation.id !== inviteId)) {
         return (
             <div className="min-h-screen flex items-center justify-center">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -145,24 +137,61 @@ export default function InvitePage({ params }: InvitePageProps) {
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="bg-muted rounded-lg p-4">
-                            <p className="text-sm text-muted-foreground">Invited by</p>
+                            <p className="text-sm text-muted-foreground">Tree</p>
+                            <p className="font-medium">{invitation?.treeName}</p>
+                            <p className="text-sm text-muted-foreground mt-2">Invited by</p>
                             <p className="font-medium">{invitation?.inviterName}</p>
                             <p className="text-sm text-muted-foreground mt-2">Role</p>
                             <Badge variant="secondary" className="mt-1 capitalize">{invitation?.role}</Badge>
                         </div>
                         <p className="text-sm text-muted-foreground">
-                            Please sign in with <strong>{invitation?.inviteeEmail}</strong> to accept this invitation.
+                            {state?.kind === 'signup' ? <>You&apos;ve been invited to KonnectedRoots. Create an account to join this family tree using <strong>{invitation?.inviteeEmail}</strong>.</> : <>Please sign in with <strong>{invitation?.inviteeEmail}</strong> to accept this invitation.</>}
                         </p>
                     </CardContent>
                     <CardFooter>
                         <Button asChild className="w-full">
-                            <Link href={`/login?redirect=/invite/${inviteId}`}>
+                            <Link href={state!.authHref}>
                                 <LogIn className="mr-2 h-4 w-4" />
-                                Sign In to Accept
+                                {state?.kind === 'signup' ? 'Create Account to Accept' : 'Sign In to Accept'}
                             </Link>
                         </Button>
                     </CardFooter>
                 </Card>
+            </div>
+        );
+    }
+
+    if (state?.kind === 'mismatch') {
+        return (
+            <div className="min-h-screen flex items-center justify-center p-4">
+                <Card className="max-w-md w-full">
+                    <CardHeader><CardTitle>Use the invited account</CardTitle></CardHeader>
+                    <CardContent className="space-y-4">
+                        <p>This invitation was sent to:<br /><strong>{invitation?.inviteeEmail}</strong></p>
+                        <p>You&apos;re currently signed in as:<br /><strong>{user.email || 'an account without an email'}</strong></p>
+                    </CardContent>
+                    <CardFooter className="flex gap-3">
+                        <Button disabled={processing} onClick={() => setIsSignOutDialogOpen(true)}>Sign Out &amp; Continue</Button>
+                        <Button variant="outline" onClick={() => router.push('/dashboard')}>Go to Dashboard</Button>
+                    </CardFooter>
+                </Card>
+                <AlertDialog open={isSignOutDialogOpen} onOpenChange={setIsSignOutDialogOpen}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Sign out of this account?</AlertDialogTitle>
+                            <AlertDialogDescription>You&apos;ll return to this invitation to sign in or create the invited account.</AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={async () => {
+                                setProcessing(true);
+                                try { await logout(state.redirect); }
+                                catch { setError('Could not sign out. Please try again.'); }
+                                finally { setProcessing(false); }
+                            }}>Sign Out &amp; Continue</AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
             </div>
         );
     }

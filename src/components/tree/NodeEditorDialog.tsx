@@ -31,6 +31,10 @@ import { handleGenerateBiography } from '@/app/actions';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useParams } from 'next/navigation';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { preparePersonPhoto, enhancedPhotoFile } from '@/lib/photos/prepare';
+import { deleteOwnedPhoto } from '@/lib/photos/storage';
+import { savePersonPhoto } from '@/lib/photos/save';
 import { uploadPersonPhoto } from "@/lib/uploadPersonPhoto";
 
 
@@ -38,16 +42,23 @@ interface NodeEditorDialogProps {
   isOpen: boolean;
   onClose: () => void;
   person: Person | null;
-  onSave: (person: Person) => void;
+  onSave: (person: Person) => Promise<boolean>;
+  retainPhotoForUndo: (url: string, personId: string) => Promise<boolean>;
   onDeleteRequest: (person: Person) => void;
   onOpenNameSuggestor: (personDetails: Partial<Person>) => void;
   treeId?: string;
 }
 
-export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDeleteRequest, onOpenNameSuggestor, treeId: propTreeId }: NodeEditorDialogProps) {
+export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDeleteRequest, onOpenNameSuggestor, retainPhotoForUndo, treeId: propTreeId }: NodeEditorDialogProps) {
   const [formData, setFormData] = useState<Partial<Person>>({});
   const [isGeneratingBio, setIsGeneratingBio] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [pendingPhoto, setPendingPhoto] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [isRemovePhotoOpen, setIsRemovePhotoOpen] = useState(false);
+  const photoSelection = useRef(0);
+  const saveInFlight = useRef(false);
   const [isTranslationOpen, setIsTranslationOpen] = useState(false);
   const [isOCROpen, setIsOCROpen] = useState(false);
   const [isEnhanceOpen, setIsEnhanceOpen] = useState(false);
@@ -58,7 +69,16 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
   const treeId = propTreeId || params.treeId as string;
 
 
+  useEffect(() => () => { if (photoPreview) URL.revokeObjectURL(photoPreview); }, [photoPreview]);
+  useEffect(() => () => { photoSelection.current++; }, []);
+
   useEffect(() => {
+    photoSelection.current++;
+    setPendingPhoto(null);
+    setPhotoPreview(null);
+    setIsUploading(false);
+    setIsRemovePhotoOpen(false);
+    setIsEnhanceOpen(false);
     if (person) {
       setFormData(person);
     } else {
@@ -80,7 +100,8 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
     setFormData({ ...formData, [name]: value });
   };
 
-  const handleSaveChanges = () => {
+  const handleSaveChanges = async () => {
+    if (saveInFlight.current || isUploading || !person || !user) return;
     if (!formData.firstName || formData.firstName.trim() === "") {
       toast({ variant: "destructive", title: "Validation Error", description: "First Name is required." });
       return;
@@ -89,7 +110,21 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
       toast({ variant: "destructive", title: "Validation Error", description: "Gender is required. Please select Male or Female." });
       return;
     }
-    onSave(formData as Person);
+    saveInFlight.current = true;
+    setIsSaving(true);
+    try {
+      await savePersonPhoto({person: formData as Person, pending: pendingPhoto,
+        oldUrl: person.profilePictureUrl,
+        upload: file => uploadPersonPhoto(file, treeId, person.id),
+        persist: onSave,
+        cleanup: url => deleteOwnedPhoto(url, {treeId, personId: person.id}),
+        retainForUndo: url => retainPhotoForUndo(url, person.id),
+      });
+      setPendingPhoto(null); setPhotoPreview(null);
+      onClose();
+    } catch (error) {
+      toast({variant: 'destructive', title: 'Save Failed', description: (error as Error).message || 'Your changes were not saved. Please try again.'});
+    } finally { saveInFlight.current = false; setIsSaving(false); }
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLFormElement>) => {
@@ -134,74 +169,31 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
     }
   };
 
-  // Compress image before upload
-  const compressImage = (file: File): Promise<File> => {
-    return new Promise((resolve) => {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      const img = document.createElement('img');
-
-      img.onload = () => {
-        const maxSize = 400; // Max dimension
-        let { width, height } = img;
-
-        // Resize if larger than maxSize
-        if (width > maxSize || height > maxSize) {
-          if (width > height) {
-            height = (height / width) * maxSize;
-            width = maxSize;
-          } else {
-            width = (width / height) * maxSize;
-            height = maxSize;
-          }
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        ctx?.drawImage(img, 0, 0, width, height);
-
-        canvas.toBlob((blob) => {
-          if (blob) {
-            const compressedFile = new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), {
-              type: 'image/jpeg',
-              lastModified: Date.now(),
-            });
-            resolve(compressedFile);
-          } else {
-            resolve(file); // Fallback to original if compression fails
-          }
-        }, 'image/jpeg', 0.8); // 80% quality
-      };
-
-      img.onerror = () => resolve(file); // Fallback to original on error
-      img.src = URL.createObjectURL(file);
-    });
+  const stagePhoto = (file: File) => {
+    setPendingPhoto(file);
+    setPhotoPreview(URL.createObjectURL(file));
   };
-
   const handleProfilePictureChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !person) return;
-
+    event.target.value = '';
+    if (!file || !person || isSaving) return;
+    const selection = ++photoSelection.current;
     setIsUploading(true);
     try {
-      // Compress image before upload
-      const compressedFile = await compressImage(file);
-      const downloadURL = await uploadPersonPhoto(compressedFile, treeId, person.id);
-      setFormData(prev => ({ ...prev, profilePictureUrl: downloadURL }));
-      toast({ title: "Picture Uploaded", description: "Your profile picture has been compressed and uploaded. Save to confirm." });
-    } catch (e: any) {
-      console.error("Upload failed:", e);
-      toast({
-        variant: "destructive",
-        title: "Upload Failed",
-        description: e.message || "An unexpected error occurred.",
-      });
-    } finally {
-      setIsUploading(false);
-      if (event.target) {
-        event.target.value = '';
-      }
-    }
+      const prepared = await preparePersonPhoto(file);
+      if (selection !== photoSelection.current) return;
+      stagePhoto(prepared);
+      toast({title: 'Photo Selected', description: 'Save to apply this photo.'});
+    } catch (error) {
+      if (selection === photoSelection.current) toast({variant: 'destructive', title: 'Invalid Photo', description: (error as Error).message});
+    } finally { if (selection === photoSelection.current) setIsUploading(false); }
+  };
+  const handleClose = () => {
+    if (saveInFlight.current) return;
+    photoSelection.current++;
+    setPendingPhoto(null); setPhotoPreview(null); setIsUploading(false);
+    setIsEnhanceOpen(false);
+    onClose();
   };
 
   const handleDeleteClick = () => {
@@ -214,12 +206,12 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
 
   const currentPersonName = formData.firstName || person?.firstName || 'New Person';
   const srcUrl =
-    formData.profilePictureUrl ||
+    photoPreview || formData.profilePictureUrl ||
     `https://placehold.co/80x80.png?text=${(currentPersonName?.[0] ?? 'P').toString().toUpperCase()}`;
 
   return (
     <>
-      <Dialog open={isOpen} onOpenChange={onClose}>
+      <Dialog open={isOpen} onOpenChange={open => { if (!open) handleClose(); }}>
         <DialogContent className="sm:max-w-xl max-h-[90vh] flex flex-col">
           <DialogHeader className="pb-2">
             <DialogTitle className="font-headline text-xl flex items-center">
@@ -233,6 +225,7 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
 
           <ScrollArea className="flex-1 pr-4">
             <form onKeyDown={handleKeyDown} className="space-y-3 py-2">
+              <fieldset disabled={isSaving} className="min-w-0">
 
               <Accordion type="single" defaultValue="essential" collapsible className="space-y-2">
 
@@ -282,11 +275,14 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
                         >
                           <Upload className="mr-1 h-3 w-3" /> Photo
                         </Button>
+                        {(photoPreview || formData.profilePictureUrl) && <Button type="button" variant="ghost" size="sm" className="text-xs mt-1 h-6 px-2 w-full" disabled={isUploading || isSaving} onClick={() => setIsRemovePhotoOpen(true)}>
+                          <Trash2 className="mr-1 h-3 w-3" /> Remove
+                        </Button>}
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => setIsEnhanceOpen(true)}
-                          disabled={!srcUrl && !formData.profilePictureUrl && !person?.profilePictureUrl}
+                          disabled={isUploading || isSaving || !(photoPreview || formData.profilePictureUrl)}
                           className="text-xs mt-1 h-6 px-2 w-full text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                           type="button"
                         >
@@ -498,22 +494,40 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
                 </AccordionItem>
 
               </Accordion>
+              </fieldset>
             </form>
           </ScrollArea>
 
           <DialogFooter className="pt-3 border-t flex-shrink-0 sm:justify-between gap-2">
-            <Button variant="destructive" size="sm" onClick={handleDeleteClick} type="button">
+            <Button variant="destructive" size="sm" onClick={handleDeleteClick} disabled={isSaving || isUploading} type="button">
               <Trash2 className="mr-1 h-3 w-3" /> Delete
             </Button>
             <div className="flex gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={onClose}>Cancel</Button>
-              <Button type="button" size="sm" onClick={handleSaveChanges} className="bg-primary hover:bg-primary/90">
+              <Button type="button" variant="outline" size="sm" disabled={isSaving} onClick={handleClose}>Cancel</Button>
+              <Button type="button" size="sm" disabled={isSaving || isUploading} onClick={handleSaveChanges} className="bg-primary hover:bg-primary/90">
                 <Save className="mr-1 h-3 w-3" /> Save
               </Button>
             </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={isRemovePhotoOpen} onOpenChange={setIsRemovePhotoOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove this photo?</AlertDialogTitle>
+            <AlertDialogDescription>Save will remove the photo. Canceling the editor keeps the current photo.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              photoSelection.current++;
+              setPendingPhoto(null); setPhotoPreview(null); setIsEnhanceOpen(false);
+              setFormData(previous => ({...previous, profilePictureUrl: undefined}));
+            }}>Remove</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Translation Dialog */}
       <TranslationDialog
@@ -551,12 +565,14 @@ export default function NodeEditorDialog({ isOpen, onClose, person, onSave, onDe
       <PhotoEnhanceDialog
         isOpen={isEnhanceOpen}
         onClose={() => setIsEnhanceOpen(false)}
-        currentPhotoUrl={srcUrl}
+        currentPhotoUrl={photoPreview || formData.profilePictureUrl}
         onPhotoEnhanced={(newPhotoUrl) => {
-          // In a real app, this would be an uploaded file URL
-          // For this demo, we're just updating the preview state
-          setFormData(prev => ({ ...prev, profilePictureUrl: newPhotoUrl }));
-          toast({ title: "Photo Updated", description: "Enhanced photo applied to profile." });
+          try {
+            stagePhoto(enhancedPhotoFile(newPhotoUrl));
+            toast({title: 'Photo Updated', description: 'Save to apply the enhanced photo.'});
+          } catch (error) {
+            toast({variant: 'destructive', title: 'Invalid Photo', description: (error as Error).message});
+          }
         }}
       />
     </>

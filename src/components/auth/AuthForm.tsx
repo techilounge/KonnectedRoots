@@ -21,12 +21,18 @@ import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import GoogleIcon from "@/components/icons/GoogleIcon";
 
+import { useSearchParams } from 'next/navigation';
+import { authContinuation, sanitizeAuthRedirect } from '@/lib/auth/redirect';
+
 interface AuthFormProps {
   mode: "login" | "signup";
 }
 
 export default function AuthForm({ mode }: AuthFormProps) {
   const { login, signup, signInWithGoogle } = useAuth();
+  const searchParams = useSearchParams();
+  const redirect = sanitizeAuthRedirect(searchParams.get('redirect'));
+  const fromInvitation = /^\/invite\/[^/?#]+$/.test(redirect);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -64,10 +70,10 @@ export default function AuthForm({ mode }: AuthFormProps) {
     setError(null);
     try {
       if (mode === "login") {
-        await login(values.email, values.password);
+        await login(values.email, values.password, redirect);
       } else if (mode === "signup" && values.name) {
         if (values.name) {
-          await signup(values.email, values.password, values.name);
+          await signup(values.email, values.password, values.name, redirect);
         }
       }
     } catch (err: any) {
@@ -102,7 +108,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
     setIsLoading(true);
     setError(null);
     try {
-      await signInWithGoogle();
+      await signInWithGoogle(redirect);
     } catch (err: any) {
       if (err.code !== 'auth/popup-closed-by-user') {
         setError(err.message || "An unknown error occurred with Google Sign-In.");
@@ -116,12 +122,12 @@ export default function AuthForm({ mode }: AuthFormProps) {
     <Card className="w-full shadow-xl">
       <CardHeader className="space-y-1 text-center">
         <CardTitle className="text-3xl font-headline">
-          {mode === "login" ? "Welcome Back" : "Create Account"}
+          {mode === "login" ? "Welcome Back" : fromInvitation ? "Create your account to accept this invitation" : "Create Account"}
         </CardTitle>
         <CardDescription>
           {mode === "login"
             ? "Enter your credentials to access your account."
-            : "Fill in the details to start your journey with KonnectedRoots."}
+            : fromInvitation ? "You'll return to your family tree invitation after creating your account." : "Fill in the details to start your journey with KonnectedRoots."}
         </CardDescription>
       </CardHeader>
       <CardContent className="pb-2">
@@ -240,14 +246,14 @@ export default function AuthForm({ mode }: AuthFormProps) {
           <p>
             Don&apos;t have an account?{" "}
             <Button variant="link" asChild className="p-0 h-auto text-primary hover:text-accent">
-              <Link href="/signup">Sign up</Link>
+              <Link href={authContinuation('/signup', redirect)}>Sign up</Link>
             </Button>
           </p>
         ) : (
           <p>
             Already have an account?{" "}
             <Button variant="link" asChild className="p-0 h-auto text-primary hover:text-accent">
-              <Link href="/login">Log in</Link>
+              <Link href={authContinuation('/login', redirect)}>Log in</Link>
             </Button>
           </p>
         )}

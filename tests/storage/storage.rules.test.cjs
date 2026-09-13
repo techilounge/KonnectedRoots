@@ -8,6 +8,7 @@ const {initializeApp, deleteApp} = require('firebase-admin/app');
 const {getFirestore} = require('firebase-admin/firestore');
 const {syncUserStorageAuthority} = require('../../functions/lib/storageAuthority');
 
+require('firebase/compat/firestore');
 const projectId = 'demo-konnectedroots-storage-rules';
 const root = path.resolve(__dirname, '../..');
 const GiB = 1024 ** 3;
@@ -413,4 +414,155 @@ test('downgrade and unlink retain known Family usage floor and remove Family quo
   await database.doc(`users/${m.uid}`).update({family: {familyId: null}}); await syncUserStorageAuthority(m.uid, database);
   assert.equal((await database.doc(`users/${m.uid}`).get()).data().storageAuthority.storageUsedBytes, 60 * GiB);
   await assertFails(put(m.uid, m.target));
+});
+
+// Real Firestore + compiled invitation handlers. No production Auth/Resend calls.
+const {loadInvitations} = require('../../functions/tests/helpers/invitations.cjs');
+function invitationHandlers(identities) {
+  return loadInvitations(database, {
+    async getUserByEmail(email) {
+      const found = [...identities.values()].find(user => user.email === email);
+      if (!found) throw Object.assign(Error('Synthetic missing identity'), {code: 'auth/user-not-found'});
+      return found;
+    },
+    async getUser(uid) {return identities.get(uid);},
+  }, require('firebase-admin/firestore'));
+}
+for (const role of ['viewer', 'editor', 'manager']) test(`real invitation ${role}: signup links pending invitation; explicit acceptance persists exact role`, async () => {
+  const a = await account({plan: 'pro'}), uid = `invitee-${++sequence}`, email = `${uid}@example.test`, identities = new Map();
+  const handlers = invitationHandlers(identities);
+  const result = await handlers.createInvitation({auth: {uid: a.uid}, data: {treeId: a.treeId, inviteeEmail: email, role}});
+  const inviteRef = database.doc(`invitations/${result.invitationId}`);
+  assert.equal((await inviteRef.get()).data().inviteeUid, null);
+  identities.set(uid, {uid, email}); await assertSucceeds(env.authenticatedContext(uid, {email}).firestore().doc(`users/${uid}`).set({email, displayName: 'Synthetic Invitee'}));
+  await handlers.onUserCreated({data: await database.doc(`users/${uid}`).get(), params: {userId: uid}});
+  let invite = (await inviteRef.get()).data(); assert.equal(invite.status, 'pending'); assert.equal(invite.inviteeUid, uid);
+  assert.equal((await database.doc(`trees/${a.treeId}`).get()).data().collaborators[uid], undefined);
+  await assert.rejects(handlers.acceptInvitation({auth: {uid: 'wrong', token: {email: 'wrong@example.test'}}, data: {invitationId: result.invitationId}}), {code: 'permission-denied'});
+  await handlers.acceptInvitation({auth: {uid, token: {email}}, data: {invitationId: result.invitationId}});
+  assert.equal((await database.doc(`trees/${a.treeId}`).get()).data().collaborators[uid], role);
+  assert.equal((await inviteRef.get()).data().status, 'accepted');
+});
+for (const actor of ['correct', 'wrong', 'linked-wrong', 'anonymous', 'inviter']) test(`real Rules invitation decline/cancellation: ${actor}`, async () => {
+  const id = `decline-${++sequence}`;
+  await database.doc(`invitations/${id}`).set({inviteeEmail: 'invited@example.test', inviteeUid: 'linked-wrong', inviterUid: 'inviter', status: 'pending'});
+  const context = actor === 'anonymous' ? env.unauthenticatedContext() : env.authenticatedContext(actor, {email: actor === 'correct' ? 'INVITED@example.test' : `${actor}@example.test`});
+  const operation = context.firestore().doc(`invitations/${id}`).delete();
+  if (actor === 'correct' || actor === 'inviter') {await assertSucceeds(operation); assert.equal((await database.doc(`invitations/${id}`).get()).exists, false);}
+  else {await assertFails(operation); assert.equal((await database.doc(`invitations/${id}`).get()).exists, true);}
+});
+test('real Rules invitation ID read remains available but public/unscoped listing denied', async () => {
+  const id = `listing-${++sequence}`; await database.doc(`invitations/${id}`).set({inviterUid: 'inviter', inviteeEmail: 'invited@example.test'});
+  await assertSucceeds(env.unauthenticatedContext().firestore().doc(`invitations/${id}`).get());
+  await assertFails(env.unauthenticatedContext().firestore().collection('invitations').get());
+  await assertFails(env.authenticatedContext('stranger', {email: 'stranger@example.test'}).firestore().collection('invitations').get());
+  await assertSucceeds(env.authenticatedContext('inviter').firestore().collection('invitations').where('inviterUid', '==', 'inviter').get());
+});
+for (const role of ['owner', 'editor', 'manager', 'viewer', 'anonymous']) test(`real Rules person photo save/remove and tree timestamp batch: ${role}`, async () => {
+  const a = await account(); const uid = role === 'owner' ? a.uid : role;
+  const reference = database.doc(`trees/${a.treeId}/people/synthetic-person`); await reference.set({firstName: 'Synthetic', profilePictureUrl: 'synthetic-old-photo'});
+  const context = role === 'anonymous' ? env.unauthenticatedContext() : env.authenticatedContext(uid);
+  const client = context.firestore(); const batch = client.batch();
+  batch.update(client.doc(reference.path), {profilePictureUrl: 'synthetic-new-photo'});
+  batch.update(client.doc(`trees/${a.treeId}`), {lastUpdated: require('firebase/compat/app').firestore.FieldValue.serverTimestamp()});
+  if (['owner', 'editor', 'manager'].includes(role)) {
+    await assertSucceeds(batch.commit()); assert.equal((await reference.get()).data().profilePictureUrl, 'synthetic-new-photo');
+    await assertSucceeds(client.doc(reference.path).update({profilePictureUrl: require('firebase/compat/app').firestore.FieldValue.delete()}));
+    assert.equal((await reference.get()).data().profilePictureUrl, undefined);
+  } else {await assertFails(batch.commit()); assert.equal((await reference.get()).data().profilePictureUrl, 'synthetic-old-photo');}
+});
+for (const mutation of [{memberCount: 999}, {title: 'Unauthorized'}, {ownerId: 'editor'},
+  {collaborators: {editor: 'manager'}}, {slug: 'unauthorized'}, {lastUpdated: new Date(0)}])
+test(`real Rules Editor cannot write protected parent field ${Object.keys(mutation)[0]}`, async () => {
+  const a = await account(); const client = env.authenticatedContext('editor').firestore();
+  const ref = database.doc(`trees/${a.treeId}`); const before = (await ref.get()).data();
+  await assertFails(client.doc(ref.path).update(mutation));
+  assert.deepEqual((await ref.get()).data(), before);
+});
+
+// Execute the actual Editor page handlers against real Rules, then invoke the
+// unchanged compiled count Function with the real Admin database. This verifies
+// server recount persistence, without claiming deployed trigger delivery.
+const {treeHandlers} = require('../helpers/tree-editor.cjs');
+const browserFirestore = require('firebase/firestore');
+for (const role of ['owner', 'manager', 'editor']) for (const action of ['add', 'delete', 'merge'])
+test(`real Rules actual tree ${action} handler: ${role}, timestamp-only parent and server recount`, async () => {
+  const a = await account(); const actor = role === 'owner' ? a.uid : role;
+  const treeRef = database.doc(`trees/${a.treeId}`);
+  await treeRef.update({memberCount: 5, lastUpdated: new Date(0), title: 'Synthetic Count Regression', slug: 'synthetic-count'});
+  const metadata = (await treeRef.get()).data();
+  const people = [
+    {id: 'remove', firstName: 'Synthetic Duplicate', spouseIds: ['partner'], parentId1: 'parent', childrenIds: ['child'], biography: 'Synthetic biography'},
+    {id: 'keep', firstName: 'Synthetic Kept', spouseIds: [], childrenIds: []},
+    {id: 'partner', firstName: 'Synthetic Partner', spouseIds: ['remove']},
+    {id: 'parent', firstName: 'Synthetic Parent', childrenIds: ['remove']},
+    {id: 'child', firstName: 'Synthetic Child', parentId1: 'remove'},
+  ];
+  for (const person of people) await treeRef.collection('people').doc(person.id).set(person);
+  const client = env.authenticatedContext(actor).firestore(); const db = client._delegate;
+  assert.ok(db, 'Rules context must expose the real modular browser Firestore');
+  const toasts = [], commands = [];
+  const handlers = treeHandlers({...browserFirestore, db, treeId: a.treeId, resolvedTreeId: a.treeId,
+    user: {uid: actor}, people, personToDelete: people[0], selectedPerson: people[0],
+    getPeopleColRef: () => browserFirestore.collection(db, 'trees', a.treeId, 'people'),
+    getTreeDocRef: () => browserFirestore.doc(db, 'trees', a.treeId),
+    toast: value => toasts.push(value), pushCommand: value => commands.push(value),
+  });
+  if (action === 'add') await handlers.handleAddPerson({firstName: 'Synthetic Added'});
+  if (action === 'delete') await handlers.handleConfirmDelete();
+  if (action === 'merge') await handlers.handleMergeDuplicates('keep', 'remove');
+  assert.equal(toasts.length, 1);
+  assert.equal(toasts[0].title, {add: 'Person Added', delete: 'Person Deleted', merge: 'Merged Successfully'}[action]);
+  const expectedCount = action === 'add' ? 6 : 4;
+  const savedPeople = await treeRef.collection('people').get();
+  assert.equal(savedPeople.size, expectedCount);
+  const parent = (await treeRef.get()).data();
+  assert.equal(parent.memberCount, 5, 'Browser leaves authoritative count untouched');
+  assert.ok(parent.lastUpdated.toMillis() > 0, 'serverTimestamp accepted by real Rules');
+  for (const key of ['title', 'slug', 'ownerId', 'collaborators']) assert.deepEqual(parent[key], metadata[key]);
+  const read = async id => (await treeRef.collection('people').doc(id).get()).data();
+  if (action === 'add') {
+    assert.equal(commands.length, 1);
+    assert.equal((await read(commands[0].personId)).firstName, 'Synthetic Added');
+  } else {
+    assert.equal(await read('remove'), undefined);
+    assert.deepEqual((await read('partner')).spouseIds, action === 'merge' ? ['keep'] : []);
+    assert.deepEqual((await read('parent')).childrenIds, action === 'merge' ? ['keep'] : []);
+    assert.equal((await read('child')).parentId1, action === 'merge' ? 'keep' : undefined);
+    if (action === 'merge') {
+      const keep = await read('keep'); assert.deepEqual(keep.spouseIds, ['partner']);
+      assert.deepEqual(keep.childrenIds, ['child']); assert.equal(keep.parentId1, 'parent');
+      assert.equal(keep.biography, 'Synthetic biography');
+    }
+  }
+  await loadInvitations(database, {}, require('firebase-admin/firestore')).updateTreeMemberCount({params: {treeId: a.treeId, personId: 'synthetic-trigger'}});
+  assert.equal((await treeRef.get()).data().memberCount, expectedCount, 'Unchanged backend aggregation persists actual count');
+});
+for (const action of ['add', 'edit', 'delete']) test(`real Rules Viewer cannot ${action} people`, async () => {
+  const a = await account(); const ref = database.doc(`trees/${a.treeId}/people/viewer-target`);
+  await ref.set({firstName: 'Synthetic Unchanged'});
+  const client = env.authenticatedContext('viewer').firestore();
+  if (action === 'add') await assertFails(client.doc(`trees/${a.treeId}/people/viewer-added`).set({firstName: 'Synthetic Denied'}));
+  if (action === 'edit') await assertFails(client.doc(ref.path).update({firstName: 'Synthetic Denied'}));
+  if (action === 'delete') await assertFails(client.doc(ref.path).delete());
+  assert.deepEqual((await ref.get()).data(), {firstName: 'Synthetic Unchanged'});
+  assert.equal((await database.doc(`trees/${a.treeId}/people/viewer-added`).get()).exists, false);
+});
+test('real Rules denied parent timestamp rolls back actual Editor Add without partial person creation', async () => {
+  const a = await account(), restricted = await account();
+  await database.doc(`trees/${restricted.treeId}`).update({collaborators: {}});
+  const db = env.authenticatedContext('editor').firestore()._delegate;
+  const toasts = [], commands = [];
+  const handlers = treeHandlers({...browserFirestore, db, user: {uid: 'editor'}, treeId: a.treeId,
+    getPeopleColRef: () => browserFirestore.collection(db, 'trees', a.treeId, 'people'),
+    // Fault injection: person target is authorized but parent timestamp target is not.
+    getTreeDocRef: () => browserFirestore.doc(db, 'trees', restricted.treeId),
+    toast: value => toasts.push(value), pushCommand: value => commands.push(value),
+    saveLayoutSnapshot() {assert.fail('Denied Add must not save a layout snapshot');},
+  });
+  await handlers.handleAddPerson({firstName: 'Synthetic Atomic Denial'});
+  assert.equal((await database.collection(`trees/${a.treeId}/people`).get()).size, 0);
+  assert.equal((await database.doc(`trees/${restricted.treeId}`).get()).data().lastUpdated, undefined);
+  assert.equal(commands.length, 0); assert.equal(toasts.length, 1);
+  assert.equal(toasts[0].description, 'Failed to save new person.');
 });

@@ -4,7 +4,7 @@ import AuthForm from "@/components/auth/AuthForm";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 
 export default function SignupPage() {
   const [isClient, setIsClient] = useState(false);
@@ -22,7 +22,7 @@ export default function SignupPage() {
           </Link>
         </Button>
       {/* Only render the AuthForm on the client to avoid hydration mismatch */}
-      {isClient && <AuthForm mode="signup" />}
+      {isClient && <Suspense><AuthForm mode="signup" /></Suspense>}
     </div>
   );
 }

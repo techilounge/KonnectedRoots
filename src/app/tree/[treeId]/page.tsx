@@ -23,7 +23,7 @@ import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { db } from '@/lib/firebase/clients';
-import { collection, doc, getDocs, setDoc, deleteDoc, writeBatch, serverTimestamp, getDoc, updateDoc, query, where, onSnapshot, increment, deleteField } from 'firebase/firestore';
+import { collection, doc, getDocs, deleteDoc, writeBatch, serverTimestamp, getDoc, updateDoc, query, where, onSnapshot, deleteField } from 'firebase/firestore';
 import { useAuth } from '@/hooks/useAuth';
 import { useUndoRedo } from '@/hooks/useUndoRedo';
 import { handleFindRelationship } from '@/app/actions';
@@ -39,7 +39,7 @@ export default function TreeEditorPage() {
   const { toast } = useToast();
   const { user, refreshUserProfile } = useAuth();
   const [resolvedTreeId, setResolvedTreeId] = useState<string | null>(null);
-  const { pushCommand, undo, redo, canUndo, canRedo, isProcessing: isUndoProcessing } = useUndoRedo(resolvedTreeId || '');
+  const { pushCommand, retainPhotoForUndo, undo, redo, canUndo, canRedo, isProcessing: isUndoProcessing } = useUndoRedo(resolvedTreeId || '');
   const photoUploadInputRef = useRef<HTMLInputElement>(null);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
 
@@ -249,8 +249,12 @@ export default function TreeEditorPage() {
 
     try {
       const personDocRef = doc(peopleCol, newPersonId);
+      // Commit the person and tree timestamp together. updateTreeMemberCount owns the count.
+      const batch = writeBatch(db);
+      batch.set(personDocRef, personWithDefaults);
+      batch.update(getTreeDocRef(), { lastUpdated: serverTimestamp() });
       // The real-time listener will handle updating the local state (setPeople)
-      await setDoc(personDocRef, personWithDefaults);
+      await batch.commit();
 
       // Push undo command
       pushCommand({
@@ -263,21 +267,23 @@ export default function TreeEditorPage() {
       // Note: Don't auto-open editor - user can double-click to edit
       // This prevents duplicate undo commands (add + save)
       toast({ title: "Person Added", description: "Double-click to edit details." });
-      // Also update the parent tree's lastUpdated timestamp to trigger UI refreshes elsewhere if needed
-      await updateDoc(getTreeDocRef(), { lastUpdated: serverTimestamp(), memberCount: increment(1) });
-
       // Save layout snapshot to capture initial position
       if (resolvedTreeId && user) {
         // Use updated list including new person to ensure they are in the snapshot
-        await saveLayoutSnapshot(
-          resolvedTreeId,
-          [...people, personWithDefaults],
-          user.uid,
-          'auto',
-          { x: 0, y: 0 },
-          1,
-          'Added New Person'
-        );
+        try {
+          await saveLayoutSnapshot(
+            resolvedTreeId,
+            [...people, personWithDefaults],
+            user.uid,
+            'auto',
+            { x: 0, y: 0 },
+            1,
+            'Added New Person'
+          );
+        } catch {
+          // The person is already saved; optional history failure must not suggest retrying Add.
+          console.warn('Person added, but layout snapshot could not be saved.');
+        }
       }
     } catch (error) {
       console.error("Error adding person to Firestore:", error);
@@ -294,10 +300,10 @@ export default function TreeEditorPage() {
     }, 150);
   };
 
-  const handleSavePerson = async (updatedPerson: Person) => {
-    if (readOnly) {
+  const handleSavePerson = async (updatedPerson: Person): Promise<boolean> => {
+    if (readOnly || !user) {
       toast({ variant: "destructive", title: "View Only", description: "You don't have permission to edit." });
-      return;
+      return false;
     }
     // Find current state before update (for undo)
     const beforePerson = people.find(p => p.id === updatedPerson.id);
@@ -315,9 +321,12 @@ export default function TreeEditorPage() {
 
       // Remove id because we don't save it inside the document itself
       delete dataToSave.id;
+      // Merge writes must explicitly remove an absent photo field.
+      const personWrite = Object.fromEntries(Object.entries(dataToSave).filter(([, value]) => value !== undefined));
+      personWrite.profilePictureUrl = updatedPerson.profilePictureUrl || deleteField();
 
       const batch = writeBatch(db);
-      batch.set(personDocRef, dataToSave, { merge: true });
+      batch.set(personDocRef, personWrite, { merge: true });
       batch.update(getTreeDocRef(), { lastUpdated: serverTimestamp() });
       await batch.commit();
 
@@ -327,18 +336,17 @@ export default function TreeEditorPage() {
           type: 'UPDATE_PERSON',
           treeId,
           personId: updatedPerson.id,
-          before: beforePerson,
-          after: updatedPerson
+          before: {...beforePerson, profilePictureUrl: beforePerson.profilePictureUrl},
+          after: {...updatedPerson, profilePictureUrl: updatedPerson.profilePictureUrl}
         });
       }
 
       toast({ title: "Person Updated", description: `${updatedPerson.firstName} has been saved.` });
+      return true;
     } catch (error) {
       console.error("Error updating person in Firestore:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to save changes." });
-    } finally {
-      setIsEditorOpen(false);
-      setSelectedPerson(null);
+      return false;
     }
   };
 
@@ -447,8 +455,8 @@ export default function TreeEditorPage() {
         }
       }
 
-      // Update tree metadata
-      batch.update(getTreeDocRef(), { lastUpdated: serverTimestamp(), memberCount: increment(-1) });
+      // updateTreeMemberCount maintains the count after the person deletion.
+      batch.update(getTreeDocRef(), { lastUpdated: serverTimestamp() });
 
       // Close dialog BEFORE commit to prevent state conflicts
       handleCloseDeleteDialog();
@@ -610,11 +618,8 @@ export default function TreeEditorPage() {
       const removeRef = doc(getPeopleColRef(), removeId);
       batch.delete(removeRef);
 
-      // Update member count
-      batch.update(getTreeDocRef(), {
-        memberCount: increment(-1),
-        lastUpdated: serverTimestamp()
-      });
+      // updateTreeMemberCount maintains the count after removing the duplicate.
+      batch.update(getTreeDocRef(), { lastUpdated: serverTimestamp() });
 
       await batch.commit();
 
@@ -1222,6 +1227,7 @@ export default function TreeEditorPage() {
           onClose={() => { setIsEditorOpen(false); setSelectedPerson(null); }}
           person={selectedPerson}
           onSave={handleSavePerson}
+          retainPhotoForUndo={retainPhotoForUndo}
           onDeleteRequest={handleOpenDeleteDialog}
           onOpenNameSuggestor={(details) => {
             setIsEditorOpen(false);
@@ -1257,7 +1263,7 @@ export default function TreeEditorPage() {
             const personToUpdate = people.find(p => p.id === personForSuggestion!.id);
             if (personToUpdate) {
               const fullyUpdatedPerson = { ...personToUpdate, ...updatedDetails };
-              handleSavePerson(fullyUpdatedPerson);
+              void handleSavePerson(fullyUpdatedPerson);
               setSelectedPerson(fullyUpdatedPerson);
               setIsEditorOpen(true);
             }

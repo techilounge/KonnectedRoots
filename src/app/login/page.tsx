@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 
 import AuthForm from "@/components/auth/AuthForm";
 import Link from "next/link";
@@ -12,7 +13,7 @@ export default function LoginPage() {
             <ChevronLeft className="mr-2 h-4 w-4" /> Back to Home
           </Link>
         </Button>
-      <AuthForm mode="login" />
+      <Suspense><AuthForm mode="login" /></Suspense>
     </div>
   );
 }

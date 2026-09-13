@@ -43,6 +43,7 @@ function loadIndex(emailResult) {
     'firebase-admin': {
       initializeApp() {},
       firestore: () => db,
+      auth: () => ({getUser: async () => ({email: 'phase2-billing@example.test'})}),
     },
     'firebase-admin/firestore': {
       FieldValue: {
